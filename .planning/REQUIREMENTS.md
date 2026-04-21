@@ -1,7 +1,7 @@
 # Requirements — Pfizer SDF Intelligence System
 
 **Version:** v1 (Phase 1 + Phase 2 + Phase 3)
-**Last updated:** 2026-04-16
+**Last updated:** 2026-04-21
 
 ---
 
@@ -83,14 +83,33 @@
 
 ## Traceability
 
-| REQ-ID | Phase | Roadmap Phase |
-|--------|-------|---------------|
-| INGEST-01, INGEST-02 | v1 | Phase 1 |
-| EXTRACT-01, EXTRACT-02 | v1 | Phase 1 |
-| RETRIEVE-01, RETRIEVE-02, RETRIEVE-03 | v1 | Phase 1 |
-| RAG-01, RAG-02 | v1 | Phase 1 |
-| DASH-01, DASH-02 | v1 | Phase 1 |
-| EVAL-01 through EVAL-05 | v1 | Phase 1 |
-| VISUAL-01, VISUAL-02, EXTRACT-03, EXTRACT-04 | v2 | Phase 2 |
-| HITL-01, RAG-03, OBS-01 | v2 | Phase 2 |
-| BENCH-01, BENCH-02, POLISH-01, POLISH-02, POLISH-03 | v3 | Phase 3 |
+| Requirement | Version | Roadmap Phase | Status |
+|-------------|---------|---------------|--------|
+| INGEST-01 | v1 | Phase 1: Foundation & Ingestion | Pending |
+| INGEST-02 | v1 | Phase 1: Foundation & Ingestion | Pending |
+| EXTRACT-01 | v1 | Phase 2: Extraction & Compliance | Pending |
+| EXTRACT-02 | v1 | Phase 2: Extraction & Compliance | Pending |
+| RETRIEVE-01 | v1 | Phase 3: Retrieval & RAG Chatbot | Pending |
+| RETRIEVE-02 | v1 | Phase 3: Retrieval & RAG Chatbot | Pending |
+| RETRIEVE-03 | v1 | Phase 3: Retrieval & RAG Chatbot | Pending |
+| RAG-01 | v1 | Phase 3: Retrieval & RAG Chatbot | Pending |
+| RAG-02 | v1 | Phase 3: Retrieval & RAG Chatbot | Pending |
+| DASH-01 | v1 | Phase 4: Dashboard & Evaluation | Pending |
+| DASH-02 | v1 | Phase 4: Dashboard & Evaluation | Pending |
+| EVAL-01 | v1 | Phase 4: Dashboard & Evaluation | Pending |
+| EVAL-02 | v1 | Phase 4: Dashboard & Evaluation | Pending |
+| EVAL-03 | v1 | Phase 4: Dashboard & Evaluation | Pending |
+| EVAL-04 | v1 | Phase 4: Dashboard & Evaluation | Pending |
+| EVAL-05 | v1 | Phase 4: Dashboard & Evaluation | Pending |
+| VISUAL-01 | v2 | Phase 5: Visual Retrieval & Critic Extraction | Pending |
+| VISUAL-02 | v2 | Phase 5: Visual Retrieval & Critic Extraction | Pending |
+| EXTRACT-03 | v2 | Phase 5: Visual Retrieval & Critic Extraction | Pending |
+| EXTRACT-04 | v2 | Phase 5: Visual Retrieval & Critic Extraction | Pending |
+| HITL-01 | v2 | Phase 6: Agentic RAG & Observability | Pending |
+| RAG-03 | v2 | Phase 6: Agentic RAG & Observability | Pending |
+| OBS-01 | v2 | Phase 6: Agentic RAG & Observability | Pending |
+| BENCH-01 | v3 | Phase 7: Benchmark & Polish | Pending |
+| BENCH-02 | v3 | Phase 7: Benchmark & Polish | Pending |
+| POLISH-01 | v3 | Phase 7: Benchmark & Polish | Pending |
+| POLISH-02 | v3 | Phase 7: Benchmark & Polish | Pending |
+| POLISH-03 | v3 | Phase 7: Benchmark & Polish | Pending |
