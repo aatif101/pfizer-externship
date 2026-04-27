@@ -32,7 +32,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Scanned, stamped, and complex-table PDFs are ingested without errors (Docling handles them)
   4. SQLite compliance database schema exists with tables for documents, extractions, and evaluations
   5. Streamlit app launches with skeleton tabs (Compliance, Chat, Eval) and Langfuse connection is verified
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 01-01-PLAN.md — Project scaffold, pyproject.toml, config, Wave 0 test stubs
+- [ ] 01-02-PLAN.md — Core ingestion pipeline (DB schema, converter, rasterizer, CLI)
+- [ ] 01-03-PLAN.md — Streamlit skeleton and Langfuse v3 tracing
 
 ### Phase 2: Extraction & Compliance
 **Goal**: Every ingested document has structured metadata extracted and validated, with compliance risk levels computed and stored
@@ -109,7 +113,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation & Ingestion | 0/TBD | Not started | - |
+| 1. Foundation & Ingestion | 0/3 | Not started | - |
 | 2. Extraction & Compliance | 0/TBD | Not started | - |
 | 3. Retrieval & RAG Chatbot | 0/TBD | Not started | - |
 | 4. Dashboard & Evaluation | 0/TBD | Not started | - |
