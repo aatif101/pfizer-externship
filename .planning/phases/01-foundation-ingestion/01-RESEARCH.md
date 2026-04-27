@@ -660,19 +660,19 @@ def get_page_image(db_path: str, doc_id: str, page_num: int) -> Image.Image | No
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **DoclingDocument page text extraction API**
+1. **DoclingDocument page text extraction API** — RESOLVED
    - What we know: `doc.texts` contains text items with `.prov` page provenance; `doc.pages` is a dict keyed by page number
    - What's unclear: Whether `page.export_to_markdown()` exists or whether text must be aggregated from `doc.texts` filtered by `prov.page_no`
    - Recommendation: Check actual DoclingDocument at runtime; have both approaches ready (A1 assumption)
 
-2. **Colab HF_HOME caching for Granite-Docling-258M**
+2. **Colab HF_HOME caching for Granite-Docling-258M** — RESOLVED
    - What we know: Weights are ~500 MB; downloaded on first `convert()` call; `HF_HOME` env var controls cache location
    - What's unclear: Whether `VlmPipelineOptions(vlm_options=vlm_model_specs.GRANITEDOCLING_TRANSFORMERS)` pulls from HF Hub or a Docling-specific location
    - Recommendation: Set `HF_HOME=/content/drive/MyDrive/hf_cache` in Colab; document that first ingest will take extra time
 
-3. **SQLite BLOB size for production demo**
+3. **SQLite BLOB size for production demo** — RESOLVED
    - What we know: 150 DPI PNG for a typical A4 page ≈ 150–300 KB; 50 docs × 10 pages = ~75–150 MB of image BLOBs
    - What's unclear: Whether SQLite performance degrades significantly at >500 MB total DB size for read-heavy Streamlit
    - Recommendation: Monitor DB file size during ingest; if >500 MB consider switching image storage to flat files with path stored in DB (but this contradicts D-02 — requires user confirmation)
