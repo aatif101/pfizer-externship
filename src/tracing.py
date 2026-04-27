@@ -33,13 +33,26 @@ except Exception as e:
 # Version guard: fail loud at import time if langfuse v4 is accidentally installed
 # Only check if import succeeded
 if '_langfuse_module' in globals() and _langfuse_module is not None:
-    assert hasattr(_langfuse_module, '__version__') and _langfuse_module.__version__.startswith("3."), (
-        f"langfuse version {getattr(_langfuse_module, '__version__', 'unknown')} detected. "
+    version = None
+    if hasattr(_langfuse_module, '__version__'):
+        version = _langfuse_module.__version__
+    else:
+        # Try to get version from version module
+        try:
+            from langfuse.version import __version__ as version
+        except ImportError:
+            try:
+                from importlib.metadata import version
+                version = version('langfuse')
+            except Exception:
+                version = 'unknown'
+    assert version and version.startswith("3."), (
+        f"langfuse version {version} detected. "
         "Only v3.x is supported (langfuse>=3.0,<4.0). "
         "Run: pip install 'langfuse>=3.0,<4.0' to downgrade."
     )
 
-from langfuse.decorators import langfuse_context, observe  # noqa: E402, F401
+from langfuse import observe, get_client  # noqa: E402, F401
 from loguru import logger  # noqa: E402
 
 from src.config import get_settings  # noqa: E402
@@ -48,7 +61,7 @@ from src.config import get_settings  # noqa: E402
 def verify_langfuse_connection() -> bool:
     """Return True if Langfuse API keys are set and the connection is valid.
 
-    Uses langfuse_context.auth_check() (v3 API).
+    Uses get_client().auth_check() (v3 API).
     Returns False (never raises) when keys are absent or connection fails.
 
     Security: API keys are read from environment — never logged.
@@ -69,7 +82,8 @@ def verify_langfuse_connection() -> bool:
         return False
 
     try:
-        result: bool = langfuse_context.auth_check()
+        client = get_client()
+        result: bool = client.auth_check()
         if result:
             logger.info("Langfuse connection verified")
         else:
