@@ -1,0 +1,517 @@
+{
+  "version": 1,
+  "exported_at": "2026-05-19T21:06:54.264Z",
+  "milestones": [
+    {
+      "id": "M001",
+      "title": "Phase 2 Extraction and Compliance",
+      "status": "active",
+      "depends_on": [],
+      "created_at": "2026-05-19T20:55:05.866Z",
+      "completed_at": null,
+      "vision": "Deliver the baseline structured extraction and compliance workflow on top of the completed Phase 1 ingestion foundation.",
+      "success_criteria": [
+        "Migration cleanup leaves no tracked local secrets.",
+        "Python 3.11 venv is the documented and verified execution path.",
+        "Phase 2 extraction stores required metadata with source evidence.",
+        "Compliance risk levels are computed and visible to the user.",
+        "Langfuse/tracing behavior remains non-fatal when credentials are absent."
+      ],
+      "key_risks": [
+        {
+          "risk": "Docling VLM API usage may have drifted since the original GSD 1.0 research.",
+          "whyItMatters": "The current converter works but emits deprecation warnings; building extraction on deprecated APIs can create avoidable churn."
+        },
+        {
+          "risk": "LLM extraction may hallucinate dates or vendors without sufficient evidence capture.",
+          "whyItMatters": "The demo's credibility depends on grounded, auditable compliance fields."
+        },
+        {
+          "risk": "Secrets were previously tracked in local settings.",
+          "whyItMatters": "The project must not leak provider credentials or normalize insecure local config patterns."
+        }
+      ],
+      "proof_strategy": [
+        {
+          "riskOrUnknown": "Repository and environment may be unsafe or stale after GSD 1.0 migration.",
+          "retireIn": "S01",
+          "whatWillBeProven": "GitHub main is reconciled, local settings are ignored, editable install works, and tests pass in Python 3.11."
+        },
+        {
+          "riskOrUnknown": "SDF metadata extraction shape and evidence requirements may be underspecified.",
+          "retireIn": "S02",
+          "whatWillBeProven": "Pydantic extraction models and deterministic parsing helpers cover source spans, pages, confidence, and date normalization."
+        },
+        {
+          "riskOrUnknown": "VLM extraction may not reliably populate fields from sample PDFs.",
+          "retireIn": "S03",
+          "whatWillBeProven": "Sample PDFs can be extracted into SQLite with explicit field-level evidence and graceful low-confidence behavior."
+        },
+        {
+          "riskOrUnknown": "Compliance officers need a visible workflow, not only database rows.",
+          "retireIn": "S04",
+          "whatWillBeProven": "Streamlit displays extracted records with risk levels and source links."
+        }
+      ],
+      "verification_contract": "Run `./venv/Scripts/python.exe -m pip install -e \".[dev]\"` after packaging changes and `./venv/Scripts/python.exe -m pytest -q` after each implementation slice.",
+      "verification_integration": "Use sample PDFs and SQLite assertions to verify ingestion-to-extraction-to-dashboard data flow closes without manual database edits.",
+      "verification_operational": "Confirm missing Langfuse credentials do not crash Streamlit or CLI paths; no secrets are logged or committed.",
+      "verification_uat": "A compliance officer can open the dashboard and identify at-risk documents with source-page evidence.",
+      "definition_of_done": [
+        "GitHub main is reconciled locally before Phase 2 work begins.",
+        "Local secrets and machine-specific provider settings are not tracked.",
+        "Python 3.11 venv supports editable install and test execution.",
+        "Phase 2 extraction produces validated records with source evidence.",
+        "Compliance risk levels are persisted and visible in Streamlit."
+      ],
+      "requirement_coverage": "M001 advances R002, R003, R004, R008, R009, and R010 while consuming validated R001 from the Phase 1 foundation.",
+      "boundary_map_markdown": "Not provided.",
+      "sequence": 0
+    },
+    {
+      "id": "M002",
+      "title": "Retrieval and RAG Chatbot",
+      "status": "queued",
+      "depends_on": [],
+      "created_at": "2026-05-19T20:55:05.866Z",
+      "completed_at": null,
+      "vision": "",
+      "success_criteria": [],
+      "key_risks": [],
+      "proof_strategy": [],
+      "verification_contract": "",
+      "verification_integration": "",
+      "verification_operational": "",
+      "verification_uat": "",
+      "definition_of_done": [],
+      "requirement_coverage": "",
+      "boundary_map_markdown": "",
+      "sequence": 0
+    },
+    {
+      "id": "M003",
+      "title": "Dashboard Evaluation and Polish",
+      "status": "queued",
+      "depends_on": [],
+      "created_at": "2026-05-19T20:55:05.866Z",
+      "completed_at": null,
+      "vision": "",
+      "success_criteria": [],
+      "key_risks": [],
+      "proof_strategy": [],
+      "verification_contract": "",
+      "verification_integration": "",
+      "verification_operational": "",
+      "verification_uat": "",
+      "definition_of_done": [],
+      "requirement_coverage": "",
+      "boundary_map_markdown": "",
+      "sequence": 0
+    }
+  ],
+  "slices": [
+    {
+      "milestone_id": "M001",
+      "id": "S01",
+      "title": "S01",
+      "status": "complete",
+      "risk": "medium",
+      "depends": [],
+      "demo": "Repo is on current GitHub main, local secrets are untracked, Python 3.11 editable install works, tests pass, and current GSD artifacts reflect migrated project state.",
+      "created_at": "2026-05-19T20:59:26.692Z",
+      "completed_at": "2026-05-19T21:06:53.823Z",
+      "full_summary_md": "---\nid: S01\nparent: M001\nmilestone: M001\nprovides:\n  - A current M001 roadmap with S01-S04 slices.\n  - A current GSD requirements register.\n  - A verified Python 3.11 packaging/test baseline.\n  - A local-secret hygiene baseline.\nrequires:\n  []\naffects:\n  - S02\n  - S03\n  - S04\nkey_files:\n  - .gitignore\n  - pyproject.toml\n  - .gsd/PROJECT.md\n  - .gsd/REQUIREMENTS.md\n  - .gsd/DECISIONS.md\n  - .gsd/milestones/M001/M001-ROADMAP.md\n  - .gsd/milestones/M001/slices/S01/S01-PLAN.md\nkey_decisions:\n  - D001: Python 3.11 project venv is the supported runtime.\n  - D002: settings.local.json is local-only and ignored.\n  - D003: setuptools.build_meta is the build backend.\n  - D004: Current GSD artifacts seeded from GSD 1.0 .planning state.\npatterns_established:\n  - Use ./venv/Scripts/python.exe for all verification commands on Windows.\n  - Keep settings.local.json local-only and ignored.\n  - Use GSD tools for current artifact updates rather than hand-editing generated checkboxes.\nobservability_surfaces:\n  - GSD decisions D001-D004 document environment, security, packaging, and workflow migration choices.\n  - Requirements R001-R010 document validated foundation and active capability contract.\n  - M001/S01 task summaries contain verification evidence.\ndrill_down_paths:\n  - .gsd/milestones/M001/slices/S01/tasks/T01-SUMMARY.md\n  - .gsd/milestones/M001/slices/S01/tasks/T02-SUMMARY.md\n  - .gsd/milestones/M001/slices/S01/tasks/T03-SUMMARY.md\n  - .gsd/milestones/M001/slices/S01/tasks/T04-SUMMARY.md\n  - .gsd/milestones/M001/slices/S01/tasks/T05-SUMMARY.md\nduration: \"\"\nverification_result: passed\ncompleted_at: 2026-05-19T21:06:53.824Z\nblocker_discovered: false\n---\n\n# S01: Migration readiness cleanup\n\n**Migration readiness cleanup is complete: GitHub main is reconciled, local settings are secret-safe, packaging is fixed, GSD state is current, and tests pass.**\n\n## What Happened\n\nS01 reconciled the local repository with GitHub main, removed local provider settings from version control, fixed packaging so editable installs work, migrated old GSD 1.0 planning context into current .gsd artifacts, recorded durable decisions and requirements, and verified the project with the Python 3.11 venv test suite. The repo is now ready for Phase 2 extraction/compliance work from current GSD artifacts instead of stale .planning state.\n\n## Verification\n\nFinal verification command passed: HEAD matched origin/main, settings.local.json was ignored, local secret-prefix scan passed, required GSD files existed, and ./venv/Scripts/python.exe -m pytest -q passed with 15 tests.\n\n## Requirements Advanced\n\n- R001 — Validated existing Phase 1 ingestion foundation during migration cleanup.\n- R009 — Documented the supported Python 3.11 environment and verified editable install/test commands.\n- R010 — Removed tracked local provider settings and added ignore coverage.\n\n## Requirements Validated\n\n- R009 — ./venv/Scripts/python.exe -m pip install -e \".[dev]\" succeeded and ./venv/Scripts/python.exe -m pytest -q passed.\n- R010 — settings.local.json is ignored, removed from Git tracking, and local token-prefix scan passed.\n\n## New Requirements Surfaced\n\nNone.\n\n## Requirements Invalidated or Re-scoped\n\nNone.\n\n## Operational Readiness\n\nNone.\n\n## Deviations\n\nTask-level S01 planning was added after the cleanup work started so current GSD state could accurately track already-requested migration work.\n\n## Known Limitations\n\nThe global Python 3.14 environment is still not suitable for this project. Historical .planning artifacts remain for reference. Git history may still contain the previously exposed token-like value; the user stated it has been deleted/invalidated.\n\n## Follow-ups\n\nMigrate Docling converter away from deprecated legacy VLM options before heavy Phase 2 extraction work. Consider whether to migrate Langfuse v3 to v4 before LangGraph integration.\n\n## Files Created/Modified\n\n- `.gitignore` — Added settings.local.json to ignore list.\n- `pyproject.toml` — Switched build backend to setuptools.build_meta.\n- `settings.local.json` — Removed local settings file from Git tracking while keeping it locally ignored.\n- `.gsd/PROJECT.md` — Created current GSD project state from old planning artifacts.\n- `.gsd/REQUIREMENTS.md` — Created current GSD requirements register.\n- `.gsd/DECISIONS.md` — Recorded migration and environment/security decisions.\n- `.gsd/milestones/M001/M001-ROADMAP.md` — Planned current M001 roadmap.\n- `.gsd/milestones/M001/slices/S01/S01-PLAN.md` — Planned and completed S01 cleanup tasks.\n",
+      "full_uat_md": "# S01: Migration readiness cleanup — UAT\n\n**Milestone:** M001\n**Written:** 2026-05-19T21:06:53.825Z\n\n# UAT — S01 Migration Readiness Cleanup\n\n## Scenario\nA developer resumes the GSD 1.0 Pfizer externship project and needs to know whether it is safe to start Phase 2 work.\n\n## Steps\n1. Confirm local HEAD matches origin/main.\n2. Confirm settings.local.json is ignored and no known token prefixes are present in the local file.\n3. Run `./venv/Scripts/python.exe -m pip install -e \".[dev]\"`.\n4. Confirm current GSD artifacts exist under `.gsd/`.\n5. Run `./venv/Scripts/python.exe -m pytest -q`.\n\n## Expected Result\n- Local main is reconciled with GitHub main.\n- Local provider settings are not tracked.\n- Editable install succeeds.\n- Current GSD project, requirements, decisions, roadmap, and slice plan exist.\n- Tests pass in the Python 3.11 venv.\n\n## Actual Result\nPassed. Final verification showed HEAD and origin/main both at `c4f394e4dd0d1a054886a7422a5c591f36045bdd`, settings.local.json ignored, secret scan passed, required GSD files present, and 15 tests passing.\n",
+      "goal": "Make the migrated GSD 1.0 project safe and ready for Phase 2 execution.",
+      "success_criteria": "- Local main matches origin/main.\n- settings.local.json is removed from Git tracking and ignored.\n- pyproject editable install works in the Python 3.11 venv.\n- Tests pass with ./venv/Scripts/python.exe.\n- Current .gsd PROJECT, REQUIREMENTS, DECISIONS, and ROADMAP exist.",
+      "proof_level": "Repository inspection plus editable install and pytest in Python 3.11 venv.",
+      "integration_closure": "Git state, packaging, local secret handling, tests, and current GSD artifacts all agree on the next working baseline.",
+      "observability_impact": "Documents environment/security gotchas in GSD decisions and requirements for future agents.",
+      "sequence": 1,
+      "replan_triggered_at": null,
+      "is_sketch": 0,
+      "sketch_scope": ""
+    },
+    {
+      "milestone_id": "M001",
+      "id": "S02",
+      "title": "Extraction contract and persistence",
+      "status": "pending",
+      "risk": "high",
+      "depends": [
+        "S01"
+      ],
+      "demo": "A typed extraction schema can represent required SDF fields, source evidence, confidence, and review state for sample records.",
+      "created_at": "2026-05-19T20:59:26.693Z",
+      "completed_at": null,
+      "full_summary_md": "",
+      "full_uat_md": "",
+      "goal": "Define the structured extraction contract and persistence shape before adding VLM calls.",
+      "success_criteria": "- Pydantic models cover required fields, source spans, source pages, confidence, and needs_review.\n- Date parsing handles expected pharma formats.\n- DB helpers can upsert and list extraction records.\n- Tests cover invalid and low-confidence records.",
+      "proof_level": "Unit tests for model validation, date parsing, threshold boundaries, and DB persistence.",
+      "integration_closure": "Schema code, DB write/read helpers, and tests agree on extraction field storage and evidence requirements.",
+      "observability_impact": "Adds explicit confidence/review fields and trace identifiers for later Langfuse correlation.",
+      "sequence": 2,
+      "replan_triggered_at": null,
+      "is_sketch": 0,
+      "sketch_scope": ""
+    },
+    {
+      "milestone_id": "M001",
+      "id": "S03",
+      "title": "Baseline extraction pipeline",
+      "status": "pending",
+      "risk": "high",
+      "depends": [
+        "S02"
+      ],
+      "demo": "Running extraction against sample PDFs produces structured metadata rows with page/source evidence or explicit abstentions.",
+      "created_at": "2026-05-19T20:59:26.693Z",
+      "completed_at": null,
+      "full_summary_md": "",
+      "full_uat_md": "",
+      "goal": "Implement baseline VLM-assisted metadata extraction over ingested documents.",
+      "success_criteria": "- Extractor reads ingested page text/images and emits validated models.\n- Low-confidence or missing evidence fields are marked for review instead of guessed.\n- Results are stored in extractions table.\n- CLI or callable pipeline can process all ingested documents.",
+      "proof_level": "Integration tests with mocked LLM responses plus one real/manual sample run when credentials are available.",
+      "integration_closure": "Extraction consumes ingested document/page rows and persists results into the existing SQLite schema.",
+      "observability_impact": "Extraction attempts include structured logs and Langfuse trace metadata without logging document text or secrets.",
+      "sequence": 3,
+      "replan_triggered_at": null,
+      "is_sketch": 0,
+      "sketch_scope": ""
+    },
+    {
+      "milestone_id": "M001",
+      "id": "S04",
+      "title": "Compliance dashboard records",
+      "status": "pending",
+      "risk": "medium",
+      "depends": [
+        "S03"
+      ],
+      "demo": "The Compliance tab shows document metadata, age, risk color, confidence, and source page links from SQLite.",
+      "created_at": "2026-05-19T20:59:26.693Z",
+      "completed_at": null,
+      "full_summary_md": "",
+      "full_uat_md": "",
+      "goal": "Turn extracted data into the visible compliance officer workflow.",
+      "success_criteria": "- Compliance tab lists ingested documents with extracted fields.\n- Risk colors match threshold rules.\n- Source page links or previews resolve to stored page images.\n- Empty/error states are clear and actionable.",
+      "proof_level": "Automated data-shaping tests plus browser/manual Streamlit smoke verification.",
+      "integration_closure": "Streamlit reads the same SQLite database populated by ingestion/extraction and displays risk records deterministically.",
+      "observability_impact": "Dashboard shows connection/status surfaces and does not crash when optional services are unavailable.",
+      "sequence": 4,
+      "replan_triggered_at": null,
+      "is_sketch": 0,
+      "sketch_scope": ""
+    }
+  ],
+  "tasks": [
+    {
+      "milestone_id": "M001",
+      "slice_id": "S01",
+      "id": "T01",
+      "title": "Reconciled GitHub main, removed tracked local settings, fixed editable installs, migrated GSD state, and verified tests.",
+      "status": "complete",
+      "one_liner": "Reconciled GitHub main, removed tracked local settings, fixed editable installs, migrated GSD state, and verified tests.",
+      "narrative": "Fast-forwarded local main to origin/main, removed local provider settings from Git tracking, ignored settings.local.json, replaced the broken setuptools legacy build backend with setuptools.build_meta, seeded current GSD project/requirements/roadmap/decision artifacts from the old GSD 1.0 .planning state, and verified the Python 3.11 project environment.",
+      "verification_result": "Verification command passed: HEAD and origin/main both resolved to c4f394e4dd0d1a054886a7422a5c591f36045bdd; settings.local.json was ignored; secret pattern scan passed; required GSD artifacts existed; ./venv/Scripts/python.exe -m pytest -q passed with 15 tests.",
+      "duration": "",
+      "completed_at": "2026-05-19T21:04:41.515Z",
+      "blocker_discovered": false,
+      "deviations": "Work was performed before task-level S01 planning was added, then the plan was backfilled to normalize current GSD state. No implementation scope changed.",
+      "known_issues": "Docling emits a deprecation warning for legacy VLM options in the converter. This should be addressed before heavy Phase 2 extraction work.",
+      "key_files": [
+        ".gitignore",
+        "pyproject.toml",
+        "settings.local.json",
+        ".gsd/PROJECT.md",
+        ".gsd/REQUIREMENTS.md",
+        ".gsd/DECISIONS.md",
+        ".gsd/milestones/M001/M001-ROADMAP.md",
+        ".gsd/milestones/M001/slices/S01/S01-PLAN.md"
+      ],
+      "key_decisions": [
+        "D001: Python 3.11 venv is the supported runtime.",
+        "D002: settings.local.json is local-only and ignored.",
+        "D003: setuptools.build_meta is the package build backend.",
+        "D004: Current GSD artifacts seeded from GSD 1.0 .planning state."
+      ],
+      "full_summary_md": "---\nid: T01\nparent: S01\nmilestone: M001\nkey_files:\n  - .gitignore\n  - pyproject.toml\n  - settings.local.json\n  - .gsd/PROJECT.md\n  - .gsd/REQUIREMENTS.md\n  - .gsd/DECISIONS.md\n  - .gsd/milestones/M001/M001-ROADMAP.md\n  - .gsd/milestones/M001/slices/S01/S01-PLAN.md\nkey_decisions:\n  - D001: Python 3.11 venv is the supported runtime.\n  - D002: settings.local.json is local-only and ignored.\n  - D003: setuptools.build_meta is the package build backend.\n  - D004: Current GSD artifacts seeded from GSD 1.0 .planning state.\nduration: \nverification_result: passed\ncompleted_at: 2026-05-19T21:04:41.514Z\nblocker_discovered: false\n---\n\n# T01: Reconciled GitHub main, removed tracked local settings, fixed editable installs, migrated GSD state, and verified tests.\n\n**Reconciled GitHub main, removed tracked local settings, fixed editable installs, migrated GSD state, and verified tests.**\n\n## What Happened\n\nFast-forwarded local main to origin/main, removed local provider settings from Git tracking, ignored settings.local.json, replaced the broken setuptools legacy build backend with setuptools.build_meta, seeded current GSD project/requirements/roadmap/decision artifacts from the old GSD 1.0 .planning state, and verified the Python 3.11 project environment.\n\n## Verification\n\nVerification command passed: HEAD and origin/main both resolved to c4f394e4dd0d1a054886a7422a5c591f36045bdd; settings.local.json was ignored; secret pattern scan passed; required GSD artifacts existed; ./venv/Scripts/python.exe -m pytest -q passed with 15 tests.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `git pull --ff-only origin main` | 0 | ✅ pass | 0ms |\n| 2 | `git rev-parse HEAD && git rev-parse origin/main` | 0 | ✅ pass | 0ms |\n\n## Deviations\n\nWork was performed before task-level S01 planning was added, then the plan was backfilled to normalize current GSD state. No implementation scope changed.\n\n## Known Issues\n\nDocling emits a deprecation warning for legacy VLM options in the converter. This should be addressed before heavy Phase 2 extraction work.\n\n## Files Created/Modified\n\n- `.gitignore`\n- `pyproject.toml`\n- `settings.local.json`\n- `.gsd/PROJECT.md`\n- `.gsd/REQUIREMENTS.md`\n- `.gsd/DECISIONS.md`\n- `.gsd/milestones/M001/M001-ROADMAP.md`\n- `.gsd/milestones/M001/slices/S01/S01-PLAN.md`\n",
+      "description": "Fast-forward local main to origin/main and confirm both refs match before editing.",
+      "estimate": "small",
+      "files": [],
+      "verify": "git rev-parse HEAD && git rev-parse origin/main",
+      "inputs": [],
+      "expected_output": [],
+      "observability_impact": "Reduces stale-code ambiguity for future GSD work.",
+      "full_plan_md": "",
+      "sequence": 0,
+      "blocker_source": "",
+      "escalation_pending": 0,
+      "escalation_awaiting_review": 0,
+      "escalation_artifact_path": null,
+      "escalation_override_applied_at": null
+    },
+    {
+      "milestone_id": "M001",
+      "slice_id": "S01",
+      "id": "T02",
+      "title": "Made settings.local.json local-only and verified no known token prefixes remain in the local file.",
+      "status": "complete",
+      "one_liner": "Made settings.local.json local-only and verified no known token prefixes remain in the local file.",
+      "narrative": "Added settings.local.json to .gitignore and removed it from Git tracking with git rm --cached. The file remains present locally for machine-specific settings but is no longer intended for version control. A token-prefix scan checked the current local file for known provider-key prefixes without printing any secret values.",
+      "verification_result": "Verification command passed: git check-ignore settings.local.json returned the file path, and the local token-prefix scan printed 'secret scan passed'.",
+      "duration": "",
+      "completed_at": "2026-05-19T21:04:54.915Z",
+      "blocker_discovered": false,
+      "deviations": "None.",
+      "known_issues": "The historical exposed key should remain revoked/rotated outside this repo. No secret value was printed in completion artifacts.",
+      "key_files": [
+        ".gitignore",
+        "settings.local.json"
+      ],
+      "key_decisions": [
+        "D002: settings.local.json is local-only and ignored."
+      ],
+      "full_summary_md": "---\nid: T02\nparent: S01\nmilestone: M001\nkey_files:\n  - .gitignore\n  - settings.local.json\nkey_decisions:\n  - D002: settings.local.json is local-only and ignored.\nduration: \nverification_result: passed\ncompleted_at: 2026-05-19T21:04:54.915Z\nblocker_discovered: false\n---\n\n# T02: Made settings.local.json local-only and verified no known token prefixes remain in the local file.\n\n**Made settings.local.json local-only and verified no known token prefixes remain in the local file.**\n\n## What Happened\n\nAdded settings.local.json to .gitignore and removed it from Git tracking with git rm --cached. The file remains present locally for machine-specific settings but is no longer intended for version control. A token-prefix scan checked the current local file for known provider-key prefixes without printing any secret values.\n\n## Verification\n\nVerification command passed: git check-ignore settings.local.json returned the file path, and the local token-prefix scan printed 'secret scan passed'.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `git check-ignore settings.local.json && python secret-prefix scan` | 0 | ✅ pass | 0ms |\n\n## Deviations\n\nNone.\n\n## Known Issues\n\nThe historical exposed key should remain revoked/rotated outside this repo. No secret value was printed in completion artifacts.\n\n## Files Created/Modified\n\n- `.gitignore`\n- `settings.local.json`\n",
+      "description": "Remove settings.local.json from Git tracking, add it to .gitignore, and verify the local file does not contain known token prefixes.",
+      "estimate": "small",
+      "files": [
+        ".gitignore",
+        "settings.local.json"
+      ],
+      "verify": "git check-ignore settings.local.json && python - <<'PY'\nfrom pathlib import Path\ntext = Path('settings.local.json').read_text() if Path('settings.local.json').exists() else ''\nassert not any(x in text for x in ['sk-or-v1-', 'sk-ant-', 'sk-', 'AIza'])\nprint('secret scan passed')\nPY",
+      "inputs": [
+        "settings.local.json",
+        ".gitignore"
+      ],
+      "expected_output": [
+        ".gitignore"
+      ],
+      "observability_impact": "Captures the local-secret rule as durable project state.",
+      "full_plan_md": "",
+      "sequence": 0,
+      "blocker_source": "",
+      "escalation_pending": 0,
+      "escalation_awaiting_review": 0,
+      "escalation_artifact_path": null,
+      "escalation_override_applied_at": null
+    },
+    {
+      "milestone_id": "M001",
+      "slice_id": "S01",
+      "id": "T03",
+      "title": "Fixed Python packaging so editable installs work in the project venv.",
+      "status": "complete",
+      "one_liner": "Fixed Python packaging so editable installs work in the project venv.",
+      "narrative": "Changed the build backend from setuptools.backends.legacy:build to setuptools.build_meta. Retried editable installation with dev extras in the Python 3.11 venv, and the package built and installed successfully.",
+      "verification_result": "Verification command passed: ./venv/Scripts/python.exe -m pip install -e \".[dev]\" built an editable wheel and installed pfizer-sdf-intelligence 0.1.0 successfully.",
+      "duration": "",
+      "completed_at": "2026-05-19T21:05:11.039Z",
+      "blocker_discovered": false,
+      "deviations": "None.",
+      "known_issues": "The global Python 3.14 environment remains unsuitable for this project unless repaired separately.",
+      "key_files": [
+        "pyproject.toml"
+      ],
+      "key_decisions": [
+        "D001: Python 3.11 venv is the supported runtime.",
+        "D003: setuptools.build_meta is the package build backend."
+      ],
+      "full_summary_md": "---\nid: T03\nparent: S01\nmilestone: M001\nkey_files:\n  - pyproject.toml\nkey_decisions:\n  - D001: Python 3.11 venv is the supported runtime.\n  - D003: setuptools.build_meta is the package build backend.\nduration: \nverification_result: passed\ncompleted_at: 2026-05-19T21:05:11.039Z\nblocker_discovered: false\n---\n\n# T03: Fixed Python packaging so editable installs work in the project venv.\n\n**Fixed Python packaging so editable installs work in the project venv.**\n\n## What Happened\n\nChanged the build backend from setuptools.backends.legacy:build to setuptools.build_meta. Retried editable installation with dev extras in the Python 3.11 venv, and the package built and installed successfully.\n\n## Verification\n\nVerification command passed: ./venv/Scripts/python.exe -m pip install -e \".[dev]\" built an editable wheel and installed pfizer-sdf-intelligence 0.1.0 successfully.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `./venv/Scripts/python.exe -m pip install -e \".[dev]\"` | 0 | ✅ pass | 25300ms |\n\n## Deviations\n\nNone.\n\n## Known Issues\n\nThe global Python 3.14 environment remains unsuitable for this project unless repaired separately.\n\n## Files Created/Modified\n\n- `pyproject.toml`\n",
+      "description": "Replace the broken setuptools legacy backend with setuptools.build_meta and verify editable install with dev extras in the Python 3.11 venv.",
+      "estimate": "small",
+      "files": [
+        "pyproject.toml"
+      ],
+      "verify": "./venv/Scripts/python.exe -m pip install -e \".[dev]\"",
+      "inputs": [
+        "pyproject.toml"
+      ],
+      "expected_output": [
+        "pyproject.toml"
+      ],
+      "observability_impact": "Documents the supported environment path for future agents.",
+      "full_plan_md": "",
+      "sequence": 0,
+      "blocker_source": "",
+      "escalation_pending": 0,
+      "escalation_awaiting_review": 0,
+      "escalation_artifact_path": null,
+      "escalation_override_applied_at": null
+    },
+    {
+      "milestone_id": "M001",
+      "slice_id": "S01",
+      "id": "T04",
+      "title": "Migrated GSD 1.0 planning context into current .gsd project, requirements, decisions, roadmap, and slice plan artifacts.",
+      "status": "complete",
+      "one_liner": "Migrated GSD 1.0 planning context into current .gsd project, requirements, decisions, roadmap, and slice plan artifacts.",
+      "narrative": "Seeded current-format GSD state from the GSD 1.0 .planning artifacts. Saved a parseable project artifact with a Milestone Sequence, created current requirements R001-R010, recorded decisions D001-D004, planned M001 Phase 2 Extraction and Compliance, and added an S01 task plan for the migration readiness cleanup.",
+      "verification_result": "Verification command passed: required current GSD artifact files exist under .gsd, including PROJECT.md, REQUIREMENTS.md, DECISIONS.md, M001-ROADMAP.md, and S01-PLAN.md.",
+      "duration": "",
+      "completed_at": "2026-05-19T21:05:33.050Z",
+      "blocker_discovered": false,
+      "deviations": "The first PROJECT migration attempt failed because current GSD requires a parseable Milestone Sequence. The PROJECT artifact was rewritten with M001-M003 sequence entries, then requirements and roadmap state were seeded through GSD tools.",
+      "known_issues": "The old .planning artifacts remain as historical reference and have not been deleted.",
+      "key_files": [
+        ".gsd/PROJECT.md",
+        ".gsd/REQUIREMENTS.md",
+        ".gsd/DECISIONS.md",
+        ".gsd/milestones/M001/M001-ROADMAP.md",
+        ".gsd/milestones/M001/slices/S01/S01-PLAN.md"
+      ],
+      "key_decisions": [
+        "D004: Current GSD artifacts seeded from GSD 1.0 .planning state."
+      ],
+      "full_summary_md": "---\nid: T04\nparent: S01\nmilestone: M001\nkey_files:\n  - .gsd/PROJECT.md\n  - .gsd/REQUIREMENTS.md\n  - .gsd/DECISIONS.md\n  - .gsd/milestones/M001/M001-ROADMAP.md\n  - .gsd/milestones/M001/slices/S01/S01-PLAN.md\nkey_decisions:\n  - D004: Current GSD artifacts seeded from GSD 1.0 .planning state.\nduration: \nverification_result: passed\ncompleted_at: 2026-05-19T21:05:33.050Z\nblocker_discovered: false\n---\n\n# T04: Migrated GSD 1.0 planning context into current .gsd project, requirements, decisions, roadmap, and slice plan artifacts.\n\n**Migrated GSD 1.0 planning context into current .gsd project, requirements, decisions, roadmap, and slice plan artifacts.**\n\n## What Happened\n\nSeeded current-format GSD state from the GSD 1.0 .planning artifacts. Saved a parseable project artifact with a Milestone Sequence, created current requirements R001-R010, recorded decisions D001-D004, planned M001 Phase 2 Extraction and Compliance, and added an S01 task plan for the migration readiness cleanup.\n\n## Verification\n\nVerification command passed: required current GSD artifact files exist under .gsd, including PROJECT.md, REQUIREMENTS.md, DECISIONS.md, M001-ROADMAP.md, and S01-PLAN.md.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `test -f .gsd/PROJECT.md && test -f .gsd/REQUIREMENTS.md && test -f .gsd/DECISIONS.md && test -f .gsd/milestones/M001/M001-ROADMAP.md && test -f .gsd/milestones/M001/slices/S01/S01-PLAN.md` | 0 | ✅ pass | 0ms |\n\n## Deviations\n\nThe first PROJECT migration attempt failed because current GSD requires a parseable Milestone Sequence. The PROJECT artifact was rewritten with M001-M003 sequence entries, then requirements and roadmap state were seeded through GSD tools.\n\n## Known Issues\n\nThe old .planning artifacts remain as historical reference and have not been deleted.\n\n## Files Created/Modified\n\n- `.gsd/PROJECT.md`\n- `.gsd/REQUIREMENTS.md`\n- `.gsd/DECISIONS.md`\n- `.gsd/milestones/M001/M001-ROADMAP.md`\n- `.gsd/milestones/M001/slices/S01/S01-PLAN.md`\n",
+      "description": "Seed current GSD artifacts from the old .planning state: project summary, requirements register, roadmap, slice plan, and decisions.",
+      "estimate": "medium",
+      "files": [
+        ".gsd/PROJECT.md",
+        ".gsd/REQUIREMENTS.md",
+        ".gsd/ROADMAP.md",
+        ".gsd/DECISIONS.md"
+      ],
+      "verify": "test -f .gsd/PROJECT.md && test -f .gsd/REQUIREMENTS.md && test -f .gsd/ROADMAP.md && test -f .gsd/DECISIONS.md",
+      "inputs": [
+        ".planning/PROJECT.md",
+        ".planning/REQUIREMENTS.md",
+        ".planning/ROADMAP.md",
+        ".planning/STATE.md"
+      ],
+      "expected_output": [
+        ".gsd/PROJECT.md",
+        ".gsd/REQUIREMENTS.md",
+        ".gsd/ROADMAP.md",
+        ".gsd/DECISIONS.md",
+        ".gsd/milestones/M001/slices/S01/S01-PLAN.md"
+      ],
+      "observability_impact": "Makes the current GSD state parseable by current workflow tooling.",
+      "full_plan_md": "",
+      "sequence": 0,
+      "blocker_source": "",
+      "escalation_pending": 0,
+      "escalation_awaiting_review": 0,
+      "escalation_artifact_path": null,
+      "escalation_override_applied_at": null
+    },
+    {
+      "milestone_id": "M001",
+      "slice_id": "S01",
+      "id": "T05",
+      "title": "Verified readiness cleanup with the supported Python 3.11 test suite and expected git status.",
+      "status": "complete",
+      "one_liner": "Verified readiness cleanup with the supported Python 3.11 test suite and expected git status.",
+      "narrative": "Ran the final readiness verification in the supported Python 3.11 venv after all cleanup and migration steps. The suite passed with 15 tests. Git status showed the expected local changes: .gitignore and pyproject.toml modified, settings.local.json removed from tracking, and current .gsd artifacts untracked/new.",
+      "verification_result": "Final verification passed: ./venv/Scripts/python.exe -m pytest -q returned 15 passed, 19 warnings in 98.42s; git status showed only expected cleanup and GSD artifact changes.",
+      "duration": "",
+      "completed_at": "2026-05-19T21:05:49.826Z",
+      "blocker_discovered": false,
+      "deviations": "None.",
+      "known_issues": "Docling deprecation warning remains: legacy VLM options should migrate to VlmConvertOptions before heavy Phase 2 extraction work.",
+      "key_files": [
+        "tests/",
+        "venv/Scripts/python.exe"
+      ],
+      "key_decisions": [],
+      "full_summary_md": "---\nid: T05\nparent: S01\nmilestone: M001\nkey_files:\n  - tests/\n  - venv/Scripts/python.exe\nkey_decisions: []\nduration: \nverification_result: passed\ncompleted_at: 2026-05-19T21:05:49.826Z\nblocker_discovered: false\n---\n\n# T05: Verified readiness cleanup with the supported Python 3.11 test suite and expected git status.\n\n**Verified readiness cleanup with the supported Python 3.11 test suite and expected git status.**\n\n## What Happened\n\nRan the final readiness verification in the supported Python 3.11 venv after all cleanup and migration steps. The suite passed with 15 tests. Git status showed the expected local changes: .gitignore and pyproject.toml modified, settings.local.json removed from tracking, and current .gsd artifacts untracked/new.\n\n## Verification\n\nFinal verification passed: ./venv/Scripts/python.exe -m pytest -q returned 15 passed, 19 warnings in 98.42s; git status showed only expected cleanup and GSD artifact changes.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `./venv/Scripts/python.exe -m pytest -q` | 0 | ✅ pass | 98420ms |\n| 2 | `git status --short` | 0 | ✅ pass | 0ms |\n\n## Deviations\n\nNone.\n\n## Known Issues\n\nDocling deprecation warning remains: legacy VLM options should migrate to VlmConvertOptions before heavy Phase 2 extraction work.\n\n## Files Created/Modified\n\n- `tests/`\n- `venv/Scripts/python.exe`\n",
+      "description": "Run the project test suite using the supported Python 3.11 venv and inspect git status for expected changes only.",
+      "estimate": "small",
+      "files": [],
+      "verify": "./venv/Scripts/python.exe -m pytest -q && git status --short",
+      "inputs": [
+        "tests/"
+      ],
+      "expected_output": [],
+      "observability_impact": "Produces final verification evidence for the readiness cleanup slice.",
+      "full_plan_md": "",
+      "sequence": 0,
+      "blocker_source": "",
+      "escalation_pending": 0,
+      "escalation_awaiting_review": 0,
+      "escalation_artifact_path": null,
+      "escalation_override_applied_at": null
+    }
+  ],
+  "decisions": [],
+  "verification_evidence": [
+    {
+      "id": 1,
+      "task_id": "T01",
+      "slice_id": "S01",
+      "milestone_id": "M001",
+      "command": "git pull --ff-only origin main",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 0,
+      "created_at": "2026-05-19T21:04:41.515Z"
+    },
+    {
+      "id": 2,
+      "task_id": "T01",
+      "slice_id": "S01",
+      "milestone_id": "M001",
+      "command": "git rev-parse HEAD && git rev-parse origin/main",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 0,
+      "created_at": "2026-05-19T21:04:41.515Z"
+    },
+    {
+      "id": 3,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M001",
+      "command": "git check-ignore settings.local.json && python secret-prefix scan",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 0,
+      "created_at": "2026-05-19T21:04:54.916Z"
+    },
+    {
+      "id": 4,
+      "task_id": "T03",
+      "slice_id": "S01",
+      "milestone_id": "M001",
+      "command": "./venv/Scripts/python.exe -m pip install -e \".[dev]\"",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 25300,
+      "created_at": "2026-05-19T21:05:11.040Z"
+    },
+    {
+      "id": 5,
+      "task_id": "T04",
+      "slice_id": "S01",
+      "milestone_id": "M001",
+      "command": "test -f .gsd/PROJECT.md && test -f .gsd/REQUIREMENTS.md && test -f .gsd/DECISIONS.md && test -f .gsd/milestones/M001/M001-ROADMAP.md && test -f .gsd/milestones/M001/slices/S01/S01-PLAN.md",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 0,
+      "created_at": "2026-05-19T21:05:33.051Z"
+    },
+    {
+      "id": 6,
+      "task_id": "T05",
+      "slice_id": "S01",
+      "milestone_id": "M001",
+      "command": "./venv/Scripts/python.exe -m pytest -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 98420,
+      "created_at": "2026-05-19T21:05:49.826Z"
+    },
+    {
+      "id": 7,
+      "task_id": "T05",
+      "slice_id": "S01",
+      "milestone_id": "M001",
+      "command": "git status --short",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 0,
+      "created_at": "2026-05-19T21:05:49.826Z"
+    }
+  ]
+}

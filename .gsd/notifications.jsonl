@@ -1,0 +1,1 @@
+{"id":"ec941f7d-6582-4206-b2da-ad4b07861e7c","ts":"2026-05-19T20:54:24.948Z","severity":"error","message":"[tool] gsd_summary_save: PROJECT.md saved to PROJECT.md but parsed zero milestones — registration produced no DB rows","source":"workflow-logger","read":false}

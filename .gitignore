@@ -1,6 +1,7 @@
 compliance.db
 *.db
 .env
+settings.local.json
 data/pdfs/
 __pycache__/
 *.pyc
