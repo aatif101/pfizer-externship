@@ -2,11 +2,16 @@
 
 from src.retrieval.models import (
     CorpusFingerprint,
+    EvidenceGateResult,
     PageIndexInput,
+    RetrievalEvidenceReason,
+    RetrievalHit,
     RetrievalIndexPageRecord,
     RetrievalIndexRun,
     RetrievalIndexStatus,
+    RetrievalResult,
 )
+from src.retrieval.retriever import EvidenceGate, retrieve_evidence
 from src.retrieval.repository import (
     compute_corpus_fingerprint,
     list_page_index_records,
@@ -18,14 +23,20 @@ from src.retrieval.repository import (
 
 __all__ = [
     "CorpusFingerprint",
+    "EvidenceGate",
+    "EvidenceGateResult",
     "PageIndexInput",
+    "RetrievalEvidenceReason",
+    "RetrievalHit",
     "RetrievalIndexPageRecord",
     "RetrievalIndexRun",
     "RetrievalIndexStatus",
+    "RetrievalResult",
     "compute_corpus_fingerprint",
     "list_page_index_records",
     "load_latest_index_run",
     "retrieval_fts_available",
+    "retrieve_evidence",
     "save_index_run",
     "upsert_page_index_records",
 ]

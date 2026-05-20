@@ -126,13 +126,37 @@ class RetrievalHit:
 
 
 @dataclass(frozen=True)
-class RetrievalResult:
-    """Reason-coded safe retrieval response for a user question."""
+class EvidenceGateResult:
+    """Reason-coded safe evidence decision for a user question.
 
-    reason: RetrievalEvidenceReason
+    The gate exposes bounded citation-ready hits only when evidence is strong.
+    Hash metadata is truncated for public diagnostics; raw page text and full
+    corpus hashes remain confined to the index/retriever internals.
+    """
+
+    is_strong: bool
+    reason_code: RetrievalEvidenceReason
     hits: tuple[RetrievalHit, ...]
-    query_terms: tuple[str, ...]
     top_score: float
+    query_terms: tuple[str, ...]
     run_id: str | None
-    content_hash: str | None
+    content_hash_prefix: str | None = None
     message: str | None = None
+
+    @property
+    def reason(self) -> RetrievalEvidenceReason:
+        """Backward-compatible alias for earlier retriever callers/tests."""
+
+        return self.reason_code
+
+    @property
+    def content_hash(self) -> str | None:
+        """Backward-compatible safe hash metadata alias.
+
+        This intentionally returns the public prefix, not the full corpus hash.
+        """
+
+        return self.content_hash_prefix
+
+
+RetrievalResult = EvidenceGateResult

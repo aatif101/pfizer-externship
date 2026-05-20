@@ -7,7 +7,7 @@ from src.db.queries import insert_document, insert_page, mark_document_ingested
 from src.db.schema import init_db
 from src.retrieval.indexer import build_retrieval_index
 from src.retrieval.models import RetrievalEvidenceReason
-from src.retrieval.retriever import HybridTextRetriever, extract_search_terms, make_fts_query
+from src.retrieval.retriever import HybridTextRetriever, extract_search_terms, make_fts_query, retrieve_evidence
 
 
 def _seed_doc(db_path: str, *, doc_id: str, filename: str, pages: tuple[str, ...]) -> None:
@@ -38,9 +38,11 @@ def test_hybrid_retriever_ranks_expected_supplier_page_first(tmp_db_path: str) -
 
     result = HybridTextRetriever(tmp_db_path).retrieve("Which page mentions Acme supplier compliance approval?", top_k=2)
 
+    assert result.is_strong is True
+    assert result.reason_code is RetrievalEvidenceReason.STRONG_EVIDENCE
     assert result.reason is RetrievalEvidenceReason.STRONG_EVIDENCE
     assert result.run_id == built.run.run_id
-    assert result.content_hash == built.run.content_hash
+    assert result.content_hash == built.run.content_hash[:16]
     assert result.query_terms == ("mentions", "acme", "supplier", "compliance", "approval")
     assert result.top_score > 0
     assert result.hits
@@ -110,6 +112,114 @@ def test_hybrid_retriever_returns_empty_question_for_stopword_only_query(tmp_db_
     assert result.hits == ()
     assert result.query_terms == ()
     assert result.top_score == 0
+
+
+def test_evidence_gate_returns_strong_evidence_for_fixture_supplier_question(tmp_db_path: str) -> None:
+    init_db(tmp_db_path)
+    _seed_doc(
+        tmp_db_path,
+        doc_id="doc-acme",
+        filename="acme-supplier-sdf.pdf",
+        pages=(
+            "Supplier Declaration Form. Vendor Name: Acme Pharma Ltd. Quality Unit Approval: Pfizer supplier compliance documentation controls apply. Expiry Date: 2027-01-31.",
+        ),
+    )
+    built = build_retrieval_index(tmp_db_path)
+
+    result = retrieve_evidence(tmp_db_path, "Acme supplier compliance approval", top_k=1)
+
+    assert result.is_strong is True
+    assert result.reason_code is RetrievalEvidenceReason.STRONG_EVIDENCE
+    assert result.run_id == built.run.run_id
+    assert result.content_hash_prefix == built.run.content_hash[:16]
+    assert result.top_score >= 0.45
+    assert result.hits[0].filename == "acme-supplier-sdf.pdf"
+    assert result.hits[0].display_page_num == 1
+    assert "Acme Pharma Ltd." in result.hits[0].snippet
+
+
+def test_evidence_gate_returns_empty_question_for_blank_and_stopword_only_queries(tmp_db_path: str) -> None:
+    init_db(tmp_db_path)
+    _seed_doc(tmp_db_path, doc_id="doc-empty", filename="empty.pdf", pages=("Some searchable text",))
+    build_retrieval_index(tmp_db_path)
+
+    for question in ("", "   \t\n ", "the and of to in"):
+        result = retrieve_evidence(tmp_db_path, question, top_k=1)
+
+        assert result.is_strong is False
+        assert result.reason_code is RetrievalEvidenceReason.EMPTY_QUESTION
+        assert result.hits == ()
+        assert result.query_terms == ()
+        assert result.top_score == 0
+
+
+def test_evidence_gate_returns_index_missing_before_build(tmp_db_path: str) -> None:
+    init_db(tmp_db_path)
+    _seed_doc(tmp_db_path, doc_id="doc-missing", filename="missing.pdf", pages=("Supplier compliance text",))
+
+    result = retrieve_evidence(tmp_db_path, "supplier compliance", top_k=1)
+
+    assert result.is_strong is False
+    assert result.reason_code is RetrievalEvidenceReason.INDEX_MISSING
+    assert result.hits == ()
+    assert result.run_id is None
+    assert result.content_hash_prefix is not None
+
+
+def test_evidence_gate_returns_index_empty_for_empty_indexed_corpus(tmp_db_path: str) -> None:
+    init_db(tmp_db_path)
+    build_retrieval_index(tmp_db_path)
+
+    result = retrieve_evidence(tmp_db_path, "supplier compliance", top_k=1)
+
+    assert result.is_strong is False
+    assert result.reason_code is RetrievalEvidenceReason.INDEX_EMPTY
+    assert result.hits == ()
+    assert result.top_score == 0
+
+
+def test_evidence_gate_returns_index_stale_without_querying_old_hits(tmp_db_path: str) -> None:
+    init_db(tmp_db_path)
+    _seed_doc(tmp_db_path, doc_id="doc-stale", filename="stale.pdf", pages=("Original supplier compliance evidence",))
+    build_retrieval_index(tmp_db_path)
+    conn = sqlite3.connect(tmp_db_path)
+    conn.execute("UPDATE pages SET page_text = ? WHERE doc_id = ? AND page_num = ?", ("Mutated source page text", "doc-stale", 0))
+    conn.commit()
+    conn.close()
+
+    result = retrieve_evidence(tmp_db_path, "Original supplier compliance", top_k=1)
+
+    assert result.is_strong is False
+    assert result.reason_code is RetrievalEvidenceReason.INDEX_STALE
+    assert result.hits == ()
+    assert result.top_score == 0
+
+
+def test_evidence_gate_returns_no_match_for_unrelated_question(tmp_db_path: str) -> None:
+    init_db(tmp_db_path)
+    _seed_doc(tmp_db_path, doc_id="doc-zeta", filename="zeta-sdf.pdf", pages=("Zeta supplier compliance page",))
+    build_retrieval_index(tmp_db_path)
+
+    result = retrieve_evidence(tmp_db_path, "astronomy telescope nebula", top_k=1)
+
+    assert result.is_strong is False
+    assert result.reason_code is RetrievalEvidenceReason.NO_MATCH
+    assert result.hits == ()
+    assert result.top_score == 0
+
+
+def test_evidence_gate_returns_below_threshold_without_hits_for_weak_partial_overlap(tmp_db_path: str) -> None:
+    init_db(tmp_db_path)
+    _seed_doc(tmp_db_path, doc_id="doc-zeta", filename="zeta-sdf.pdf", pages=("Zeta supplier compliance page",))
+    build_retrieval_index(tmp_db_path)
+
+    result = retrieve_evidence(tmp_db_path, "zeta astronomy telescope nebula", top_k=1)
+
+    assert result.is_strong is False
+    assert result.reason_code is RetrievalEvidenceReason.BELOW_THRESHOLD
+    assert result.hits == ()
+    assert result.top_score > 0
+    assert result.query_terms == ("zeta", "astronomy", "telescope", "nebula")
 
 
 def test_hybrid_retriever_diagnostics_do_not_expose_full_page_text(tmp_db_path: str) -> None:

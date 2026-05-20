@@ -24,8 +24,11 @@ from src.retrieval.repository import retrieval_fts_available
 _TOKEN_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
 _SNIPPET_MAX_CHARS = 220
 _SNIPPET_MIN_CHARS = 180
+_HASH_PREFIX_CHARS = 16
 _DEFAULT_CANDIDATE_LIMIT = 50
-_DEFAULT_MIN_SCORE = 0.45
+DEFAULT_MIN_TOP_SCORE = 0.45
+DEFAULT_MIN_QUERY_TERM_COVERAGE = 0.50
+DEFAULT_MIN_HIT_COUNT = 1
 
 _STOPWORDS = frozenset(
     {
@@ -101,11 +104,15 @@ class HybridTextRetriever:
         db_path: str,
         *,
         candidate_limit: int = _DEFAULT_CANDIDATE_LIMIT,
-        min_score: float = _DEFAULT_MIN_SCORE,
+        min_score: float = DEFAULT_MIN_TOP_SCORE,
+        min_query_term_coverage: float = DEFAULT_MIN_QUERY_TERM_COVERAGE,
+        min_hit_count: int = DEFAULT_MIN_HIT_COUNT,
     ) -> None:
         self.db_path = db_path
         self.candidate_limit = max(1, candidate_limit)
         self.min_score = max(0.0, min_score)
+        self.min_query_term_coverage = min(max(0.0, min_query_term_coverage), 1.0)
+        self.min_hit_count = max(1, min_hit_count)
 
     def retrieve(self, question: str, *, top_k: int = 5) -> RetrievalResult:
         """Return citation-ready ranked evidence or a weak-evidence reason code."""
@@ -113,10 +120,11 @@ class HybridTextRetriever:
         top_k = max(1, top_k)
         terms = extract_search_terms(question)
         if not terms:
-            return RetrievalResult(
-                reason=RetrievalEvidenceReason.EMPTY_QUESTION,
+            return self._result(
+                RetrievalEvidenceReason.EMPTY_QUESTION,
+                is_strong=False,
                 hits=(),
-                query_terms=(),
+                terms=(),
                 top_score=0.0,
                 run_id=None,
                 content_hash=None,
@@ -145,23 +153,39 @@ class HybridTextRetriever:
             top_score = hits[0].score if hits else 0.0
             if not hits:
                 reason = RetrievalEvidenceReason.NO_MATCH
+                strong_hits: tuple[RetrievalHit, ...] = ()
+                is_strong = False
             elif top_score < self.min_score:
                 reason = RetrievalEvidenceReason.BELOW_THRESHOLD
+                strong_hits = ()
+                is_strong = False
+            elif hits[0].score_components.token_coverage < self.min_query_term_coverage:
+                reason = RetrievalEvidenceReason.BELOW_THRESHOLD
+                strong_hits = ()
+                is_strong = False
+            elif len(hits) < self.min_hit_count:
+                reason = RetrievalEvidenceReason.BELOW_THRESHOLD
+                strong_hits = ()
+                is_strong = False
             else:
                 reason = RetrievalEvidenceReason.STRONG_EVIDENCE
-            return RetrievalResult(
-                reason=reason,
-                hits=tuple(hits),
-                query_terms=terms,
+                strong_hits = tuple(hits)
+                is_strong = True
+            return self._result(
+                reason,
+                is_strong=is_strong,
+                hits=strong_hits,
+                terms=terms,
                 top_score=top_score,
                 run_id=status.run_id,
                 content_hash=status.content_hash,
             )
         except sqlite3.Error as exc:
-            return RetrievalResult(
-                reason=RetrievalEvidenceReason.RETRIEVAL_ERROR,
+            return self._result(
+                RetrievalEvidenceReason.RETRIEVAL_ERROR,
+                is_strong=False,
                 hits=(),
-                query_terms=terms,
+                terms=terms,
                 top_score=0.0,
                 run_id=None,
                 content_hash=None,
@@ -175,13 +199,29 @@ class HybridTextRetriever:
         run_id: str | None,
         content_hash: str | None,
     ) -> RetrievalResult:
+        return self._result(reason, is_strong=False, hits=(), terms=terms, top_score=0.0, run_id=run_id, content_hash=content_hash)
+
+    def _result(
+        self,
+        reason: RetrievalEvidenceReason,
+        *,
+        is_strong: bool,
+        hits: tuple[RetrievalHit, ...],
+        terms: tuple[str, ...],
+        top_score: float,
+        run_id: str | None,
+        content_hash: str | None,
+        message: str | None = None,
+    ) -> RetrievalResult:
         return RetrievalResult(
-            reason=reason,
-            hits=(),
+            is_strong=is_strong,
+            reason_code=reason,
+            hits=hits,
             query_terms=terms,
-            top_score=0.0,
+            top_score=top_score,
             run_id=run_id,
-            content_hash=content_hash,
+            content_hash_prefix=_hash_prefix(content_hash),
+            message=message,
         )
 
     def _fts_candidates(self, terms: tuple[str, ...]) -> list[_Candidate]:
@@ -275,6 +315,36 @@ class HybridTextRetriever:
         )
 
 
+class EvidenceGate(HybridTextRetriever):
+    """Named evidence-gate API for callers that should not use raw retrieval directly."""
+
+
+def retrieve_evidence(
+    db_path: str,
+    question: str,
+    *,
+    top_k: int = 5,
+    candidate_limit: int = _DEFAULT_CANDIDATE_LIMIT,
+    min_top_score: float = DEFAULT_MIN_TOP_SCORE,
+    min_query_term_coverage: float = DEFAULT_MIN_QUERY_TERM_COVERAGE,
+    min_hit_count: int = DEFAULT_MIN_HIT_COUNT,
+) -> RetrievalResult:
+    """Return a deterministic strong/weak evidence decision over the index.
+
+    The gate checks index status before scoring and returns citation-ready hits
+    only for ``strong_evidence`` outcomes. Weak outcomes expose diagnostics but
+    never fabricate or leak page evidence.
+    """
+
+    return EvidenceGate(
+        db_path,
+        candidate_limit=candidate_limit,
+        min_score=min_top_score,
+        min_query_term_coverage=min_query_term_coverage,
+        min_hit_count=min_hit_count,
+    ).retrieve(question, top_k=top_k)
+
+
 def extract_search_terms(question: str) -> tuple[str, ...]:
     """Normalize and de-duplicate searchable question terms deterministically."""
 
@@ -318,6 +388,12 @@ def make_query_snippet(text: str, terms: tuple[str, ...], *, max_chars: int = _S
     if end < len(normalized):
         snippet = snippet.rstrip() + "…"
     return snippet
+
+
+def _hash_prefix(content_hash: str | None) -> str | None:
+    if not content_hash:
+        return None
+    return content_hash[:_HASH_PREFIX_CHARS]
 
 
 def _candidate_from_row(row: sqlite3.Row) -> _Candidate:
