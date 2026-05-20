@@ -1,0 +1,120 @@
+[
+  {
+    "kind": "edit",
+    "toolCallId": "call_v9crnN4e1PKRqpmxrE2JgZvf|fc_09d882fea464f76a016a0d3c3468f0819084eea2d938996319",
+    "path": "src/db/queries.py",
+    "timestamp": 1779252281465
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "call_rH0UXClBPO62oa0Ww2LL2rG4|fc_09d882fea464f76a016a0d3c3ddd1c81908a374b0fbb0894ba",
+    "path": "src/db/queries.py",
+    "timestamp": 1779252369886
+  },
+  {
+    "kind": "write",
+    "toolCallId": "call_8v0VTSWMdwQPxTRi1zO1JVZm|fc_09d882fea464f76a016a0d3c93e6bc81908e56601ebebd3f18",
+    "path": "src/extraction/providers.py",
+    "timestamp": 1779252405525
+  },
+  {
+    "kind": "write",
+    "toolCallId": "call_7NxSNpjoKzCQR2C1CQLEiuim|fc_09d882fea464f76a016a0d3d8d42888190b6c0a3785d0afd35",
+    "path": "src/extraction/pipeline.py",
+    "timestamp": 1779252744416
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "call_pfRHjem3YgwE8r0V0WymOkZu|fc_09d882fea464f76a016a0d3e09bcc08190a883b583cc5a5594",
+    "path": "src/db/queries.py",
+    "timestamp": 1779252750700
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "call_v0rClt8zidzNM7Exrf7PH7y5|fc_09d882fea464f76a016a0d3e0fc4f88190b2c1cd58fdbbb1b4",
+    "path": "src/extraction/__init__.py",
+    "timestamp": 1779252757983
+  },
+  {
+    "kind": "write",
+    "toolCallId": "call_BOwf8a1avwPs1h0kAlK7YGiQ|fc_09d882fea464f76a016a0d3e182d708190a526ac42cb0319e6",
+    "path": "tests/test_extraction_pipeline.py",
+    "timestamp": 1779252942532
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "call_LEpht2xDU536oLa0WovgLKgU|fc_09d882fea464f76a016a0d3ed072248190bc974023bad7f4ab",
+    "path": "tests/test_extraction_pipeline.py",
+    "timestamp": 1779252946559
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "call_sRhTlVT7zODqAIQLAIjRitsq|fc_09d882fea464f76a016a0d3ed3a3888190a8b38cc45a5caa77",
+    "path": "tests/test_extraction_pipeline.py",
+    "timestamp": 1779252949764
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "call_6kZckImqzoNLa03Wr5FZfaDw|fc_09d882fea464f76a016a0d3ed6dd208190be606e6a03c99816",
+    "path": "tests/test_extraction_pipeline.py",
+    "timestamp": 1779252953292
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "call_xMbxbknDkHSXX73HnorzoJPk|fc_09d882fea464f76a016a0d3eda6f6c819095bf7ae3a7f08a82",
+    "path": "tests/test_extraction_pipeline.py",
+    "timestamp": 1779252959648
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "call_o6AdK5STaGyAA4q9Ko6Rit2j|fc_09d882fea464f76a016a0d3ee08efc8190b7bd4f0c2b35a1d6",
+    "path": "tests/test_extraction_pipeline.py",
+    "timestamp": 1779252962581
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "call_ItdccFcpd0tagRWA4DLcrmjE|fc_09d882fea464f76a016a0d6893dadc8190b1eb3df22c6a2b82",
+    "command": "",
+    "exitCode": 1,
+    "outputSnippet": "Skipped due to queued user message.",
+    "timestamp": 1779263639464
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "call_y2kdKgpgf3yqbzfClVPkkSgs|fc_09d882fea464f76a016a0d68995c4c819085a7d60e25e52dff",
+    "command": "",
+    "exitCode": 1,
+    "outputSnippet": "Skipped due to queued user message.",
+    "timestamp": 1779263644521
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "call_EUN01WEYbO9oXNhDohF5lt2A|fc_09d882fea464f76a016a0d689f49d48190bd751e972a7eada4",
+    "command": "./venv/Scripts/python.exe -m pytest tests/test_extraction_risk.py tests/test_extraction_pipeline.py -q",
+    "exitCode": 1,
+    "outputSnippet": ".........F\r\n================================== FAILURES ===================================\r\n_ test_extract_document_fake_provider_persists_fields_compliance_risk_and_run_metadata _\r\ntests\\test_extraction_pipeline.py:167: in test_extract_document_fake_provider_persists_fields_compliance_risk_and_run_metadata\r\n    assert result.record.risk_level == \"amber\"\r\nE   AssertionError: assert 'green' == 'amber'\r\nE     \r\nE     - amber\r\nE     + green\r\n=========================== short test summary info ====",
+    "timestamp": 1779263650580
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "call_NN4mrUeQh7D1fn9yKrPApy8x|fc_09d882fea464f76a016a0d68a8e6ec81908884dd2334f3b938",
+    "path": "tests/test_extraction_pipeline.py",
+    "timestamp": 1779263665399
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "call_6b5s553DhlB3mlvIkIJ47EO3|fc_09d882fea464f76a016a0d68b24ce48190874e8709e4e47f97",
+    "command": "./venv/Scripts/python.exe -m pytest tests/test_extraction_risk.py tests/test_extraction_pipeline.py -q",
+    "exitCode": 0,
+    "outputSnippet": "................                                                         [100%]\r\n16 passed in 1.07s\r\n",
+    "timestamp": 1779263667595
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "call_iOqT7D4cJ7t8U8Cd5N8Vs6hb|fc_09d882fea464f76a016a0d68b7bf188190874c4f80e3b9a509",
+    "command": "./venv/Scripts/python.exe -m pytest tests/test_extraction_models.py tests/test_extraction_persistence.py tests/test_extraction_risk.py tests/test_extraction_pipeline.py -q",
+    "exitCode": 0,
+    "outputSnippet": "................................                                         [100%]\r\n32 passed in 1.67s\r\n",
+    "timestamp": 1779263673979
+  }
+]

@@ -1,14 +1,14 @@
 {
   "version": 1,
-  "exported_at": "2026-05-19T21:06:54.264Z",
+  "exported_at": "2026-05-20T19:29:17.404Z",
   "milestones": [
     {
       "id": "M001",
       "title": "Phase 2 Extraction and Compliance",
-      "status": "active",
+      "status": "complete",
       "depends_on": [],
       "created_at": "2026-05-19T20:55:05.866Z",
-      "completed_at": null,
+      "completed_at": "2026-05-20T19:29:17.108Z",
       "vision": "Deliver the baseline structured extraction and compliance workflow on top of the completed Phase 1 ingestion foundation.",
       "success_criteria": [
         "Migration cleanup leaves no tracked local secrets.",
@@ -135,22 +135,20 @@
     {
       "milestone_id": "M001",
       "id": "S02",
-      "title": "Extraction contract and persistence",
-      "status": "pending",
+      "title": "S02",
+      "status": "complete",
       "risk": "high",
-      "depends": [
-        "S01"
-      ],
+      "depends": [],
       "demo": "A typed extraction schema can represent required SDF fields, source evidence, confidence, and review state for sample records.",
       "created_at": "2026-05-19T20:59:26.693Z",
-      "completed_at": null,
-      "full_summary_md": "",
-      "full_uat_md": "",
-      "goal": "Define the structured extraction contract and persistence shape before adding VLM calls.",
-      "success_criteria": "- Pydantic models cover required fields, source spans, source pages, confidence, and needs_review.\n- Date parsing handles expected pharma formats.\n- DB helpers can upsert and list extraction records.\n- Tests cover invalid and low-confidence records.",
-      "proof_level": "Unit tests for model validation, date parsing, threshold boundaries, and DB persistence.",
-      "integration_closure": "Schema code, DB write/read helpers, and tests agree on extraction field storage and evidence requirements.",
-      "observability_impact": "Adds explicit confidence/review fields and trace identifiers for later Langfuse correlation.",
+      "completed_at": "2026-05-19T22:49:44.421Z",
+      "full_summary_md": "---\nid: S02\nparent: M001\nmilestone: M001\nprovides:\n  - Typed extraction models for S03 real extraction pipeline integration.\n  - SQLite schema and repository helpers for S03 to persist extracted metadata.\n  - Dashboard-ready compliance listing shape for S04 Streamlit rendering.\nrequires:\n  - slice: S01\n    provides: Python 3.11 virtual environment path and clean migrated repository state.\n  - slice: Phase 1 ingestion foundation\n    provides: Existing `documents` and `pages` table conventions, including document IDs and page references.\naffects:\n  - S03\n  - S04\nkey_files:\n  - src/extraction/__init__.py\n  - src/extraction/models.py\n  - src/extraction/repository.py\n  - src/db/schema.py\n  - tests/test_extraction_models.py\n  - tests/test_extraction_schema.py\n  - tests/test_extraction_persistence.py\n  - tests/test_db.py\nkey_decisions:\n  - Model required SDF fields as a closed enum and require extraction records to include exactly the six Phase 2 fields.\n  - Require non-abstained fields to include source evidence while permitting abstained fields to omit spans when an explicit abstention reason is present.\n  - Use migration-safe nullable SQLite columns and a separate document-level `compliance_records` table to prepare dashboard consumption.\n  - Use SQLite foreign-key enforcement at the repository boundary for missing documents.\n  - Use deterministic compliance listing order by non-null expiry date, expiry date ascending, vendor name, then doc_id.\n  - Use expiry-date evidence as document-level source context when available, otherwise fall back to the first non-abstained field.\npatterns_established:\n  - Strict Pydantic validation is the boundary before extraction records are persisted.\n  - Extraction persistence uses idempotent upserts for both field-level rows and document-level compliance summaries.\n  - SQLite writes use parameterized queries, including for untrusted vendor/source strings.\n  - Dashboard-facing data should be exposed through repository list helpers rather than raw SQL in UI code.\nobservability_surfaces:\n  - Extraction and compliance persistence carry `trace_id`/run metadata fields for future Langfuse/runtime correlation.\n  - Field-level rows preserve confidence, review state, needs-review, abstention reason, source page, bbox JSON, and verbatim evidence for audit/debugging.\ndrill_down_paths:\n  - .gsd/milestones/M001/slices/S02/tasks/T01-SUMMARY.md\n  - .gsd/milestones/M001/slices/S02/tasks/T02-SUMMARY.md\n  - .gsd/milestones/M001/slices/S02/tasks/T03-SUMMARY.md\nduration: \"\"\nverification_result: passed\ncompleted_at: 2026-05-19T22:49:44.422Z\nblocker_discovered: false\n---\n\n# S02: Extraction contract and persistence\n\n**Established a strict typed SDF extraction contract plus SQLite persistence and dashboard-ready compliance records for deterministic sample extraction records.**\n\n## What Happened\n\nS02 delivered the Phase 2 extraction foundation on top of the Phase 1 document/page store. T01 introduced `src/extraction/models.py` with strict Pydantic v2 models for the six required SDF fields, source evidence, confidence, review state, needs-review state, and abstention handling. T02 evolved the SQLite schema with extraction review metadata, nullable compliance/dashboard placeholders, `compliance_records`, and indexes for document/review/risk access paths while preserving migration compatibility. T03 added repository helpers that idempotently persist and retrieve validated `SDFExtractionRecord` instances, write exactly six field-level extraction rows per document record, maintain one document-level compliance record, preserve SQL metacharacters safely through parameterized queries, and provide deterministic compliance listing for the later Streamlit dashboard slice. Closeout verification found that the originally planned `./venv/Scripts/python.exe` command form is not accepted by this Windows shell, so the same project venv was verified with `venv/Scripts/python.exe`.\n\n## Verification\n\nCloseout verification was run through `gsd_exec` using the project Python 3.11 virtual environment. `venv/Scripts/python.exe -m pytest tests/test_extraction_models.py tests/test_extraction_schema.py tests/test_extraction_persistence.py -q` passed as part of the combined closeout command, covering 21 targeted extraction contract/schema/persistence tests. `venv/Scripts/python.exe -m pytest -q` passed with 36 tests and 19 third-party deprecation warnings in 94.23s. No Langfuse credentials or external API/network calls were required. Persistence tests cover malformed model rejection before persistence, SQLite FK rejection for nonexistent documents, idempotent upserts, SQL metacharacter round-trips, abstention storage, review flags, aggregate compliance fields, and deterministic dashboard listing.\n\n## Requirements Advanced\n\n- R002 — Typed models and repository tests now represent/persist the six required SDF fields with source spans, source page evidence, confidence, review state, and abstentions for deterministic sample records.\n- R003 — Compliance record schema includes nullable risk/review fields and document-level summaries needed for later threshold computation.\n- R004 — Repository exposes dashboard-ready compliance rows with deterministic ordering, confidence/source metadata, and document-level field summaries.\n- R008 — Extraction persistence carries trace/run metadata and remains non-fatal without Langfuse credentials.\n\n## Requirements Validated\n\nNone.\n\n## New Requirements Surfaced\n\n- None.\n\n## Requirements Invalidated or Re-scoped\n\nNone.\n\n## Operational Readiness\n\nNone.\n\n## Deviations\n\nThe planned verification command used `./venv/Scripts/python.exe`, but the Windows shell in this environment rejects the leading `./`. Verification used the same project virtual environment via `venv/Scripts/python.exe`, which passed. No source-code scope deviation.\n\n## Known Limitations\n\nS02 stores contract and persistence foundations only. It does not run real PDF/VLM extraction, compute final compliance risk thresholds, render Streamlit dashboard rows, or emit extraction runtime traces.\n\n## Follow-ups\n\nS03 should wire real extractor calls into `SDFExtractionRecord` and repository helpers, compute/abstain source-grounded metadata from PDFs, and populate compliance/risk values. S04 should render `compliance_records` in Streamlit with risk coloring, confidence, and source-page links.\n\n## Files Created/Modified\n\n- `src/extraction/__init__.py` — Exports extraction model/repository surface for Phase 2 use.\n- `src/extraction/models.py` — Defines strict Pydantic v2 SDF extraction field, evidence, confidence, review, and abstention models.\n- `src/extraction/repository.py` — Adds idempotent SQLite persistence, retrieval, and compliance listing helpers.\n- `src/db/schema.py` — Adds extraction review columns, compliance_records schema, and indexes.\n- `tests/test_extraction_models.py` — Covers extraction contract validation and negative cases.\n- `tests/test_extraction_schema.py` — Covers schema evolution for extraction/compliance tables.\n- `tests/test_extraction_persistence.py` — Covers repository persistence, idempotency, FK failures, abstentions, SQL metacharacters, and compliance listing.\n- `tests/test_db.py` — Updates database schema regression coverage.\n",
+      "full_uat_md": "# S02: Extraction contract and persistence — UAT\n\n**Milestone:** M001\n**Written:** 2026-05-19T22:49:44.423Z\n\n## UAT: S02 Extraction Contract and Persistence\n\n**UAT Type:** Automated developer UAT using temporary SQLite databases and deterministic sample extraction records.\n\n### Preconditions\n\n1. Work from the project root on the Python 3.11 virtual environment.\n2. No Gemini, Claude, or Langfuse credentials are required.\n3. A temporary SQLite database can be initialized with the project schema.\n\n### Steps\n\n1. Create or initialize a test SQLite database with the existing Phase 1 `documents` and `pages` tables plus the S02 extraction/compliance schema.\n2. Insert one document and at least one page row using the established Phase 1 document/page conventions.\n3. Construct a valid `SDFExtractionRecord` containing exactly these six required fields: document type, vendor, manufacturing date, effective date, revision date, and expiry date.\n4. Include field-level source evidence with source page references, source spans, confidence scores, normalized values, review state, and needs-review flags.\n5. Include at least one abstained field with an explicit abstention reason.\n6. Persist the record through the extraction repository.\n7. Fetch the record back and compare field values, normalized values, evidence, confidence, review state, trace/run metadata, and abstention details.\n8. Persist the same record again with changed values and verify the repository updates idempotently rather than duplicating rows.\n9. List dashboard-ready compliance records and verify the row includes document-level field summaries, risk/review placeholders, confidence/source metadata, and deterministic ordering.\n10. Attempt negative cases: unknown field names, invalid confidence, negative page numbers, malformed bounding boxes, missing non-abstained values, missing abstention reasons, nonexistent `doc_id`, and SQL-like vendor/source strings.\n\n### Expected Outcomes\n\n- The valid sample record is accepted by Pydantic validation.\n- Invalid records fail before persistence.\n- Exactly six field-level extraction rows are stored for the sample record.\n- One document-level `compliance_records` row is upserted for the document.\n- Fetching the record reconstructs the typed model with evidence, confidence, review, and abstention details intact.\n- Repeated persistence is idempotent and updates existing rows.\n- Missing parent documents fail via SQLite foreign-key enforcement.\n- SQL metacharacter strings round-trip as data and do not alter query behavior.\n- Compliance listing returns dashboard-ready rows for S04.\n\n### Edge Cases Covered\n\n- Unknown fields are rejected.\n- Confidence outside `[0, 1]` is rejected.\n- Negative source page numbers are rejected.\n- Invalid bounding boxes are rejected.\n- Non-abstained fields without values/source spans are rejected.\n- Abstentions without reasons are rejected.\n- Missing `doc_id` parents fail FK checks.\n- Malicious-looking vendor/source text persists safely as literal text.\n\n### Not Proven By This UAT\n\n- Real VLM/Gemini/Claude extraction from PDFs is not proven; that is S03.\n- Compliance risk threshold calculation is only prepared by nullable columns/placeholders; threshold behavior belongs to S03/S04.\n- Streamlit rendering, risk coloring, and source-page links are not proven; that is S04.\n- Langfuse tracing integration for extraction runtime is not exercised beyond confirming credentials are not required for this persistence slice.\n",
+      "goal": "Establish the Phase 2 extraction contract and SQLite persistence foundation: typed SDF extraction records validate required fields, evidence, confidence, review/abstention state, and deterministic sample records round-trip through field-level and dashboard-ready document-level tables.",
+      "success_criteria": "Owned requirement: R002. Supporting/preparatory requirements: R003, R004, R008. Demo outcome: with no VLM or Langfuse credentials, tests can construct a sample SDFExtractionRecord containing the six required fields, include source page/span evidence and an abstention, persist it for an existing document, fetch it back, and list a dashboard-ready compliance record row. Verification commands: `./venv/Scripts/python.exe -m pytest tests/test_extraction_models.py tests/test_extraction_schema.py tests/test_extraction_persistence.py -q` and `./venv/Scripts/python.exe -m pytest -q`. Threat Surface (Q3): untrusted extracted text and vendor strings will be written to SQLite, so all persistence must use parameterized queries and tests must cover SQL metacharacter round-trips; no auth or network/API calls are introduced. Requirement Impact (Q4): R002 is directly advanced; R003/R004 are prepared via nullable risk/dashboard columns; R009/D001 remain binding through Python 3.11 venv commands; D002 remains binding by not reading ignored local provider settings. Failure Modes (Q5): malformed extraction records must fail Pydantic validation before persistence; nonexistent doc_id must fail FK checks; absent Langfuse credentials must not affect persistence. Load Profile (Q6): per document, six field upserts plus one compliance record upsert; SQLite is adequate for demo corpus, but use idempotent upserts and indexed doc_id paths. Negative Tests (Q7): unknown fields, invalid confidence, negative page numbers, missing value without abstention, malformed bbox, FK violations, and malicious SQL-like values.",
+      "proof_level": "Contract plus persistence integration proof. Real runtime required: yes, via Python 3.11 pytest against temporary SQLite databases. Human/UAT required: no.",
+      "integration_closure": "Upstream consumed: Phase 1 `documents` and `pages` persistence conventions, especially existing `doc_id` and 0-indexed `pages.page_num`. New wiring introduced: `src/extraction` typed models and repository helpers, schema evolution for `extractions`, and a new `compliance_records` document-level table. Remaining before end-to-end milestone usability: S03 must wire real extractor calls into these models/repository, and S04 must render `compliance_records` in Streamlit with risk coloring/source links.",
+      "observability_impact": "Extraction persistence will carry `trace_id`, field-level `review_state`, `needs_review`, `abstention_reason`, normalized values, and document-level aggregate/review/risk placeholders. Future agents can inspect SQLite tables (`extractions`, `compliance_records`) and repository test failures without requiring Langfuse credentials. Redaction boundary: do not log verbatim page text or secret-bearing settings; verbatim spans are persisted only as explicit evidence fields.",
       "sequence": 2,
       "replan_triggered_at": null,
       "is_sketch": 0,
@@ -159,22 +157,20 @@
     {
       "milestone_id": "M001",
       "id": "S03",
-      "title": "Baseline extraction pipeline",
-      "status": "pending",
+      "title": "S03",
+      "status": "complete",
       "risk": "high",
-      "depends": [
-        "S02"
-      ],
+      "depends": [],
       "demo": "Running extraction against sample PDFs produces structured metadata rows with page/source evidence or explicit abstentions.",
       "created_at": "2026-05-19T20:59:26.693Z",
-      "completed_at": null,
-      "full_summary_md": "",
-      "full_uat_md": "",
-      "goal": "Implement baseline VLM-assisted metadata extraction over ingested documents.",
-      "success_criteria": "- Extractor reads ingested page text/images and emits validated models.\n- Low-confidence or missing evidence fields are marked for review instead of guessed.\n- Results are stored in extractions table.\n- CLI or callable pipeline can process all ingested documents.",
-      "proof_level": "Integration tests with mocked LLM responses plus one real/manual sample run when credentials are available.",
-      "integration_closure": "Extraction consumes ingested document/page rows and persists results into the existing SQLite schema.",
-      "observability_impact": "Extraction attempts include structured logs and Langfuse trace metadata without logging document text or secrets.",
+      "completed_at": "2026-05-20T17:40:56.145Z",
+      "full_summary_md": "---\nid: S03\nparent: M001\nmilestone: M001\nprovides:\n  - Baseline SDF extraction pipeline persisting six-field extraction records and compliance rows.\n  - Offline-safe fake and Gemini provider seams with typed sanitized failures.\n  - Extraction CLI entrypoints for one-document and batch extraction.\nrequires:\n  - slice: S02\n    provides: Ingested documents/pages and extraction model/repository contract.\naffects:\n  - S04 can render compliance dashboard rows populated by the extraction pipeline.\nkey_files:\n  - src/extraction/models.py\n  - src/extraction/repository.py\n  - src/extraction/risk.py\n  - src/db/queries.py\n  - src/extraction/providers.py\n  - src/extraction/pipeline.py\n  - src/extraction/gemini.py\n  - src/extraction/cli.py\n  - src/config.py\n  - tests/test_extraction_risk.py\n  - tests/test_extraction_persistence.py\n  - tests/test_extraction_pipeline.py\n  - tests/test_extraction_provider_gemini.py\n  - tests/test_extraction_cli.py\nkey_decisions:\n  - Use calendar-year anniversary cutoffs for 2-year and 3-year SDF risk thresholds while persisting actual elapsed age_days.\n  - Validate and ground untrusted provider facts in the pipeline behind a dependency-free provider protocol.\n  - Lazy Gemini provider construction keeps default imports and tests credential-free while live mode fails with typed configuration errors.\n  - Default CLI provider construction is lazy Gemini with a monkeypatchable provider seam for offline CLI tests.\npatterns_established:\n  - Provider DTOs are untrusted and validated for field names, pages, source spans, confidence, and abstentions before persistence.\n  - Malformed provider output becomes deterministic six-field abstentions rather than raw-response leakage or crashes.\n  - Operator diagnostics include identifiers and typed reason classes, not secrets or document content.\nobservability_surfaces:\n  - Extraction diagnostics expose run_id, trace_id, provider_name, document_id, page_count, review states, and abstention reasons.\n  - CLI output reports per-document success/failure counts and sanitized provider/config errors.\n  - SQLite extraction_fields and compliance_records persist dashboard-ready extraction and risk metadata.\ndrill_down_paths:\n  - .gsd/milestones/M001/slices/S03/tasks/T01-SUMMARY.md\n  - .gsd/milestones/M001/slices/S03/tasks/T02-SUMMARY.md\n  - .gsd/milestones/M001/slices/S03/tasks/T03-SUMMARY.md\n  - .gsd/milestones/M001/slices/S03/tasks/T04-SUMMARY.md\nduration: \"\"\nverification_result: passed\ncompleted_at: 2026-05-20T17:40:56.149Z\nblocker_discovered: false\n---\n\n# S03: Baseline extraction pipeline\n\n**Delivered the offline-verifiable baseline SDF extraction pipeline with risk persistence, provider seams, deterministic failure handling, and CLI entrypoints.**\n\n## What Happened\n\nS03 connects ingested document pages to strict six-field SDF extraction records and dashboard-ready compliance rows. T01 added conservative risk metadata and SQLite round-trip coverage. T02 introduced the provider protocol, fake-provider integration path, page loading, source-span grounding, abstentions, run/trace metadata, and persistence. T03 added a lazy Gemini provider with non-required configuration, bounded retries, typed sanitized provider/config failures, malformed-output abstentions, low-confidence review handling, and mocked offline tests. T04 wired Typer extract and extract-all commands through the real pipeline with safe diagnostics and deterministic failure behavior.\n\n## Verification\n\nFull project regression passed after task-summary recovery: `venv/Scripts/python.exe -m pytest -q` returned 65 passed with 19 existing third-party deprecation warnings. Targeted checks also covered app import, pipeline behavior, Gemini provider failure paths, and CLI persistence paths. Extraction runs expose run IDs, optional trace IDs, document IDs, page counts, provider/error classes, review/abstention states, and persisted compliance rows without surfacing API keys, full page text, raw provider responses, or image blobs.\n\n## Requirements Advanced\n\n- R002 — Strict six-field extraction records are produced with evidence, confidence, review state, and abstention handling.\n- R003 — Compliance rows are populated with conservative risk status, reason, age_days, run metadata, and source evidence.\n- R004 — Source-page/span grounding is enforced before provider facts are trusted.\n- R008 — Provider/CLI failure modes are typed, deterministic, observable, and safe without optional credentials.\n\n## Requirements Validated\n\n- R002 — Provider/pipeline tests assert exactly six fields and malformed-output abstentions.\n- R003 — Persistence and CLI tests assert compliance_records rows are written from pipeline execution.\n- R004 — Span mismatch tests abstain ungrounded provider facts.\n- R008 — Missing credential, retryable provider failure, unknown doc, no-doc, and provider failure tests assert safe deterministic behavior.\n\n## New Requirements Surfaced\n\nNone.\n\n## Requirements Invalidated or Re-scoped\n\nNone.\n\n## Operational Readiness\n\nFull regression passed offline without Gemini or Langfuse credentials. Live Gemini extraction remains opt-in and requires GEMINI_API_KEY. Batch extraction is sequential, so Gemini quota/cost is the first scaling breakpoint.\n\n## Deviations\n\nAdded `venv.bat` during T04 to make the automated Windows verification gate execute the required forward-slash venv/Scripts/python.exe path through cmd.exe.\n\n## Known Limitations\n\nFull regression emits existing third-party deprecation warnings from installed dependencies. Streamlit compliance rendering and source-page UI links remain deferred to S04.\n\n## Follow-ups\n\nProceed to S04 to render persisted compliance rows in the dashboard and source-page UI.\n\n## Files Created/Modified\n\n- `src/extraction/models.py` — S03 extraction pipeline implementation or verification support.\n- `src/extraction/repository.py` — S03 extraction pipeline implementation or verification support.\n- `src/extraction/risk.py` — S03 extraction pipeline implementation or verification support.\n- `src/db/queries.py` — S03 extraction pipeline implementation or verification support.\n- `src/extraction/providers.py` — S03 extraction pipeline implementation or verification support.\n- `src/extraction/pipeline.py` — S03 extraction pipeline implementation or verification support.\n- `src/extraction/gemini.py` — S03 extraction pipeline implementation or verification support.\n- `src/extraction/cli.py` — S03 extraction pipeline implementation or verification support.\n- `src/config.py` — S03 extraction pipeline implementation or verification support.\n- `tests/test_extraction_risk.py` — S03 extraction pipeline implementation or verification support.\n- `tests/test_extraction_persistence.py` — S03 extraction pipeline implementation or verification support.\n- `tests/test_extraction_pipeline.py` — S03 extraction pipeline implementation or verification support.\n- `tests/test_extraction_provider_gemini.py` — S03 extraction pipeline implementation or verification support.\n- `tests/test_extraction_cli.py` — S03 extraction pipeline implementation or verification support.\n- `venv.bat` — S03 extraction pipeline implementation or verification support.\n",
+      "full_uat_md": "# S03: Baseline extraction pipeline — UAT\n\n**Milestone:** M001\n**Written:** 2026-05-20T17:40:56.153Z\n\nNo human UAT required for S03. Integration proof completed through deterministic offline automated tests. Evidence: `venv/Scripts/python.exe -m pytest -q` exited 0 with 65 passed and 19 warnings. CLI tests exercise extract and extract-all against temporary SQLite databases with mocked providers. Provider tests cover missing Gemini credentials, malformed output abstentions, retryable failure wrapping/redaction, low-confidence review state, and source-span mismatch abstention.\n",
+      "goal": "Running baseline extraction against ingested sample document pages produces strict six-field SDF extraction records with source page/span evidence or explicit abstentions, conservative compliance risk metadata, run/trace metadata, and dashboard-ready compliance rows in SQLite without requiring Langfuse credentials for success.",
+      "success_criteria": "- `SDFExtractionRecord` persists and reconstructs document-level `risk_reason` and `age_days` in addition to existing risk/status metadata.\n- Pure risk tests cover expired, missing/ambiguous dates, green, amber, and red age thresholds with injectable `today`.\n- A fake-provider pipeline integration test seeds a temp SQLite DB with realistic page text, runs extraction for one doc, and asserts six extraction rows plus one populated `compliance_records` row with source evidence, run metadata, risk fields, and deterministic dashboard values.\n- Provider failure tests cover missing Gemini credentials, malformed provider output, missing source spans, low confidence, missing pages/page text, and abstention synthesis without live network calls.\n- CLI tests or executable invocations cover `extract` and `extract-all` entrypoints against a temp/demo DB with mocked provider behavior.\n- Full regression remains green with `venv/Scripts/python.exe -m pytest -q`.",
+      "proof_level": "Integration proof. Default verification must be deterministic and offline using fake/mocked providers. A live Gemini smoke path may be added, but it must be opt-in and skipped without `GEMINI_API_KEY`. Human/UAT is not required for S03.",
+      "integration_closure": "Consumes the S02 extraction model/repository contract and Phase 1 `documents`/`pages` SQLite store. Introduces runtime extraction orchestration, provider abstraction, Gemini adapter, risk computation, CLI entrypoints, and persistence of risk/run metadata. Leaves Streamlit Compliance tab rendering and source-page UI links to S04.",
+      "observability_impact": "Extraction runs should expose non-secret run IDs, optional trace IDs, document IDs, page counts, provider/error classes, review/abstention states, and persisted compliance rows. Logs/traces must not include API keys, full page text, provider raw responses, or image blobs. Missing Langfuse credentials must be non-fatal.",
       "sequence": 3,
       "replan_triggered_at": null,
       "is_sketch": 0,
@@ -183,23 +179,43 @@
     {
       "milestone_id": "M001",
       "id": "S04",
-      "title": "Compliance dashboard records",
-      "status": "pending",
+      "title": "S04",
+      "status": "complete",
       "risk": "medium",
-      "depends": [
-        "S03"
-      ],
+      "depends": [],
       "demo": "The Compliance tab shows document metadata, age, risk color, confidence, and source page links from SQLite.",
       "created_at": "2026-05-19T20:59:26.693Z",
-      "completed_at": null,
-      "full_summary_md": "",
-      "full_uat_md": "",
-      "goal": "Turn extracted data into the visible compliance officer workflow.",
-      "success_criteria": "- Compliance tab lists ingested documents with extracted fields.\n- Risk colors match threshold rules.\n- Source page links or previews resolve to stored page images.\n- Empty/error states are clear and actionable.",
-      "proof_level": "Automated data-shaping tests plus browser/manual Streamlit smoke verification.",
-      "integration_closure": "Streamlit reads the same SQLite database populated by ingestion/extraction and displays risk records deterministically.",
-      "observability_impact": "Dashboard shows connection/status surfaces and does not crash when optional services are unavailable.",
+      "completed_at": "2026-05-20T18:04:36.631Z",
+      "full_summary_md": "---\nid: S04\nparent: M001\nmilestone: M001\nprovides:\n  - Offline Streamlit compliance tab backed by persisted extraction rows.\n  - Validated dashboard contract for R004 and downstream UI/evaluation polish.\n  - Reusable compliance dashboard module for future milestones.\nrequires:\n  - slice: S03\n    provides: Persisted extraction/compliance records via `list_compliance_records` and page image lookup support via `get_page_image`.\naffects:\n  - M001\n  - M003\nkey_files:\n  - src/dashboard/__init__.py\n  - src/dashboard/compliance.py\n  - src/app.py\n  - tests/test_compliance_dashboard.py\n  - tests/test_app.py\nkey_decisions:\n  - Keep Compliance dashboard data access credential-free and provider-free by wrapping only SQLite repository/query functions.\n  - Use additive display-label fields for Streamlit compatibility while preserving raw compliance row keys.\n  - Treat missing DB/table states as empty dashboard states rather than exceptions.\n  - Load source page images lazily only for selected detail records.\npatterns_established:\n  - SQLite-backed dashboard adapter normalizes compliance rows before rendering.\n  - Friendly empty states for absent persistence layers.\n  - Sanitized, lazy source evidence display for compliance UI.\nobservability_surfaces:\n  - Dashboard summary metrics by risk/review state.\n  - Run_id and trace_id columns in compliance records.\n  - Risk reasons and source page/span details in record detail views.\n  - Sanitized empty/error UI states instead of stack traces.\ndrill_down_paths:\n  - .gsd/milestones/M001/slices/S04/tasks/T01-SUMMARY.md\n  - .gsd/milestones/M001/slices/S04/tasks/T02-SUMMARY.md\n  - .gsd/milestones/M001/slices/S04/tasks/T03-SUMMARY.md\n  - .gsd/exec/1c1054ab-1c3a-4ff9-a247-d39977fbbb57.stdout\nduration: \"\"\nverification_result: passed\ncompleted_at: 2026-05-20T18:04:36.633Z\nblocker_discovered: false\n---\n\n# S04: Compliance dashboard records\n\n**Replaced the Compliance tab placeholder with an offline, SQLite-backed Streamlit dashboard that renders persisted extraction/compliance records, risk status, confidence, review metadata, and sanitized source evidence.**\n\n## What Happened\n\nS04 closes the Phase 2 compliance display loop by adding `src.dashboard.compliance` and wiring `src/app.py` to render real compliance records from SQLite through `list_compliance_records`. The dashboard adapter formats persisted metadata for Streamlit while preserving raw row values, converts source pages to user-facing 1-indexed display, normalizes nullable fields, formats review/confidence/risk/run metadata, and handles missing databases or missing `compliance_records` tables as deterministic empty states. The Streamlit renderer shows summary metrics, risk/review status, a readable records table, and lazy source evidence detail with page/span information plus optional page-image preview via `get_page_image`; it intentionally makes no Gemini, Langfuse, or other provider calls. Edge-case tests cover empty and malformed persistence states, null source evidence, page-index conversion, needs_review int-to-boolean formatting, lazy missing-image tolerance, and Streamlit app smoke startup without credentials. Requirement records R002, R003, and R004 were updated to validated based on the M001 schema/extraction/dashboard chain.\n\n## Verification\n\nCloseout verification ran through the required verification surface with `venv/Scripts/python.exe -m pytest -q` via `gsd_exec` run `1c1054ab-1c3a-4ff9-a247-d39977fbbb57`. Result: exit code 0, `71 passed, 19 warnings in 111.50s`. Prior task-level verification also passed: T01 ran `venv/Scripts/python.exe -m pytest tests/test_compliance_dashboard.py -q` with 5 tests; T02 ran `venv/Scripts/python.exe -m pytest tests/test_compliance_dashboard.py tests/test_app.py -q` with 7 tests; T03 ran the full regression. Verification covers real SQLite adapter behavior, dashboard render contracts, app startup without provider credentials, friendly empty states, source page display, and lazy source evidence handling.\n\n## Requirements Advanced\n\n- R008 — App/dashboard startup remains non-fatal without Langfuse/Gemini credentials and the UI avoids secret/raw provider exposure; broader tracing coverage remains for later milestones.\n\n## Requirements Validated\n\n- R002 — M001 S02-S04 schema/extraction/dashboard chain persists and displays structured SDF metadata with source evidence from SQLite.\n- R003 — M001 S02-S04 implement/test risk computation, persist computed risk, and render risk levels/reasons from SQLite dashboard rows.\n- R004 — S04 tests and full regression prove Streamlit Compliance tab renders SQLite records with metadata, risk display, confidence, review state, and source page/span evidence.\n\n## New Requirements Surfaced\n\n- None.\n\n## Requirements Invalidated or Re-scoped\n\nNone.\n\n## Operational Readiness\n\nNone.\n\n## Deviations\n\nT02 used a fake Streamlit object for render-level tests instead of `streamlit.testing.v1.AppTest` to keep tests stable and focused on the dashboard render contract. No source-level deviations from the slice goal.\n\n## Known Limitations\n\nThe dashboard is a baseline offline display surface, not a polished production compliance console. Page previews are optional/lazy, sorting/filtering remains Streamlit-basic, and live Langfuse trace ingestion is not proven by this slice.\n\n## Follow-ups\n\nLater milestones can improve dashboard visual polish, richer filtering/sorting, source-page navigation, and production-scale performance. R008 still has broader cross-operation tracing coverage beyond this dashboard startup behavior.\n\n## Files Created/Modified\n\n- `src/dashboard/__init__.py` — Introduced dashboard package exports for compliance rendering.\n- `src/dashboard/compliance.py` — Added compliance dashboard adapter, formatting helpers, empty-state handling, metrics, table rendering, and lazy source evidence/detail display.\n- `src/app.py` — Wired the Compliance tab to the dashboard renderer using configured SQLite database path.\n- `tests/test_compliance_dashboard.py` — Added SQLite-backed adapter and render contract tests for populated, empty, nullable, and source-evidence edge cases.\n- `tests/test_app.py` — Added/updated Streamlit app smoke coverage for compliance tab startup.\n",
+      "full_uat_md": "# S04: Compliance dashboard records — UAT\n\n**Milestone:** M001\n**Written:** 2026-05-20T18:04:36.634Z\n\n# UAT: S04 Compliance Dashboard Records\n\n## UAT Type\nManual evaluator walkthrough over an offline local SQLite database, supported by automated pytest regression evidence.\n\n## Preconditions\n1. Use the project Python 3.11 virtual environment at `venv/Scripts/python.exe`.\n2. Have either an extracted demo SQLite database configured by `src.config.get_settings().db_path`, or use an empty/missing database to verify the empty state.\n3. Do not set Gemini, Claude, or Langfuse credentials for this UAT; the Compliance tab must remain usable without provider secrets.\n\n## Steps\n1. Start the Streamlit app with the project environment, for example `venv/Scripts/python.exe -m streamlit run src/app.py`.\n2. Open the app in a browser and navigate to the **Compliance** tab.\n3. If no compliance database/table exists, observe the empty state.\n4. With a database containing extracted compliance records, reload the app and open the **Compliance** tab again.\n5. Review the summary metrics for total records, risk distribution, and review state.\n6. Review the records table for document metadata: document type, vendor, relevant dates/age, risk level/reason, confidence, review state, run_id/trace_id, and source-page display.\n7. Select or expand a record's source evidence detail.\n8. Confirm the detail shows sanitized source page/span evidence and, when available, a page image preview.\n9. Repeat with a record that has missing/null source evidence or no page image.\n\n## Expected Outcomes\n- The app starts and the Compliance tab renders without Gemini, Claude, or Langfuse credentials.\n- Missing DB or missing `compliance_records` table produces a friendly empty state rather than a stack trace.\n- Persisted records from SQLite appear in the Compliance tab with readable metadata, risk coloring/status, confidence, review state, run metadata, and trace metadata.\n- Source page numbers are displayed to users as 1-indexed pages.\n- Source evidence is visible enough to support auditability but does not expose API keys, raw provider responses, full page text blobs, or stack traces.\n- Page image lookup is lazy/optional; absent images produce a tolerant detail state rather than a crash.\n\n## Edge Cases\n- Empty database or missing compliance table.\n- Null source span/page fields.\n- 0-indexed persisted page values displayed as 1-indexed user-facing pages.\n- `needs_review` persisted as integer values and rendered as boolean/review labels.\n- Missing page image for a selected source evidence record.\n\n## Not Proven By This UAT\n- Live LLM extraction quality or provider availability.\n- Langfuse SaaS trace ingestion with real credentials.\n- Large-corpus performance beyond the expected small demo corpus.\n- Visual retrieval or chatbot behavior from later milestones.\n",
+      "goal": "Replace the Compliance tab placeholder with a credential-free, SQLite-backed Streamlit dashboard that surfaces persisted extraction/compliance rows with risk status, confidence, review state, run metadata, and source evidence.",
+      "success_criteria": "Owned/supporting requirements: R002, R003, R004, R008. Done when `src/app.py` wires the Compliance tab to a dashboard module over `list_compliance_records`, tests prove real SQLite records are formatted with all six-field-derived metadata and 1-indexed source-page display, Streamlit renders an empty state without a database/table, source evidence is visible without exposing secrets or raw full-page text, and app startup remains non-fatal without Gemini/Langfuse credentials.\n\nThreat Surface (Q3): The dashboard reads local SQLite rows containing extracted supplier metadata and source spans. Abuse/data-exposure risk is accidental display of secrets or oversized document text; keep UI read-only, only show persisted compliance fields/source spans, never provider keys or page blobs in the main table, and avoid live provider calls.\n\nRequirement Impact (Q4): Re-verify R002/R003 persistence display contracts, R004 Streamlit dashboard surface, and R008 offline-safe startup. No existing decision is revisited; D010 risk policy remains consumed as persisted data.\n\nFailure Modes (Q5): Missing DB, missing `compliance_records`, malformed nullable row values, or absent page images must produce friendly empty/detail states rather than stack traces. Langfuse/Gemini credentials are optional and must not be required.\n\nLoad Profile (Q6): Expected demo corpus is small; per render is one compliance-record query plus optional one page-image lookup for selected detail. At 10x corpus size, `st.dataframe` rendering and image loading are first bottlenecks; keep page previews optional/lazy and avoid loading all images.\n\nNegative Tests (Q7): Cover empty DB/missing table, null source evidence, 0-indexed page off-by-one display, and needs_review int-to-boolean formatting.",
+      "proof_level": "Integration proof: pytest exercises real SQLite schema/repository-to-dashboard adapter and Streamlit smoke startup. Human/UAT is optional after extraction data exists; no live LLM/provider runtime is required.",
+      "integration_closure": "Consumes S03 `src.extraction.repository.list_compliance_records(db_path)`, `src.db.queries.get_page_image(db_path, doc_id, page_num)`, and `src.config.get_settings().db_path`. Introduces `src.dashboard.compliance.render_compliance_tab` and wires it into `src/app.py`. After this slice, M001 has an end-to-end offline path from extraction persistence to visible compliance dashboard rows; later milestones can improve visual polish/source-page navigation.",
+      "observability_impact": "Runtime diagnostics become visible in the UI through deterministic empty states, summary metrics by risk/review state, run_id/trace_id columns, risk reasons, and source page/span details. Failure display must be sanitized: no API keys, raw provider responses, full page text blobs, or stack traces in Streamlit.",
       "sequence": 4,
+      "replan_triggered_at": null,
+      "is_sketch": 0,
+      "sketch_scope": ""
+    },
+    {
+      "milestone_id": "M001",
+      "id": "S05",
+      "title": "S05",
+      "status": "complete",
+      "risk": "high",
+      "depends": [],
+      "demo": "After this: M001 has an explicit boundary map, a recorded realistic PDF ingestion to extraction to dashboard verification artifact, and clarified requirement coverage for out of scope future requirements.",
+      "created_at": "2026-05-20T18:06:41.499Z",
+      "completed_at": "2026-05-20T19:27:17.487Z",
+      "full_summary_md": "---\nid: S05\nparent: M001\nmilestone: M001\nprovides:\n  - Realistic offline PDF ingestion to extraction to risk persistence to dashboard adapter proof.\n  - Explicit M001 boundary map and requirement-scope clarification.\n  - Fresh full regression evidence for M001 validation.\nrequires:\n  []\naffects:\n  - M001\nkey_files:\n  - tests/test_s05_end_to_end_proof.py\n  - .gsd/milestones/M001/M001-ROADMAP.md\n  - .gsd/milestones/M001/M001-VALIDATION.md\nkey_decisions:\n  - Use deterministic generated PDF proof rather than the existing sample fixture because the existing fixture persists empty page text.\n  - Keep live Gemini/Langfuse optional for S05 proof; the validation gap is integration evidence, not live model accuracy.\n  - Treat R005/R006/R007 as future M002/M003 scope and R008 as partial in M001 with broader tracing later.\npatterns_established:\n  - Use runtime-generated minimal text PDFs for deterministic Docling integration proof when static fixtures do not preserve page text.\n  - Keep final-assembly proof offline and credential-free by using the provider protocol seam with grounded exact spans.\nobservability_surfaces:\n  - S05 pytest proof acts as a repeatable inspection surface for the ingestion-to-dashboard chain.\n  - Compliance rows continue to persist run_id and trace_id metadata for dashboard inspection.\n  - Validation docs now state missing-credential and redaction boundaries for future agents.\ndrill_down_paths:\n  - .gsd/milestones/M001/slices/S05/tasks/T01-SUMMARY.md\n  - .gsd/milestones/M001/slices/S05/tasks/T02-SUMMARY.md\n  - .gsd/milestones/M001/slices/S05/tasks/T03-SUMMARY.md\nduration: \"\"\nverification_result: passed\ncompleted_at: 2026-05-20T19:27:17.489Z\nblocker_discovered: false\n---\n\n# S05: Validation remediation boundary and end to end proof\n\n**S05 closed M001 validation remediation with a realistic offline end-to-end proof, boundary map, requirement scope clarification, and full regression pass.**\n\n## What Happened\n\nS05 remediated the M001 validation blockers. A new deterministic pytest generates a realistic one-page Supplier Declaration Form PDF, ingests it through the real Docling ingestion path, verifies persisted page text and image output, runs the real extraction pipeline with a credential-free fake provider citing exact spans, persists six field rows plus one compliance row, verifies amber risk and 732-day age metadata, and checks dashboard-facing formatting including Page 1 source labeling and 90% aggregate confidence. The roadmap boundary map now documents S01-S05 producer/consumer contracts, and validation notes now clarify that R005/R006/R007 are future milestone scope while R008 is only partially covered by M001. Fresh closeout verification passed targeted S05, focused regression, and the full 72-test suite.\n\n## Verification\n\nFresh closeout verification passed: targeted S05 proof test passed, focused ingestion/extraction/dashboard/app regression passed, and full pytest suite passed with 72 tests.\n\n## Requirements Advanced\n\n- R008 — Clarified M001's partial observability boundary: missing credentials remain non-fatal, diagnostics are sanitized, and run/trace metadata is persisted; broader tracing remains future work.\n- R009 — All closeout verification used the Python 3.11 project venv command path.\n- R010 — S05 proof remained offline and credential-free with no local tokens or provider secrets committed.\n\n## Requirements Validated\n\n- R002 — S05 final-assembly proof ingests a realistic PDF and verifies six grounded extraction fields persisted with source evidence.\n- R003 — S05 final-assembly proof verifies persisted amber risk and age_days == 732 from extracted date fields.\n- R004 — S05 final-assembly proof verifies dashboard adapter formatting for the persisted compliance row, including vendor, source page label, source span, and confidence display.\n\n## New Requirements Surfaced\n\nNone.\n\n## Requirements Invalidated or Re-scoped\n\nNone.\n\n## Operational Readiness\n\nNone.\n\n## Deviations\n\nNone.\n\n## Known Limitations\n\nS05 proves the baseline offline final-assembly path with a fake grounded provider, not live Gemini extraction quality, visual retrieval, chatbot Q&A, or production-scale evaluation. The Streamlit UI itself was not manually driven in a browser; S04/S05 automated tests verify the SQLite-backed dashboard adapter/render contract.\n\n## Follow-ups\n\nLater milestones should implement R005 natural-language Q&A, R006 visual ColQwen/Qdrant retrieval, R007 evaluation metrics, and deeper R008 Langfuse tracing across retrieval/generation/evaluation. Docling legacy VLM option deprecation warnings can be addressed in a future dependency/ingestion cleanup slice.\n\n## Files Created/Modified\n\n- `tests/test_s05_end_to_end_proof.py` — Added deterministic realistic SDF PDF final-assembly proof covering ingestion, extraction, persistence, risk, and dashboard adapter formatting.\n- `.gsd/milestones/M001/M001-ROADMAP.md` — Filled the M001 boundary map with S01-S05 producer/consumer contracts and requirement scope boundaries.\n- `.gsd/milestones/M001/M001-VALIDATION.md` — Added S05 remediation scope update clarifying M001 coverage and future requirement scope.\n",
+      "full_uat_md": "# S05: Validation remediation boundary and end to end proof — UAT\n\n**Milestone:** M001\n**Written:** 2026-05-20T19:27:17.490Z\n\n# S05 UAT: Validation remediation boundary and end to end proof\n\n## Automated UAT Result\n\nThis slice does not require manual UI UAT. The required evaluator-facing behavior was verified through automated final-assembly tests and dashboard adapter assertions.\n\n## Commands Run\n\n1. `venv/Scripts/python.exe -m pytest tests/test_s05_end_to_end_proof.py -q`\n   - Result: 1 passed, 15 warnings in 53.18s.\n   - Proves: realistic generated SDF PDF ingestion, non-empty persisted page text, grounded fake-provider extraction, six extraction rows, one compliance row, amber risk, source evidence, and dashboard adapter formatting.\n\n2. `venv/Scripts/python.exe -m pytest tests/test_ingest.py tests/test_extraction_pipeline.py tests/test_compliance_dashboard.py tests/test_app.py -q`\n   - Result: 20 passed, 18 warnings in 93.88s.\n   - Proves: focused regression across ingestion, extraction, dashboard, and app startup.\n\n3. `venv/Scripts/python.exe -m pytest -q`\n   - Result: 72 passed, 20 warnings in 145.56s.\n   - Proves: full project regression after S05 changes.\n\n## Human Check Status\n\nNo human check is required to close M001. Optional human demo after this milestone: run the Streamlit app against a populated SQLite database and visually inspect the Compliance tab.\n",
+      "goal": "Close M001 validation remediation by proving a realistic offline PDF ingestion to extraction to risk persistence to dashboard adapter chain, documenting producer and consumer boundaries, and clarifying which requirements are complete, partial, or future scope for this milestone.",
+      "success_criteria": "- A deterministic S05 end-to-end pytest creates or uses a realistic one-page SDF PDF, ingests it through Docling, verifies non-empty grounded page text, runs the real extraction pipeline with a fake provider citing exact spans, persists six extraction rows plus one compliance row, and verifies dashboard-facing formatted values.\n- The M001 boundary map no longer says `Not provided`; it documents S01-S04 producer/consumer contracts, known watch-outs, and the S05 validation seam.\n- M001 validation or S05 closeout artifacts clarify requirement coverage: R001-R004/R009/R010 are M001-covered, R008 is M001-partial with broader tracing later, and R005-R007 are future M002/M003 scope rather than M001 failures.\n- Targeted S05 proof and full regression pass using `venv/Scripts/python.exe` without live Gemini/Langfuse credentials or committed local tokens.",
+      "proof_level": "Final-assembly proof for M001 baseline: real runtime ingestion, SQLite persistence, extraction orchestration, compliance risk computation, and dashboard adapter formatting are exercised in one offline test. Human UAT is not required; live Gemini is intentionally optional/out of scope for this remediation proof.",
+      "integration_closure": "Consumes the completed S01 Python 3.11/secret hygiene baseline, S02 schema/repository contract, S03 extraction persistence pipeline, and S04 SQLite-backed dashboard adapter. Introduces no new runtime entrypoint; closure is the validation boundary map plus one executable chain spanning the existing entrypoints. After this slice, M001 should be ready for milestone validation/completion except for any fresh regression failures discovered during verification.",
+      "observability_impact": "S05 does not expand Langfuse tracing implementation. It verifies and documents current observability surfaces: sanitized run_id/trace_id metadata persisted in compliance rows, non-fatal startup without Langfuse/Gemini credentials, safe provider abstraction for offline proof, and gsd_exec/pytest artifacts suitable for future validator inspection without secrets or raw provider payloads.",
+      "sequence": 5,
       "replan_triggered_at": null,
       "is_sketch": 0,
       "sketch_scope": ""
@@ -432,6 +448,713 @@
       "escalation_awaiting_review": 0,
       "escalation_artifact_path": null,
       "escalation_override_applied_at": null
+    },
+    {
+      "milestone_id": "M001",
+      "slice_id": "S02",
+      "id": "T01",
+      "title": "Added a strict Pydantic v2 SDF extraction contract with validation coverage for required fields, evidence, confidence, review, and abstention states.",
+      "status": "complete",
+      "one_liner": "Added a strict Pydantic v2 SDF extraction contract with validation coverage for required fields, evidence, confidence, review, and abstention states.",
+      "narrative": "Created the new src/extraction package and implemented enum-backed SDF field and review-state models, source evidence validation, field-level extraction validation, and document-level SDFExtractionRecord accessors. The contract enforces exactly the six required SDF fields, rejects malformed confidence/page/bbox/value states before persistence, supports trace/run metadata, and exposes dashboard-friendly aggregate confidence, review state, review flag, and normalized value mappings. Added tests that cover a full valid six-field sample record, an accepted abstained field, and the specified negative validation cases.",
+      "verification_result": "Ran the task-required command `./venv/Scripts/python.exe -m pytest tests/test_extraction_models.py -q`; all 9 extraction model tests passed. This verifies full-record acceptance, abstention acceptance, and rejection of unknown field names, out-of-range confidence, negative source pages, malformed bbox values, missing non-abstained values, abstention without reason, and missing required record fields.",
+      "duration": "",
+      "completed_at": "2026-05-19T22:28:30.869Z",
+      "blocker_discovered": false,
+      "deviations": "None.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/extraction/__init__.py",
+        "src/extraction/models.py",
+        "tests/test_extraction_models.py"
+      ],
+      "key_decisions": [
+        "Modeled required SDF fields as a closed enum and required SDFExtractionRecord.fields to contain exactly those six fields.",
+        "Required non-abstained fields to include source verbatim_span while permitting abstained fields to omit spans when an abstention reason is present."
+      ],
+      "full_summary_md": "---\nid: T01\nparent: S02\nmilestone: M001\nkey_files:\n  - src/extraction/__init__.py\n  - src/extraction/models.py\n  - tests/test_extraction_models.py\nkey_decisions:\n  - Modeled required SDF fields as a closed enum and required SDFExtractionRecord.fields to contain exactly those six fields.\n  - Required non-abstained fields to include source verbatim_span while permitting abstained fields to omit spans when an abstention reason is present.\nduration: \nverification_result: passed\ncompleted_at: 2026-05-19T22:28:30.867Z\nblocker_discovered: false\n---\n\n# T01: Added a strict Pydantic v2 SDF extraction contract with validation coverage for required fields, evidence, confidence, review, and abstention states.\n\n**Added a strict Pydantic v2 SDF extraction contract with validation coverage for required fields, evidence, confidence, review, and abstention states.**\n\n## What Happened\n\nCreated the new src/extraction package and implemented enum-backed SDF field and review-state models, source evidence validation, field-level extraction validation, and document-level SDFExtractionRecord accessors. The contract enforces exactly the six required SDF fields, rejects malformed confidence/page/bbox/value states before persistence, supports trace/run metadata, and exposes dashboard-friendly aggregate confidence, review state, review flag, and normalized value mappings. Added tests that cover a full valid six-field sample record, an accepted abstained field, and the specified negative validation cases.\n\n## Verification\n\nRan the task-required command `./venv/Scripts/python.exe -m pytest tests/test_extraction_models.py -q`; all 9 extraction model tests passed. This verifies full-record acceptance, abstention acceptance, and rejection of unknown field names, out-of-range confidence, negative source pages, malformed bbox values, missing non-abstained values, abstention without reason, and missing required record fields.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `./venv/Scripts/python.exe -m pytest tests/test_extraction_models.py -q` | 0 | ✅ pass (9 passed) | 2223ms |\n\n## Deviations\n\nNone.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/extraction/__init__.py`\n- `src/extraction/models.py`\n- `tests/test_extraction_models.py`\n",
+      "description": "Expected executor skills: tdd, verify-before-complete.\n\nWhy: S03 needs a strict contract before any VLM wiring, and R002 requires six structured SDF fields with confidence and source evidence rather than ad-hoc dictionaries.\n\nDo: Create `src/extraction/` with Pydantic v2 models: `SDFFieldName` enum for `doc_type`, `vendor_name`, `manufacturing_date`, `effective_date`, `revision_date`, `expiry_date`; `ReviewState` enum for `pending`, `needs_review`, `reviewed`, `abstained`; `SourceEvidence` with non-negative 0-indexed `page_num`, optional JSON-serializable bbox, and optional/required `verbatim_span` based on field state; `ExtractedField` with raw value, optional normalized value/date, confidence constrained to 0..1, evidence, review state, `needs_review` convenience behavior, optional abstention reason, and validators that reject a missing value unless the field is abstained with a reason; and `SDFExtractionRecord` for one document containing exactly the six required fields, aggregate confidence/review state, optional trace/run metadata, and dashboard-friendly accessors.\n\nDone when: model tests prove acceptance of a full six-field sample record and an abstained field, and rejection of unknown field names, invalid confidence, negative source pages, malformed bbox, and missing value without abstention.\n\nFailure Modes (Q5): malformed LLM output later should fail validation before DB writes; no external dependencies or timeouts in this task.\nLoad Profile (Q6): model construction is per document/field and trivial for demo-scale corpora.\nNegative Tests (Q7): unknown field, confidence below 0 or above 1, negative `page_num`, non-list/non-dict bbox, absent field value without `ReviewState.ABSTAINED`, and abstention without reason.",
+      "estimate": "1h",
+      "files": [
+        "src/extraction/__init__.py",
+        "src/extraction/models.py",
+        "tests/test_extraction_models.py"
+      ],
+      "verify": "./venv/Scripts/python.exe -m pytest tests/test_extraction_models.py -q",
+      "inputs": [
+        "pyproject.toml"
+      ],
+      "expected_output": [
+        "src/extraction/__init__.py",
+        "src/extraction/models.py",
+        "tests/test_extraction_models.py"
+      ],
+      "observability_impact": "Adds explicit trace/run metadata and review-state fields to the in-memory contract so later pipeline failures can distinguish pending, needs-review, reviewed, and abstained values.",
+      "full_plan_md": "",
+      "sequence": 0,
+      "blocker_source": "",
+      "escalation_pending": 0,
+      "escalation_awaiting_review": 0,
+      "escalation_artifact_path": null,
+      "escalation_override_applied_at": null
+    },
+    {
+      "milestone_id": "M001",
+      "slice_id": "S02",
+      "id": "T02",
+      "title": "Added migration-safe Phase 2 SQLite extraction columns and a document-level compliance_records table with dashboard/filter indexes.",
+      "status": "complete",
+      "one_liner": "Added migration-safe Phase 2 SQLite extraction columns and a document-level compliance_records table with dashboard/filter indexes.",
+      "narrative": "Updated `src/db/schema.py` so `init_db()` creates the Phase 2 schema on fresh databases and safely evolves Phase 1-shaped databases. The migration path inspects `PRAGMA table_info(extractions)` and applies nullable `ALTER TABLE` statements for `review_state`, `abstention_reason`, `normalized_value`, and `updated_at` only when missing. Added `compliance_records` keyed by `doc_id` with document-level SDF fields, aggregate confidence/review metadata, trace/run metadata, and nullable dashboard/risk placeholders. Preserved FK enforcement and document cascade behavior. Added schema tests for fresh DB creation, legacy Phase 1 migration preserving rows, idempotent re-runs, FK rejection for unknown documents, and compliance cascade on document deletion. During verification, a legacy migration failure exposed that indexes depending on migrated columns were created too early; moved those indexes to a post-migration step.",
+      "verification_result": "Ran the task-plan verification suite using the Windows-compatible venv path: `venv/Scripts/python.exe -m pytest tests/test_db.py tests/test_extraction_schema.py -q` passed with 8 tests. Also ran the extended regression suite including T01 extraction model tests: `venv/Scripts/python.exe -m pytest tests/test_db.py tests/test_extraction_schema.py tests/test_extraction_models.py -q` passed with 17 tests. The original gate form `./venv/Scripts/python.exe ...` is not valid in this Windows command environment, so verification used `venv/Scripts/python.exe`.",
+      "duration": "",
+      "completed_at": "2026-05-19T22:34:48.306Z",
+      "blocker_discovered": false,
+      "deviations": "Used `venv/Scripts/python.exe` instead of the plan's `./venv/Scripts/python.exe` because the gate showed the leading `./` is not recognized in this Windows environment.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/db/schema.py",
+        "tests/test_db.py",
+        "tests/test_extraction_schema.py"
+      ],
+      "key_decisions": [
+        "Create post-migration indexes for extraction review fields after nullable ALTER TABLE migrations so legacy Phase 1 databases initialize successfully.",
+        "Represent compliance_records date/source/risk fields as nullable SQLite scalar columns for dashboard readiness while preserving FK cascade to documents."
+      ],
+      "full_summary_md": "---\nid: T02\nparent: S02\nmilestone: M001\nkey_files:\n  - src/db/schema.py\n  - tests/test_db.py\n  - tests/test_extraction_schema.py\nkey_decisions:\n  - Create post-migration indexes for extraction review fields after nullable ALTER TABLE migrations so legacy Phase 1 databases initialize successfully.\n  - Represent compliance_records date/source/risk fields as nullable SQLite scalar columns for dashboard readiness while preserving FK cascade to documents.\nduration: \nverification_result: passed\ncompleted_at: 2026-05-19T22:34:48.305Z\nblocker_discovered: false\n---\n\n# T02: Added migration-safe Phase 2 SQLite extraction columns and a document-level compliance_records table with dashboard/filter indexes.\n\n**Added migration-safe Phase 2 SQLite extraction columns and a document-level compliance_records table with dashboard/filter indexes.**\n\n## What Happened\n\nUpdated `src/db/schema.py` so `init_db()` creates the Phase 2 schema on fresh databases and safely evolves Phase 1-shaped databases. The migration path inspects `PRAGMA table_info(extractions)` and applies nullable `ALTER TABLE` statements for `review_state`, `abstention_reason`, `normalized_value`, and `updated_at` only when missing. Added `compliance_records` keyed by `doc_id` with document-level SDF fields, aggregate confidence/review metadata, trace/run metadata, and nullable dashboard/risk placeholders. Preserved FK enforcement and document cascade behavior. Added schema tests for fresh DB creation, legacy Phase 1 migration preserving rows, idempotent re-runs, FK rejection for unknown documents, and compliance cascade on document deletion. During verification, a legacy migration failure exposed that indexes depending on migrated columns were created too early; moved those indexes to a post-migration step.\n\n## Verification\n\nRan the task-plan verification suite using the Windows-compatible venv path: `venv/Scripts/python.exe -m pytest tests/test_db.py tests/test_extraction_schema.py -q` passed with 8 tests. Also ran the extended regression suite including T01 extraction model tests: `venv/Scripts/python.exe -m pytest tests/test_db.py tests/test_extraction_schema.py tests/test_extraction_models.py -q` passed with 17 tests. The original gate form `./venv/Scripts/python.exe ...` is not valid in this Windows command environment, so verification used `venv/Scripts/python.exe`.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `venv/Scripts/python.exe -m pytest tests/test_db.py tests/test_extraction_schema.py -q` | 0 | ✅ pass (8 passed) | 2669ms |\n| 2 | `venv/Scripts/python.exe -m pytest tests/test_db.py tests/test_extraction_schema.py tests/test_extraction_models.py -q` | 0 | ✅ pass (17 passed) | 3175ms |\n\n## Deviations\n\nUsed `venv/Scripts/python.exe` instead of the plan's `./venv/Scripts/python.exe` because the gate showed the leading `./` is not recognized in this Windows environment.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/db/schema.py`\n- `tests/test_db.py`\n- `tests/test_extraction_schema.py`\n",
+      "description": "Expected executor skills: tdd, verify-before-complete.\n\nWhy: `CREATE TABLE IF NOT EXISTS` will not evolve existing Phase 1 databases, and S04 needs a document-level row instead of pivoting field evidence rows on every dashboard render.\n\nDo: Update `src/db/schema.py` with migration-safe helpers that inspect `PRAGMA table_info` and `ALTER TABLE` the existing `extractions` table to add nullable `review_state`, `abstention_reason`, `normalized_value`, and `updated_at` columns when missing. Add a new `compliance_records` table keyed by `doc_id` with document-level fields (`doc_type`, `vendor_name`, date columns, aggregate confidence, review state, trace_id/run metadata) and nullable future risk/dashboard fields (`risk_level`, `risk_reason`, `age_days`, source_page/source fields as needed). Add indexes for common dashboard/filter paths. Keep FK enforcement and cascade behavior. Extend schema tests or add `tests/test_extraction_schema.py` to prove fresh DB creation and Phase 1-shaped DB migration both produce the required columns/tables.\n\nDone when: tests pass for both a fresh database and an artificially pre-existing Phase 1 database containing old `documents`, `pages`, and `extractions` shapes.\n\nFailure Modes (Q5): existing local DBs may lack new columns; migration helper must be idempotent and safe to run repeatedly. SQLite DDL errors should surface as test failures rather than being swallowed.\nLoad Profile (Q6): migration runs at DB initialization; table-info checks are constant-size and acceptable. Runtime dashboard queries should have indexes on `doc_id` and risk/review fields.\nNegative Tests (Q7): re-running `init_db()` must not duplicate columns; FK insert into `compliance_records` for nonexistent `doc_id` must fail; legacy DB initialization must preserve existing rows.",
+      "estimate": "1h",
+      "files": [
+        "src/db/schema.py",
+        "tests/test_db.py",
+        "tests/test_extraction_schema.py"
+      ],
+      "verify": "./venv/Scripts/python.exe -m pytest tests/test_db.py tests/test_extraction_schema.py -q",
+      "inputs": [
+        "src/db/schema.py",
+        "tests/test_db.py",
+        "src/extraction/models.py"
+      ],
+      "expected_output": [
+        "src/db/schema.py",
+        "tests/test_db.py",
+        "tests/test_extraction_schema.py"
+      ],
+      "observability_impact": "Adds persisted review/abstention and dashboard summary state that can be inspected directly in SQLite when extraction pipeline runs are incomplete or disputed.",
+      "full_plan_md": "",
+      "sequence": 0,
+      "blocker_source": "",
+      "escalation_pending": 0,
+      "escalation_awaiting_review": 0,
+      "escalation_artifact_path": null,
+      "escalation_override_applied_at": null
+    },
+    {
+      "milestone_id": "M001",
+      "slice_id": "S02",
+      "id": "T03",
+      "title": "Added idempotent SQLite persistence and retrieval helpers for validated SDF extraction records.",
+      "status": "complete",
+      "one_liner": "Added idempotent SQLite persistence and retrieval helpers for validated SDF extraction records.",
+      "narrative": "Implemented `src/extraction/repository.py` with field-level and document-level persistence helpers: `upsert_extraction_field`, `upsert_extraction_record`, `get_extraction_record`, and `list_compliance_records`. Each validated `SDFExtractionRecord` now persists exactly six rows in `extractions` plus one dashboard-ready row in `compliance_records`, carrying trace/run metadata, confidence, source page, bbox JSON, verbatim evidence, normalized values, review state, needs-review flags, and abstention reasons. Added deterministic persistence tests covering FK rejection for missing documents, idempotent updates, SQL metacharacter round-trips, abstention persistence, aggregate compliance review state, single-field replacement, and S04-oriented list ordering/shape. The auto-gate failure was due to the command form `./venv/Scripts/python.exe` being interpreted by a Windows shell; the same checks pass with `venv/Scripts/python.exe` in this environment.",
+      "verification_result": "Verified targeted extraction contract/schema/persistence tests, the prior failing schema/database gate test set, and the full repository pytest suite using the project Python 3.11 venv. Targeted T03 tests passed with 21 tests. The previously failed gate set passed with 8 tests. The full suite passed with 36 tests; only third-party deprecation warnings were emitted.",
+      "duration": "",
+      "completed_at": "2026-05-19T22:46:58.355Z",
+      "blocker_discovered": false,
+      "deviations": "Used `venv/Scripts/python.exe` instead of `./venv/Scripts/python.exe` for verification because the latter is not recognized by the Windows command shell used by the auto-gate. No product-code deviation from the task plan.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/extraction/repository.py",
+        "tests/test_extraction_persistence.py"
+      ],
+      "key_decisions": [
+        "Use SQLite foreign-key enforcement rather than pre-checks so missing parent documents raise `sqlite3.IntegrityError` at the repository boundary.",
+        "Use deterministic compliance ordering by non-null expiry date, expiry date ascending, vendor name, then doc_id for S04 dashboard consumption.",
+        "Persist document-level source evidence from expiry date when available, otherwise from the first non-abstained field so abstained expiry records still have inspectable source context."
+      ],
+      "full_summary_md": "---\nid: T03\nparent: S02\nmilestone: M001\nkey_files:\n  - src/extraction/repository.py\n  - tests/test_extraction_persistence.py\nkey_decisions:\n  - Use SQLite foreign-key enforcement rather than pre-checks so missing parent documents raise `sqlite3.IntegrityError` at the repository boundary.\n  - Use deterministic compliance ordering by non-null expiry date, expiry date ascending, vendor name, then doc_id for S04 dashboard consumption.\n  - Persist document-level source evidence from expiry date when available, otherwise from the first non-abstained field so abstained expiry records still have inspectable source context.\nduration: \nverification_result: passed\ncompleted_at: 2026-05-19T22:46:58.353Z\nblocker_discovered: false\n---\n\n# T03: Added idempotent SQLite persistence and retrieval helpers for validated SDF extraction records.\n\n**Added idempotent SQLite persistence and retrieval helpers for validated SDF extraction records.**\n\n## What Happened\n\nImplemented `src/extraction/repository.py` with field-level and document-level persistence helpers: `upsert_extraction_field`, `upsert_extraction_record`, `get_extraction_record`, and `list_compliance_records`. Each validated `SDFExtractionRecord` now persists exactly six rows in `extractions` plus one dashboard-ready row in `compliance_records`, carrying trace/run metadata, confidence, source page, bbox JSON, verbatim evidence, normalized values, review state, needs-review flags, and abstention reasons. Added deterministic persistence tests covering FK rejection for missing documents, idempotent updates, SQL metacharacter round-trips, abstention persistence, aggregate compliance review state, single-field replacement, and S04-oriented list ordering/shape. The auto-gate failure was due to the command form `./venv/Scripts/python.exe` being interpreted by a Windows shell; the same checks pass with `venv/Scripts/python.exe` in this environment.\n\n## Verification\n\nVerified targeted extraction contract/schema/persistence tests, the prior failing schema/database gate test set, and the full repository pytest suite using the project Python 3.11 venv. Targeted T03 tests passed with 21 tests. The previously failed gate set passed with 8 tests. The full suite passed with 36 tests; only third-party deprecation warnings were emitted.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `venv/Scripts/python.exe -m pytest tests/test_extraction_models.py tests/test_extraction_schema.py tests/test_extraction_persistence.py -q` | 0 | ✅ pass — 21 passed | 3078ms |\n| 2 | `venv/Scripts/python.exe -m pytest -q` | 0 | ✅ pass — 36 passed, 19 warnings | 101042ms |\n| 3 | `venv/Scripts/python.exe -m pytest tests/test_db.py tests/test_extraction_schema.py -q` | 0 | ✅ pass — 8 passed | 2356ms |\n\n## Deviations\n\nUsed `venv/Scripts/python.exe` instead of `./venv/Scripts/python.exe` for verification because the latter is not recognized by the Windows command shell used by the auto-gate. No product-code deviation from the task plan.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/extraction/repository.py`\n- `tests/test_extraction_persistence.py`\n",
+      "description": "Expected executor skills: tdd, verify-before-complete.\n\nWhy: The typed contract is only useful if sample records can round-trip through SQLite using the existing Phase 1 document IDs and page numbering conventions, without requiring Langfuse or real VLM calls.\n\nDo: Add `src/extraction/repository.py` with helpers such as `upsert_extraction_field`, `upsert_extraction_record`, `get_extraction_record`, and `list_compliance_records`. Use only parameterized SQL placeholders. For each `SDFExtractionRecord`, upsert six field-level rows into `extractions` including confidence, 0-indexed source page, bbox JSON, verbatim span, trace_id, normalized value, review state, needs_review, and abstention reason; then upsert one dashboard-ready row into `compliance_records` with document-level values and nullable risk placeholders. Add `tests/test_extraction_persistence.py` using deterministic hand-authored records, `init_db()`, and `insert_document()` from existing query helpers. Cover FK failure for unknown docs, idempotent updates without duplicate rows, SQL-metacharacter round-trips, abstention round-trips, aggregate confidence/review state, and list ordering/shape for S04.\n\nDone when: targeted extraction tests and the full suite pass under the Python 3.11 project venv.\n\nFailure Modes (Q5): missing parent document must raise SQLite FK/integrity failure; malformed model data should be rejected before repository calls; absent Langfuse credentials must be irrelevant because repository only stores optional trace metadata.\nLoad Profile (Q6): per record persistence is six field upserts plus one compliance row upsert using short-lived SQLite connections; acceptable for demo, but duplicate rows must be prevented by unique keys.\nNegative Tests (Q7): malicious vendor/field strings containing quotes and SQL comment markers must round-trip safely; an update of the same doc/field must replace values rather than insert duplicates; abstained expiry date must persist with null value and reason.",
+      "estimate": "1.5h",
+      "files": [
+        "src/extraction/repository.py",
+        "tests/test_extraction_persistence.py"
+      ],
+      "verify": "./venv/Scripts/python.exe -m pytest tests/test_extraction_models.py tests/test_extraction_schema.py tests/test_extraction_persistence.py -q\n./venv/Scripts/python.exe -m pytest -q",
+      "inputs": [
+        "src/extraction/models.py",
+        "src/db/schema.py",
+        "src/db/queries.py",
+        "tests/conftest.py"
+      ],
+      "expected_output": [
+        "src/extraction/repository.py",
+        "tests/test_extraction_persistence.py"
+      ],
+      "observability_impact": "Persists trace_id, review_state, needs_review, abstention_reason, normalized values, and compliance summary rows so later S03/S04 agents can inspect extraction state directly from SQLite.",
+      "full_plan_md": "",
+      "sequence": 0,
+      "blocker_source": "",
+      "escalation_pending": 0,
+      "escalation_awaiting_review": 0,
+      "escalation_artifact_path": null,
+      "escalation_override_applied_at": null
+    },
+    {
+      "milestone_id": "M001",
+      "slice_id": "S03",
+      "id": "T01",
+      "title": "Added and verified conservative SDF risk metadata computation and SQLite round-trip assertions for dashboard compliance rows.",
+      "status": "complete",
+      "one_liner": "Added and verified conservative SDF risk metadata computation and SQLite round-trip assertions for dashboard compliance rows.",
+      "narrative": "Implemented the remaining T01 behavior around document risk metadata. The extraction models and repository already carried `risk_reason` and `age_days`, and repository upsert/reconstruction already used them; I fixed the stale persistence assertion so `list_compliance_records()` must expose the persisted risk fields instead of nulls. I reviewed the existing pure `src/extraction/risk.py` implementation, corrected its threshold classification to use calendar-year anniversary cutoffs for the two-year and three-year policy boundaries, and kept `age_days` as the actual elapsed day count. This preserves conservative handling for expired, malformed, missing, abstained, and future dates while avoiding leap-year misclassification.",
+      "verification_result": "Ran the authoritative T01 pytest suite for extraction models, persistence, and risk policy: `venv/Scripts/python.exe -m pytest tests/test_extraction_models.py tests/test_extraction_persistence.py tests/test_extraction_risk.py -q` passed with 24 tests. Also ran schema verification due the task's requirement-impact note: `venv/Scripts/python.exe -m pytest tests/test_extraction_schema.py -q` passed with 5 tests.",
+      "duration": "",
+      "completed_at": "2026-05-20T04:44:06.356Z",
+      "blocker_discovered": false,
+      "deviations": "The model/repository risk fields and `src/extraction/risk.py` already existed before this task execution. Work focused on correcting the remaining stale persistence assertion and leap-year threshold behavior rather than creating those files from scratch.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/extraction/risk.py",
+        "tests/test_extraction_risk.py",
+        "tests/test_extraction_persistence.py",
+        "src/extraction/models.py",
+        "src/extraction/repository.py"
+      ],
+      "key_decisions": [
+        "Use calendar-year anniversary cutoffs for 2-year and 3-year SDF risk thresholds while persisting actual elapsed `age_days`."
+      ],
+      "full_summary_md": "---\nid: T01\nparent: S03\nmilestone: M001\nkey_files:\n  - src/extraction/risk.py\n  - tests/test_extraction_risk.py\n  - tests/test_extraction_persistence.py\n  - src/extraction/models.py\n  - src/extraction/repository.py\nkey_decisions:\n  - Use calendar-year anniversary cutoffs for 2-year and 3-year SDF risk thresholds while persisting actual elapsed `age_days`.\nduration: \nverification_result: passed\ncompleted_at: 2026-05-20T04:44:06.354Z\nblocker_discovered: false\n---\n\n# T01: Added and verified conservative SDF risk metadata computation and SQLite round-trip assertions for dashboard compliance rows.\n\n**Added and verified conservative SDF risk metadata computation and SQLite round-trip assertions for dashboard compliance rows.**\n\n## What Happened\n\nImplemented the remaining T01 behavior around document risk metadata. The extraction models and repository already carried `risk_reason` and `age_days`, and repository upsert/reconstruction already used them; I fixed the stale persistence assertion so `list_compliance_records()` must expose the persisted risk fields instead of nulls. I reviewed the existing pure `src/extraction/risk.py` implementation, corrected its threshold classification to use calendar-year anniversary cutoffs for the two-year and three-year policy boundaries, and kept `age_days` as the actual elapsed day count. This preserves conservative handling for expired, malformed, missing, abstained, and future dates while avoiding leap-year misclassification.\n\n## Verification\n\nRan the authoritative T01 pytest suite for extraction models, persistence, and risk policy: `venv/Scripts/python.exe -m pytest tests/test_extraction_models.py tests/test_extraction_persistence.py tests/test_extraction_risk.py -q` passed with 24 tests. Also ran schema verification due the task's requirement-impact note: `venv/Scripts/python.exe -m pytest tests/test_extraction_schema.py -q` passed with 5 tests.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `venv/Scripts/python.exe -m pytest tests/test_extraction_models.py tests/test_extraction_persistence.py tests/test_extraction_risk.py -q` | 0 | ✅ pass | 2560ms |\n| 2 | `venv/Scripts/python.exe -m pytest tests/test_extraction_schema.py -q` | 0 | ✅ pass | 1929ms |\n\n## Deviations\n\nThe model/repository risk fields and `src/extraction/risk.py` already existed before this task execution. Work focused on correcting the remaining stale persistence assertion and leap-year threshold behavior rather than creating those files from scratch.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/extraction/risk.py`\n- `tests/test_extraction_risk.py`\n- `tests/test_extraction_persistence.py`\n- `src/extraction/models.py`\n- `src/extraction/repository.py`\n",
+      "description": "---\nestimated_steps: 7\nestimated_files: 4\nskills_used:\n  - tdd\n  - verify-before-complete\n---\n\nWhy: S02 created nullable risk columns, but repository persistence currently writes `None` for `risk_reason` and `age_days`. S03 needs deterministic compliance metadata before the runtime extractor can populate dashboard rows.\n\nDo:\n1. Extend `src/extraction/models.py` so `SDFExtractionRecord` carries `risk_reason: str | None` and `age_days: int | None` with the same trim/nullable behavior as existing document-level text fields.\n2. Update `src/extraction/repository.py` so `_upsert_compliance_record()` persists `record.risk_reason` and `record.age_days`, and `get_extraction_record()` selects/reconstructs both fields.\n3. Add `src/extraction/risk.py` with pure functions that accept validated fields/records and an injectable `today` date.\n4. Implement conservative policy: expired `expiry_date` => red; otherwise use oldest available manufacturing/effective/revision date for age; under 2 years => green; 2 to 3 years => amber; over 3 years => red; all missing/abstained/ambiguous relevant dates => `needs_review`/unknown with clear reason.\n5. Keep date parsing robust for `date` objects and ISO strings because repository round-trips normalized dates as dashboard strings.\n6. Add tests in `tests/test_extraction_risk.py` and update persistence tests to assert risk fields round-trip through SQLite.\n\nThreat Surface (Q3): Risk inputs are extracted untrusted document text normalized through Pydantic. No raw SQL interpolation; do not log source spans while computing risk.\nRequirement Impact (Q4): Advances R003 and supports R004. Re-verify extraction model, persistence, and schema tests. Decisions D009/D010 apply.\nFailure Modes (Q5): Missing/invalid date values must not crash risk computation; they produce a needs-review result and reason. SQLite write failures should rollback through existing repository behavior.\nLoad Profile (Q6): Pure CPU/date parsing per document; trivial compared with provider calls. At 10x load, DB write volume dominates, not risk computation.\nNegative Tests (Q7): Expired expiry date, no usable dates, malformed date strings, threshold boundary dates, and repository reconstruction of risk fields.\n\nDone when risk policy is covered by unit tests and persisted compliance rows expose `risk_level`, `risk_reason`, `compliance_status`, and `age_days` from records instead of hardcoded nulls.",
+      "estimate": "1h 30m",
+      "files": [
+        "src/extraction/models.py",
+        "src/extraction/repository.py",
+        "src/extraction/risk.py",
+        "tests/test_extraction_risk.py",
+        "tests/test_extraction_persistence.py"
+      ],
+      "verify": "venv/Scripts/python.exe -m pytest tests/test_extraction_models.py tests/test_extraction_persistence.py tests/test_extraction_risk.py -q",
+      "inputs": [
+        "src/extraction/models.py",
+        "src/extraction/repository.py",
+        "tests/test_extraction_models.py",
+        "tests/test_extraction_persistence.py"
+      ],
+      "expected_output": [
+        "src/extraction/models.py",
+        "src/extraction/repository.py",
+        "src/extraction/risk.py",
+        "tests/test_extraction_risk.py",
+        "tests/test_extraction_persistence.py"
+      ],
+      "observability_impact": "Adds persisted document-level risk reason and age fields that future agents can inspect via `list_compliance_records()` and `get_extraction_record()` without rerunning extraction.",
+      "full_plan_md": "",
+      "sequence": 0,
+      "blocker_source": "",
+      "escalation_pending": 0,
+      "escalation_awaiting_review": 0,
+      "escalation_artifact_path": null,
+      "escalation_override_applied_at": null
+    },
+    {
+      "milestone_id": "M001",
+      "slice_id": "S03",
+      "id": "T02",
+      "title": "Added an offline fake-provider SDF extraction pipeline that loads ingested pages, normalizes six fields, validates source spans, computes risk, and persists dashboard-ready rows.",
+      "status": "complete",
+      "one_liner": "Added an offline fake-provider SDF extraction pipeline that loads ingested pages, normalizes six fields, validates source spans, computes risk, and persists dashboard-ready rows.",
+      "narrative": "Implemented typed document/page loading helpers in `src/db/queries.py`, a dependency-free provider protocol in `src/extraction/providers.py`, and `extract_document()` orchestration in `src/extraction/pipeline.py`. The pipeline generates a non-secret run ID, loads ordered 0-indexed pages, rejects missing/empty page text with typed failures, calls a fake-compatible provider protocol, normalizes provider payloads into exactly the six SDF fields, synthesizes abstentions for missing values/evidence/invalid pages/span mismatches, marks low-confidence fields for review, computes conservative risk metadata, and persists through `upsert_extraction_record()`. Added integration tests that initialize a temp SQLite DB, insert realistic SDF-style page text, exercise the fake provider path, and assert field rows, compliance row values, source evidence, risk metadata, trace/run metadata, abstentions, low-confidence boundary behavior, and typed failure modes.",
+      "verification_result": "Ran the task-level verification with a shell-safe virtualenv path: `./venv/Scripts/python.exe -m pytest tests/test_extraction_risk.py tests/test_extraction_pipeline.py -q`, which passed 16 tests. Then ran the broader auto-gate equivalent including model and persistence tests with the same corrected path: `./venv/Scripts/python.exe -m pytest tests/test_extraction_models.py tests/test_extraction_persistence.py tests/test_extraction_risk.py tests/test_extraction_pipeline.py -q`, which passed 32 tests. The original verification failure was due to Bash not resolving `venv/Scripts/python.exe` without a leading `./`, not a test failure.",
+      "duration": "",
+      "completed_at": "2026-05-20T07:55:01.664Z",
+      "blocker_discovered": false,
+      "deviations": "Used `./venv/Scripts/python.exe` for verification because the provided Bash command `venv/Scripts/python.exe ...` failed path resolution in this environment. Added the provider protocol and pipeline as planned; no live Gemini dependency was introduced.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/db/queries.py",
+        "src/extraction/providers.py",
+        "src/extraction/pipeline.py",
+        "src/extraction/__init__.py",
+        "tests/test_extraction_pipeline.py"
+      ],
+      "key_decisions": [
+        "Keep provider integration behind a dependency-free protocol for T02; live Gemini/Claude adapters remain out of scope.",
+        "Treat ungrounded provider facts conservatively by abstaining rather than persisting confident values when cited spans/pages do not validate against stored page text.",
+        "Use a named low-confidence threshold where confidence below the threshold becomes needs_review and values at the threshold remain pending."
+      ],
+      "full_summary_md": "---\nid: T02\nparent: S03\nmilestone: M001\nkey_files:\n  - src/db/queries.py\n  - src/extraction/providers.py\n  - src/extraction/pipeline.py\n  - src/extraction/__init__.py\n  - tests/test_extraction_pipeline.py\nkey_decisions:\n  - Keep provider integration behind a dependency-free protocol for T02; live Gemini/Claude adapters remain out of scope.\n  - Treat ungrounded provider facts conservatively by abstaining rather than persisting confident values when cited spans/pages do not validate against stored page text.\n  - Use a named low-confidence threshold where confidence below the threshold becomes needs_review and values at the threshold remain pending.\nduration: \nverification_result: passed\ncompleted_at: 2026-05-20T07:55:01.662Z\nblocker_discovered: false\n---\n\n# T02: Added an offline fake-provider SDF extraction pipeline that loads ingested pages, normalizes six fields, validates source spans, computes risk, and persists dashboard-ready rows.\n\n**Added an offline fake-provider SDF extraction pipeline that loads ingested pages, normalizes six fields, validates source spans, computes risk, and persists dashboard-ready rows.**\n\n## What Happened\n\nImplemented typed document/page loading helpers in `src/db/queries.py`, a dependency-free provider protocol in `src/extraction/providers.py`, and `extract_document()` orchestration in `src/extraction/pipeline.py`. The pipeline generates a non-secret run ID, loads ordered 0-indexed pages, rejects missing/empty page text with typed failures, calls a fake-compatible provider protocol, normalizes provider payloads into exactly the six SDF fields, synthesizes abstentions for missing values/evidence/invalid pages/span mismatches, marks low-confidence fields for review, computes conservative risk metadata, and persists through `upsert_extraction_record()`. Added integration tests that initialize a temp SQLite DB, insert realistic SDF-style page text, exercise the fake provider path, and assert field rows, compliance row values, source evidence, risk metadata, trace/run metadata, abstentions, low-confidence boundary behavior, and typed failure modes.\n\n## Verification\n\nRan the task-level verification with a shell-safe virtualenv path: `./venv/Scripts/python.exe -m pytest tests/test_extraction_risk.py tests/test_extraction_pipeline.py -q`, which passed 16 tests. Then ran the broader auto-gate equivalent including model and persistence tests with the same corrected path: `./venv/Scripts/python.exe -m pytest tests/test_extraction_models.py tests/test_extraction_persistence.py tests/test_extraction_risk.py tests/test_extraction_pipeline.py -q`, which passed 32 tests. The original verification failure was due to Bash not resolving `venv/Scripts/python.exe` without a leading `./`, not a test failure.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `./venv/Scripts/python.exe -m pytest tests/test_extraction_risk.py tests/test_extraction_pipeline.py -q` | 0 | ✅ pass (16 passed) | 1070ms |\n| 2 | `./venv/Scripts/python.exe -m pytest tests/test_extraction_models.py tests/test_extraction_persistence.py tests/test_extraction_risk.py tests/test_extraction_pipeline.py -q` | 0 | ✅ pass (32 passed) | 1670ms |\n\n## Deviations\n\nUsed `./venv/Scripts/python.exe` for verification because the provided Bash command `venv/Scripts/python.exe ...` failed path resolution in this environment. Added the provider protocol and pipeline as planned; no live Gemini dependency was introduced.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/db/queries.py`\n- `src/extraction/providers.py`\n- `src/extraction/pipeline.py`\n- `src/extraction/__init__.py`\n- `tests/test_extraction_pipeline.py`\n",
+      "description": "---\nestimated_steps: 8\nestimated_files: 5\nskills_used:\n  - tdd\n  - observability\n  - verify-before-complete\n---\n\nWhy: The critical S03 integration risk is converting provider output into the exact six-field model, validating source grounding, computing risk, and persisting a dashboard-ready row. Prove that path first with a fake provider and temp SQLite DB.\n\nDo:\n1. Add typed page/document read helpers in `src/db/queries.py` or a new extraction loader module. Fetch document metadata plus ordered pages by `doc_id`, including `page_num`, `page_text`, and optionally image bytes, with 0-indexed page numbers preserved.\n2. Add `src/extraction/providers.py` with a small provider protocol/data shape that the pipeline can call; include no live Gemini dependency in this task.\n3. Add `src/extraction/pipeline.py` orchestration for `extract_document(db_path, doc_id, provider, settings/date overrides...)`.\n4. Normalize provider field payloads into all six `ExtractedField` instances, synthesizing abstentions for missing fields before constructing `SDFExtractionRecord`.\n5. Validate non-abstained source spans against cited page text using whitespace/case-tolerant matching. Missing spans should not persist as confident facts; downgrade to needs-review or abstain with a non-secret reason.\n6. Apply low-confidence review policy using a named threshold parameter, compute risk via `src/extraction/risk.py`, assign a generated `run_id`, preserve optional `trace_id`, and upsert through `upsert_extraction_record()`.\n7. Add `tests/test_extraction_pipeline.py` happy-path integration: initialize temp DB, insert one document and realistic SDF-style page text, fake provider returns all six fields with spans, run pipeline, assert six field rows and one compliance row with risk metadata/source evidence/run metadata.\n\nThreat Surface (Q3): Provider payload and page text are untrusted. SQL remains parameterized. Do not log full page text, raw provider payloads, image blobs, or secrets.\nRequirement Impact (Q4): Advances R002, R003, R004, and R008. Re-verify ingestion assumptions around `documents`/`pages` and extraction persistence.\nFailure Modes (Q5): Missing document/pages returns typed extraction failure, not crash. Missing fields become abstentions. Span mismatch becomes needs-review/abstention. DB failures rollback via repository.\nLoad Profile (Q6): One provider call per document plus one DB read and seven DB upsert statements. At 10x document load, provider rate limits and SQLite write serialization are first constraints; keep all-doc extraction sequential for now.\nNegative Tests (Q7): Empty page list, empty page text, missing required field, span mismatch, low confidence threshold boundary, and invalid page number.\n\nDone when the offline fake-provider pipeline test proves the full read -> normalize -> ground -> risk -> persist loop.",
+      "estimate": "2h",
+      "files": [
+        "src/db/queries.py",
+        "src/extraction/providers.py",
+        "src/extraction/pipeline.py",
+        "tests/test_extraction_pipeline.py",
+        "src/extraction/__init__.py"
+      ],
+      "verify": "venv/Scripts/python.exe -m pytest tests/test_extraction_risk.py tests/test_extraction_pipeline.py -q",
+      "inputs": [
+        "src/db/queries.py",
+        "src/extraction/models.py",
+        "src/extraction/repository.py",
+        "src/extraction/risk.py",
+        "tests/test_extraction_risk.py"
+      ],
+      "expected_output": [
+        "src/db/queries.py",
+        "src/extraction/providers.py",
+        "src/extraction/pipeline.py",
+        "tests/test_extraction_pipeline.py",
+        "src/extraction/__init__.py"
+      ],
+      "observability_impact": "Introduces run-level extraction diagnostics through generated `run_id`, typed failure states/exceptions, and persisted review/abstention outcomes while maintaining no-page-text logging.",
+      "full_plan_md": "",
+      "sequence": 0,
+      "blocker_source": "",
+      "escalation_pending": 0,
+      "escalation_awaiting_review": 0,
+      "escalation_artifact_path": null,
+      "escalation_override_applied_at": null
+    },
+    {
+      "milestone_id": "M001",
+      "slice_id": "S03",
+      "id": "T03",
+      "title": "Added an offline-safe Gemini SDF extraction adapter with typed sanitized provider failures, bounded retries, and deterministic abstentions for malformed output.",
+      "status": "complete",
+      "one_liner": "Added an offline-safe Gemini SDF extraction adapter with typed sanitized provider failures, bounded retries, and deterministic abstentions for malformed output.",
+      "narrative": "Added `google-genai` as an optional live-provider dependency and extended settings with `gemini_api_key`, `gemini_model`, and `extraction_low_confidence_threshold` defaults that do not require credentials during import. Implemented `src/extraction/gemini.py` as a lazy Gemini provider conforming to the T02 provider protocol: it builds a structured six-field JSON prompt with 0-indexed page references and short verbatim spans, calls `models.generate_content` only when extraction is invoked, parses JSON-compatible provider output into typed provider DTOs, and turns malformed shape/JSON into six deterministic abstention payloads. Added typed provider/config/validation errors in `src/extraction/providers.py`; missing `GEMINI_API_KEY` raises `ExtractionConfigurationError`, retryable 408/429/5xx/timeout-style failures use bounded tenacity retries, and exhausted provider failures are wrapped in sanitized `ExtractionProviderError` messages that expose provider/model/run/doc/error class without API keys, page text, raw model response, or image blobs. Updated pipeline handling to preserve provider diagnostics, apply the configurable low-confidence threshold as needs-review state, and continue validating source spans/pages before persistence. Added mocked Gemini tests for missing credentials, structured parsing, malformed JSON abstentions, bounded retry wrapping/redaction, low-confidence review state, and span mismatch grounding.",
+      "verification_result": "Re-ran the task verification command after the artifact failure: `venv/Scripts/python.exe -m pytest tests/test_app.py tests/test_extraction_pipeline.py tests/test_extraction_provider_gemini.py -q`. It passed offline with 16 tests, confirming app import remains credential-free and Gemini/pipeline failure paths are deterministic without network access. Prior full-regression evidence for this implementation also passed (`venv/Scripts/python.exe -m pytest -q`, 36 passed at the T03 point), and later S03 closeout regression passed with 65 tests after T04.",
+      "duration": "",
+      "completed_at": "2026-05-20T17:29:48.253Z",
+      "blocker_discovered": false,
+      "deviations": "None.",
+      "known_issues": "Default pytest emits existing third-party deprecation warnings from installed dependencies during full regression; no task-specific failures remain.",
+      "key_files": [
+        "pyproject.toml",
+        "src/config.py",
+        "src/extraction/providers.py",
+        "src/extraction/gemini.py",
+        "src/extraction/pipeline.py",
+        "tests/test_extraction_provider_gemini.py",
+        "tests/test_extraction_pipeline.py"
+      ],
+      "key_decisions": [
+        "Gemini provider construction is lazy and credential-checked at provider instantiation/call boundaries so tests and app imports stay offline-safe.",
+        "Malformed Gemini output is represented as deterministic six-field abstention payloads rather than leaking raw response text or crashing the pipeline.",
+        "Retry exhaustion reports sanitized provider/model/run/doc/error-class diagnostics only, preserving redaction boundaries for API keys and page text."
+      ],
+      "full_summary_md": "---\nid: T03\nparent: S03\nmilestone: M001\nkey_files:\n  - pyproject.toml\n  - src/config.py\n  - src/extraction/providers.py\n  - src/extraction/gemini.py\n  - src/extraction/pipeline.py\n  - tests/test_extraction_provider_gemini.py\n  - tests/test_extraction_pipeline.py\nkey_decisions:\n  - Gemini provider construction is lazy and credential-checked at provider instantiation/call boundaries so tests and app imports stay offline-safe.\n  - Malformed Gemini output is represented as deterministic six-field abstention payloads rather than leaking raw response text or crashing the pipeline.\n  - Retry exhaustion reports sanitized provider/model/run/doc/error-class diagnostics only, preserving redaction boundaries for API keys and page text.\nduration: \nverification_result: passed\ncompleted_at: 2026-05-20T17:29:48.252Z\nblocker_discovered: false\n---\n\n# T03: Added an offline-safe Gemini SDF extraction adapter with typed sanitized provider failures, bounded retries, and deterministic abstentions for malformed output.\n\n**Added an offline-safe Gemini SDF extraction adapter with typed sanitized provider failures, bounded retries, and deterministic abstentions for malformed output.**\n\n## What Happened\n\nAdded `google-genai` as an optional live-provider dependency and extended settings with `gemini_api_key`, `gemini_model`, and `extraction_low_confidence_threshold` defaults that do not require credentials during import. Implemented `src/extraction/gemini.py` as a lazy Gemini provider conforming to the T02 provider protocol: it builds a structured six-field JSON prompt with 0-indexed page references and short verbatim spans, calls `models.generate_content` only when extraction is invoked, parses JSON-compatible provider output into typed provider DTOs, and turns malformed shape/JSON into six deterministic abstention payloads. Added typed provider/config/validation errors in `src/extraction/providers.py`; missing `GEMINI_API_KEY` raises `ExtractionConfigurationError`, retryable 408/429/5xx/timeout-style failures use bounded tenacity retries, and exhausted provider failures are wrapped in sanitized `ExtractionProviderError` messages that expose provider/model/run/doc/error class without API keys, page text, raw model response, or image blobs. Updated pipeline handling to preserve provider diagnostics, apply the configurable low-confidence threshold as needs-review state, and continue validating source spans/pages before persistence. Added mocked Gemini tests for missing credentials, structured parsing, malformed JSON abstentions, bounded retry wrapping/redaction, low-confidence review state, and span mismatch grounding.\n\n## Verification\n\nRe-ran the task verification command after the artifact failure: `venv/Scripts/python.exe -m pytest tests/test_app.py tests/test_extraction_pipeline.py tests/test_extraction_provider_gemini.py -q`. It passed offline with 16 tests, confirming app import remains credential-free and Gemini/pipeline failure paths are deterministic without network access. Prior full-regression evidence for this implementation also passed (`venv/Scripts/python.exe -m pytest -q`, 36 passed at the T03 point), and later S03 closeout regression passed with 65 tests after T04.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `venv/Scripts/python.exe -m pytest tests/test_app.py tests/test_extraction_pipeline.py tests/test_extraction_provider_gemini.py -q` | 0 | ✅ pass (16 passed) | 8699ms |\n\n## Deviations\n\nNone.\n\n## Known Issues\n\nDefault pytest emits existing third-party deprecation warnings from installed dependencies during full regression; no task-specific failures remain.\n\n## Files Created/Modified\n\n- `pyproject.toml`\n- `src/config.py`\n- `src/extraction/providers.py`\n- `src/extraction/gemini.py`\n- `src/extraction/pipeline.py`\n- `tests/test_extraction_provider_gemini.py`\n- `tests/test_extraction_pipeline.py`\n",
+      "description": "---\nestimated_steps: 9\nestimated_files: 6\nskills_used:\n  - tdd\n  - observability\n  - security-review\n  - verify-before-complete\n---\n\nWhy: S03 needs a real Gemini-primary extraction seam, but default tests and app startup must remain non-fatal without API credentials or network access.\n\nDo:\n1. Add `google-genai` to `pyproject.toml` using the project stack recommendation, without making test import paths require credentials.\n2. Add non-required settings in `src/config.py`: `gemini_api_key`, `gemini_model` defaulting to `gemini-2.5-flash`, and `extraction_low_confidence_threshold` defaulting to `0.75` unless tests justify a different named default.\n3. Implement `src/extraction/gemini.py` or a provider class in `src/extraction/providers.py` that conforms to the protocol from T02.\n4. Prompt/request structured six-field output with 0-indexed page references and short verbatim spans; still validate everything in the pipeline with Pydantic and source-span grounding.\n5. Add typed errors such as `ExtractionConfigurationError`, `ExtractionProviderError`, and `ExtractionValidationError` where useful. Missing `GEMINI_API_KEY` should produce a clear typed configuration error caught by CLI/pipeline callers, not crash Streamlit imports.\n6. Use low-count `tenacity` retry behavior for transient 429/503/timeouts around live provider calls. Tests should mock retryable failures rather than sleep or call the network.\n7. Ensure malformed provider output can produce a model-compatible failure/abstention record when appropriate, with non-secret reason text and no raw response/page text in logs.\n8. Add mocked provider/Gemini tests for missing credentials, malformed JSON/shape, retryable error wrapping, low confidence review state, and span mismatch handling.\n\nThreat Surface (Q3): Sends supplier document text/images to an external API when live provider is used. Never log API keys, full page text, raw model responses, or image blobs. Treat provider output as untrusted.\nRequirement Impact (Q4): Advances R002 and R008; supports R003/R004 by feeding pipeline persistence. Re-verify config import, Streamlit smoke, and default pytest without credentials.\nFailure Modes (Q5): Missing credentials => typed config error. 429/503/timeout => bounded retry then provider error. Malformed response => validation failure or abstention record. Bad source citations => needs-review/abstention.\nLoad Profile (Q6): Provider calls are rate-limited and cost-bearing; at 10x load Gemini quota/cost is first breakpoint. Keep batch extraction sequential or explicitly bounded; no hidden parallel fan-out.\nNegative Tests (Q7): No `GEMINI_API_KEY`, malformed provider response, invalid JSON-compatible bbox, retryable provider exception, low confidence, and span mismatch.\n\nDone when the Gemini adapter exists behind the provider protocol, default tests remain offline, and all provider failure paths are deterministic and observable.",
+      "estimate": "2h",
+      "files": [
+        "pyproject.toml",
+        "src/config.py",
+        "src/extraction/providers.py",
+        "src/extraction/gemini.py",
+        "src/extraction/pipeline.py",
+        "tests/test_extraction_provider_gemini.py",
+        "tests/test_extraction_pipeline.py"
+      ],
+      "verify": "venv/Scripts/python.exe -m pytest tests/test_app.py tests/test_extraction_pipeline.py tests/test_extraction_provider_gemini.py -q",
+      "inputs": [
+        "pyproject.toml",
+        "src/config.py",
+        "src/extraction/providers.py",
+        "src/extraction/pipeline.py",
+        "tests/test_extraction_pipeline.py"
+      ],
+      "expected_output": [
+        "pyproject.toml",
+        "src/config.py",
+        "src/extraction/providers.py",
+        "src/extraction/gemini.py",
+        "src/extraction/pipeline.py",
+        "tests/test_extraction_provider_gemini.py",
+        "tests/test_extraction_pipeline.py"
+      ],
+      "observability_impact": "Adds typed provider/config errors and bounded retry diagnostics; preserves optional Langfuse behavior and redaction boundaries for secrets/page content.",
+      "full_plan_md": "",
+      "sequence": 0,
+      "blocker_source": "",
+      "escalation_pending": 0,
+      "escalation_awaiting_review": 0,
+      "escalation_artifact_path": null,
+      "escalation_override_applied_at": null
+    },
+    {
+      "milestone_id": "M001",
+      "slice_id": "S03",
+      "id": "T04",
+      "title": "Added a safe Typer extraction CLI for one-document and batch SDF extraction, with offline CLI tests and a Windows venv command shim for the verification gate.",
+      "status": "complete",
+      "one_liner": "Added a safe Typer extraction CLI for one-document and batch SDF extraction, with offline CLI tests and a Windows venv command shim for the verification gate.",
+      "narrative": "Implemented `src/extraction/cli.py` with `extract` and `extract-all` commands. The CLI lazily constructs the default Gemini provider so imports remain credential-free, reports non-secret run/trace/page/review diagnostics, filters batch extraction to `status='ingested'` documents sorted by `doc_id`, and converts missing credentials, missing docs/pages, provider failures, and unsupported provider choices into sanitized non-zero user-facing failures. Added `tests/test_extraction_cli.py` using Typer's runner and a monkeypatched fake provider seam to exercise the real CLI-to-pipeline persistence path for one document and all ingested documents, plus negative coverage for unknown doc IDs, no ingested docs, missing Gemini credentials, and provider failures without printing page text. The automated verification failure was caused by Windows `cmd.exe` parsing `venv/Scripts/python.exe` as command `venv`; added a root `venv.bat` compatibility shim that delegates that exact gate invocation to `venv\\Scripts\\python.exe`.",
+      "verification_result": "Ran targeted extraction CLI/pipeline/provider tests, the exact previously failing gate command through `cmd.exe` with the forward-slash venv path, and the full pytest regression. All passed offline. The exact prior gate command now passes: `cmd.exe //c \"venv/Scripts/python.exe -m pytest tests/test_app.py tests/test_extraction_pipeline.py tests/test_extraction_provider_gemini.py -q\"` returned 16 passed.",
+      "duration": "",
+      "completed_at": "2026-05-20T17:18:41.493Z",
+      "blocker_discovered": false,
+      "deviations": "Added `venv.bat` as a compatibility shim because the automated verification environment invoked the required forward-slash Windows venv path through `cmd.exe`, which otherwise cannot execute it.",
+      "known_issues": "Full regression still emits existing third-party deprecation warnings from installed dependencies; no test failures.",
+      "key_files": [
+        "src/extraction/cli.py",
+        "tests/test_extraction_cli.py",
+        "venv.bat",
+        ".gsd/DECISIONS.md"
+      ],
+      "key_decisions": [
+        "D011: Default CLI provider construction is lazy Gemini, with a monkeypatchable provider seam for offline CLI tests."
+      ],
+      "full_summary_md": "---\nid: T04\nparent: S03\nmilestone: M001\nkey_files:\n  - src/extraction/cli.py\n  - tests/test_extraction_cli.py\n  - venv.bat\n  - .gsd/DECISIONS.md\nkey_decisions:\n  - D011: Default CLI provider construction is lazy Gemini, with a monkeypatchable provider seam for offline CLI tests.\nduration: \nverification_result: passed\ncompleted_at: 2026-05-20T17:18:41.491Z\nblocker_discovered: false\n---\n\n# T04: Added a safe Typer extraction CLI for one-document and batch SDF extraction, with offline CLI tests and a Windows venv command shim for the verification gate.\n\n**Added a safe Typer extraction CLI for one-document and batch SDF extraction, with offline CLI tests and a Windows venv command shim for the verification gate.**\n\n## What Happened\n\nImplemented `src/extraction/cli.py` with `extract` and `extract-all` commands. The CLI lazily constructs the default Gemini provider so imports remain credential-free, reports non-secret run/trace/page/review diagnostics, filters batch extraction to `status='ingested'` documents sorted by `doc_id`, and converts missing credentials, missing docs/pages, provider failures, and unsupported provider choices into sanitized non-zero user-facing failures. Added `tests/test_extraction_cli.py` using Typer's runner and a monkeypatched fake provider seam to exercise the real CLI-to-pipeline persistence path for one document and all ingested documents, plus negative coverage for unknown doc IDs, no ingested docs, missing Gemini credentials, and provider failures without printing page text. The automated verification failure was caused by Windows `cmd.exe` parsing `venv/Scripts/python.exe` as command `venv`; added a root `venv.bat` compatibility shim that delegates that exact gate invocation to `venv\\Scripts\\python.exe`.\n\n## Verification\n\nRan targeted extraction CLI/pipeline/provider tests, the exact previously failing gate command through `cmd.exe` with the forward-slash venv path, and the full pytest regression. All passed offline. The exact prior gate command now passes: `cmd.exe //c \"venv/Scripts/python.exe -m pytest tests/test_app.py tests/test_extraction_pipeline.py tests/test_extraction_provider_gemini.py -q\"` returned 16 passed.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `venv/Scripts/python.exe -m pytest tests/test_extraction_cli.py tests/test_extraction_pipeline.py tests/test_extraction_provider_gemini.py -q` | 0 | ✅ pass (21 passed) | 4306ms |\n| 2 | `cmd.exe //c \"venv/Scripts/python.exe -m pytest tests/test_app.py tests/test_extraction_pipeline.py tests/test_extraction_provider_gemini.py -q\"` | 0 | ✅ pass (16 passed) | 8768ms |\n| 3 | `venv/Scripts/python.exe -m pytest -q` | 0 | ✅ pass (65 passed, 19 warnings) | 159170ms |\n\n## Deviations\n\nAdded `venv.bat` as a compatibility shim because the automated verification environment invoked the required forward-slash Windows venv path through `cmd.exe`, which otherwise cannot execute it.\n\n## Known Issues\n\nFull regression still emits existing third-party deprecation warnings from installed dependencies; no test failures.\n\n## Files Created/Modified\n\n- `src/extraction/cli.py`\n- `tests/test_extraction_cli.py`\n- `venv.bat`\n- `.gsd/DECISIONS.md`\n",
+      "description": "---\nestimated_steps: 8\nestimated_files: 4\nskills_used:\n  - tdd\n  - observability\n  - verify-before-complete\n---\n\nWhy: The pipeline needs a concrete executor-facing entrypoint so S03 can truthfully claim baseline extraction can run against ingested documents, and S04 can rely on populated `compliance_records` rows.\n\nDo:\n1. Add `src/extraction/cli.py` with Typer commands for at least `extract --doc-id DOC --db-path PATH` and `extract-all --db-path PATH`.\n2. Compose settings, optional Langfuse/no-op tracing, document listing, provider construction, and pipeline calls without requiring credentials at module import time.\n3. Ensure `extract-all` filters or handles ingested documents from `list_documents()` deterministically and reports per-document success/failure counts without printing page text or secrets.\n4. Decide CLI behavior for missing Gemini credentials: return a non-zero user-facing error for live provider mode, while tests can inject/mock fake provider behavior or use a test seam.\n5. Add tests in `tests/test_extraction_cli.py` using a temp DB and mocked/fake provider path to verify one-doc and all-doc commands persist compliance rows and expose safe failure messages.\n6. If a realistic SDF-like fixture is added, keep it small and non-secret; otherwise document that live Gemini smoke is opt-in and not part of default pytest.\n7. Run targeted extraction tests and the full project regression using the Windows venv path with no leading `./`.\n\nThreat Surface (Q3): CLI accepts doc IDs and DB paths. Use existing DB helpers and parameterized SQL, do not print raw page text/provider responses, and avoid exposing local secret values in errors.\nRequirement Impact (Q4): Completes S03 coverage for R002, R003, R004 support, and R008. Re-verify full extraction, ingestion, app startup, and persistence regression.\nFailure Modes (Q5): Missing DB/doc/pages, missing credentials, provider failure, validation failure, and SQLite write failure should produce clear exit/failure status and safe message.\nLoad Profile (Q6): Sequential per-document extraction; at 10x corpus size runtime/cost scales linearly and provider quota is first breakpoint. No hidden concurrency until rate limiting is designed.\nNegative Tests (Q7): Unknown doc ID, no ingested docs for extract-all, missing credentials, provider failure, and malformed output through CLI seam.\n\nDone when CLI commands are covered by executable tests, compliance rows are populated through the real entrypoint, and the full test suite passes offline.",
+      "estimate": "1h 30m",
+      "files": [
+        "src/extraction/cli.py",
+        "src/extraction/pipeline.py",
+        "src/extraction/providers.py",
+        "tests/test_extraction_cli.py",
+        "tests/test_extraction_pipeline.py"
+      ],
+      "verify": "venv/Scripts/python.exe -m pytest -q",
+      "inputs": [
+        "src/extraction/pipeline.py",
+        "src/extraction/providers.py",
+        "src/extraction/gemini.py",
+        "src/db/queries.py",
+        "src/config.py",
+        "tests/test_extraction_pipeline.py",
+        "tests/test_extraction_provider_gemini.py"
+      ],
+      "expected_output": [
+        "src/extraction/cli.py",
+        "src/extraction/pipeline.py",
+        "src/extraction/providers.py",
+        "tests/test_extraction_cli.py",
+        "tests/test_extraction_pipeline.py"
+      ],
+      "observability_impact": "Adds operator-visible extraction command results, per-document success/failure counts, generated run IDs, and safe error messages suitable for future debugging.",
+      "full_plan_md": "",
+      "sequence": 0,
+      "blocker_source": "",
+      "escalation_pending": 0,
+      "escalation_awaiting_review": 0,
+      "escalation_artifact_path": null,
+      "escalation_override_applied_at": null
+    },
+    {
+      "milestone_id": "M001",
+      "slice_id": "S04",
+      "id": "T01",
+      "title": "Added a credential-free compliance dashboard adapter with formatting helpers and SQLite-backed tests for persisted compliance rows.",
+      "status": "complete",
+      "one_liner": "Added a credential-free compliance dashboard adapter with formatting helpers and SQLite-backed tests for persisted compliance rows.",
+      "narrative": "Created `src/dashboard/__init__.py` and `src/dashboard/compliance.py` as a read-only seam between Streamlit-facing code and the existing extraction repository. `load_compliance_rows` delegates to `src.extraction.repository.list_compliance_records` and converts missing database/table SQLite OperationalError states into an empty list so an uninitialized dashboard has deterministic empty-state data instead of a traceback. `format_compliance_rows` preserves every raw row key while adding display-safe fields for 1-indexed source pages, source labels, source evidence availability, review state, risk/status labels, review-needed text, and confidence percentages. Added `tests/test_compliance_dashboard.py` with real SQLite fixture coverage using `init_db`, `insert_document`, and `upsert_extraction_record`, plus negative coverage for missing database, missing table, null evidence fields, and source page off-by-one display behavior.",
+      "verification_result": "Ran the task-specified targeted test command `venv/Scripts/python.exe -m pytest tests/test_compliance_dashboard.py -q`. The suite passed with 5 tests covering persisted row exposure, empty/missing database behavior, missing table behavior, nullable source evidence formatting, and 0-indexed to 1-indexed source page display.",
+      "duration": "",
+      "completed_at": "2026-05-20T17:52:02.884Z",
+      "blocker_discovered": false,
+      "deviations": "None.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/dashboard/__init__.py",
+        "src/dashboard/compliance.py",
+        "tests/test_compliance_dashboard.py"
+      ],
+      "key_decisions": [
+        "Kept dashboard data access credential-free and provider-free by wrapping only the SQLite repository layer.",
+        "Formatted display labels as additive fields while preserving all raw compliance row keys unchanged.",
+        "Converted missing/uninitialized SQLite compliance tables into empty lists for deterministic UI empty states."
+      ],
+      "full_summary_md": "---\nid: T01\nparent: S04\nmilestone: M001\nkey_files:\n  - src/dashboard/__init__.py\n  - src/dashboard/compliance.py\n  - tests/test_compliance_dashboard.py\nkey_decisions:\n  - Kept dashboard data access credential-free and provider-free by wrapping only the SQLite repository layer.\n  - Formatted display labels as additive fields while preserving all raw compliance row keys unchanged.\n  - Converted missing/uninitialized SQLite compliance tables into empty lists for deterministic UI empty states.\nduration: \nverification_result: passed\ncompleted_at: 2026-05-20T17:52:02.883Z\nblocker_discovered: false\n---\n\n# T01: Added a credential-free compliance dashboard adapter with formatting helpers and SQLite-backed tests for persisted compliance rows.\n\n**Added a credential-free compliance dashboard adapter with formatting helpers and SQLite-backed tests for persisted compliance rows.**\n\n## What Happened\n\nCreated `src/dashboard/__init__.py` and `src/dashboard/compliance.py` as a read-only seam between Streamlit-facing code and the existing extraction repository. `load_compliance_rows` delegates to `src.extraction.repository.list_compliance_records` and converts missing database/table SQLite OperationalError states into an empty list so an uninitialized dashboard has deterministic empty-state data instead of a traceback. `format_compliance_rows` preserves every raw row key while adding display-safe fields for 1-indexed source pages, source labels, source evidence availability, review state, risk/status labels, review-needed text, and confidence percentages. Added `tests/test_compliance_dashboard.py` with real SQLite fixture coverage using `init_db`, `insert_document`, and `upsert_extraction_record`, plus negative coverage for missing database, missing table, null evidence fields, and source page off-by-one display behavior.\n\n## Verification\n\nRan the task-specified targeted test command `venv/Scripts/python.exe -m pytest tests/test_compliance_dashboard.py -q`. The suite passed with 5 tests covering persisted row exposure, empty/missing database behavior, missing table behavior, nullable source evidence formatting, and 0-indexed to 1-indexed source page display.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `venv/Scripts/python.exe -m pytest tests/test_compliance_dashboard.py -q` | 0 | ✅ pass | 2286ms |\n\n## Deviations\n\nNone.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/dashboard/__init__.py`\n- `src/dashboard/compliance.py`\n- `tests/test_compliance_dashboard.py`\n",
+      "description": "Expected executor skills/frontmatter: estimated_steps: 8; estimated_files: 3; skills_used: [tdd, verify-before-complete].\n\nWhy: S04 needs a stable, testable seam between SQLite persistence and Streamlit so the UI can remain read-only, credential-free, and robust when no extraction has run yet.\n\nDo: Create `src/dashboard/__init__.py` and `src/dashboard/compliance.py`. In the module, add `load_compliance_rows(db_path: str) -> list[dict]` wrapping `src.extraction.repository.list_compliance_records` and returning an empty list for missing database/table `sqlite3.OperationalError` cases. Add `format_compliance_rows(rows)` that preserves raw row keys while adding display-safe fields such as `source_page_display` (DB `source_page` + 1 when not null), `source_page_label`, `needs_review_display`, `aggregate_confidence_display`, and risk/review labels suitable for Streamlit. Keep DB semantics unchanged and do not call Gemini/Langfuse/provider code.\n\nAdd `tests/test_compliance_dashboard.py` with real SQLite fixture coverage using `init_db`, `insert_document`, and `upsert_extraction_record` patterns from `tests/test_extraction_persistence.py`. Tests must assert that formatted rows expose vendor, doc_type, manufacturing/effective/revision/expiry dates, risk_level, risk_reason, compliance_status, age_days, confidence, review_state, run_id, trace_id, source_verbatim_span, and 1-indexed `source_page_display` for a persisted 0-indexed source page.\n\nFailure Modes (Q5): Missing DB/table returns an empty list; nullable evidence fields produce blank/unknown display labels instead of exceptions.\n\nNegative Tests (Q7): Include empty/missing database behavior, null source evidence, and off-by-one source page display.\n\nDone when: targeted dashboard tests pass without network, credentials, or Streamlit process startup.",
+      "estimate": "1h30m",
+      "files": [
+        "src/dashboard/__init__.py",
+        "src/dashboard/compliance.py",
+        "tests/test_compliance_dashboard.py"
+      ],
+      "verify": "venv/Scripts/python.exe -m pytest tests/test_compliance_dashboard.py -q",
+      "inputs": [
+        "src/extraction/repository.py",
+        "src/db/schema.py",
+        "src/db/queries.py",
+        "src/extraction/models.py",
+        "tests/test_extraction_persistence.py"
+      ],
+      "expected_output": [
+        "src/dashboard/__init__.py",
+        "src/dashboard/compliance.py",
+        "tests/test_compliance_dashboard.py"
+      ],
+      "observability_impact": "Creates the dashboard inspection seam: future agents can call adapter tests or inspect formatted rows to diagnose whether failures are persistence, formatting, or rendering issues. Empty/missing DB state becomes deterministic instead of a traceback.",
+      "full_plan_md": "",
+      "sequence": 0,
+      "blocker_source": "",
+      "escalation_pending": 0,
+      "escalation_awaiting_review": 0,
+      "escalation_artifact_path": null,
+      "escalation_override_applied_at": null
+    },
+    {
+      "milestone_id": "M001",
+      "slice_id": "S04",
+      "id": "T02",
+      "title": "Wired the Compliance tab to render persisted SQLite compliance records with summary metrics, table fields, and lazy source evidence previews.",
+      "status": "complete",
+      "one_liner": "Wired the Compliance tab to render persisted SQLite compliance records with summary metrics, table fields, and lazy source evidence previews.",
+      "narrative": "Extended `src/dashboard/compliance.py` with `render_compliance_tab(db_path: str | None = None)`, preserving the existing row-loading and formatting adapter while adding a Streamlit render path. The renderer now shows a deterministic empty/setup state for missing or empty SQLite data, summary metrics for total documents and risk/review counts, a display-safe compliance table with risk/status/vendor/date/confidence/review/source/run/trace columns, and a selected-document source evidence detail section. Source page images are fetched lazily through `get_page_image` only for the selected row, and nullable/missing/malformed source image fields fall back to a sanitized 'No source preview available' message instead of raising. Updated `src/app.py` so `st.set_page_config` remains the first Streamlit call, then the Compliance tab calls `render_compliance_tab(get_settings().db_path)` while Chat and Eval placeholders remain unchanged. Added render-level tests using a fake Streamlit surface to verify empty-state rendering, populated source-detail rendering, and lazy/missing-image behavior without requiring credentials or a preexisting `compliance.db`.",
+      "verification_result": "Ran the task verification command `venv/Scripts/python.exe -m pytest tests/test_compliance_dashboard.py tests/test_app.py -q`. It passed with 7 tests, covering SQLite load/format behavior, null source evidence formatting, render empty state, populated source-detail path, lazy missing-image tolerance, and Streamlit app smoke startup.",
+      "duration": "",
+      "completed_at": "2026-05-20T17:56:30.932Z",
+      "blocker_discovered": false,
+      "deviations": "Used a fake Streamlit object for render-level tests instead of `streamlit.testing.v1.AppTest` to keep the tests stable and focused on the dashboard render contract.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/dashboard/compliance.py",
+        "src/dashboard/__init__.py",
+        "src/app.py",
+        "tests/test_compliance_dashboard.py"
+      ],
+      "key_decisions": [
+        "Kept the Compliance renderer credential-free and provider-free, with one compliance row load per render and lazy page-image lookup for selected source evidence only.",
+        "Used display-label keys directly in the dataframe rows instead of relying on Streamlit `column_config` label behavior for better version compatibility."
+      ],
+      "full_summary_md": "---\nid: T02\nparent: S04\nmilestone: M001\nkey_files:\n  - src/dashboard/compliance.py\n  - src/dashboard/__init__.py\n  - src/app.py\n  - tests/test_compliance_dashboard.py\nkey_decisions:\n  - Kept the Compliance renderer credential-free and provider-free, with one compliance row load per render and lazy page-image lookup for selected source evidence only.\n  - Used display-label keys directly in the dataframe rows instead of relying on Streamlit `column_config` label behavior for better version compatibility.\nduration: \nverification_result: passed\ncompleted_at: 2026-05-20T17:56:30.930Z\nblocker_discovered: false\n---\n\n# T02: Wired the Compliance tab to render persisted SQLite compliance records with summary metrics, table fields, and lazy source evidence previews.\n\n**Wired the Compliance tab to render persisted SQLite compliance records with summary metrics, table fields, and lazy source evidence previews.**\n\n## What Happened\n\nExtended `src/dashboard/compliance.py` with `render_compliance_tab(db_path: str | None = None)`, preserving the existing row-loading and formatting adapter while adding a Streamlit render path. The renderer now shows a deterministic empty/setup state for missing or empty SQLite data, summary metrics for total documents and risk/review counts, a display-safe compliance table with risk/status/vendor/date/confidence/review/source/run/trace columns, and a selected-document source evidence detail section. Source page images are fetched lazily through `get_page_image` only for the selected row, and nullable/missing/malformed source image fields fall back to a sanitized 'No source preview available' message instead of raising. Updated `src/app.py` so `st.set_page_config` remains the first Streamlit call, then the Compliance tab calls `render_compliance_tab(get_settings().db_path)` while Chat and Eval placeholders remain unchanged. Added render-level tests using a fake Streamlit surface to verify empty-state rendering, populated source-detail rendering, and lazy/missing-image behavior without requiring credentials or a preexisting `compliance.db`.\n\n## Verification\n\nRan the task verification command `venv/Scripts/python.exe -m pytest tests/test_compliance_dashboard.py tests/test_app.py -q`. It passed with 7 tests, covering SQLite load/format behavior, null source evidence formatting, render empty state, populated source-detail path, lazy missing-image tolerance, and Streamlit app smoke startup.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `venv/Scripts/python.exe -m pytest tests/test_compliance_dashboard.py tests/test_app.py -q` | 0 | ✅ pass (7 passed) | 8080ms |\n\n## Deviations\n\nUsed a fake Streamlit object for render-level tests instead of `streamlit.testing.v1.AppTest` to keep the tests stable and focused on the dashboard render contract.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/dashboard/compliance.py`\n- `src/dashboard/__init__.py`\n- `src/app.py`\n- `tests/test_compliance_dashboard.py`\n",
+      "description": "Expected executor skills/frontmatter: estimated_steps: 9; estimated_files: 3; skills_used: [verify-before-complete, make-interfaces-feel-better].\n\nWhy: The evaluator-facing Compliance tab must stop being a placeholder and show the persisted S03 records with risk, confidence, review, run metadata, and source evidence.\n\nDo: Extend `src/dashboard/compliance.py` with `render_compliance_tab(db_path: str | None = None) -> None`. Render a friendly empty/setup message when `load_compliance_rows` returns no rows. When rows exist, render summary metrics for total documents, red/amber/green/unknown counts, and needs-review count. Render a `st.dataframe` table with visible columns for risk/status, vendor, doc type, date fields, age_days, confidence, review_state/needs_review, source page label, run_id, and trace_id. Add a simple detail selector (for example, by `doc_id`) or expanders that display risk reason, source page label, source_verbatim_span, and source_bbox only outside the main table. Use `get_page_image` lazily for the selected/detail row only and tolerate missing images.\n\nWire `src/app.py` so page config remains the first Streamlit call, then import `get_settings` and `render_compliance_tab`, and call `render_compliance_tab(get_settings().db_path)` inside the Compliance tab. Keep Chat/Eval placeholders unchanged and keep Langfuse status non-fatal.\n\nFailure Modes (Q5): Missing image or malformed nullable source fields must render a message such as no source preview available rather than raising. Streamlit startup must not require `GEMINI_API_KEY`, Langfuse credentials, or a preexisting `compliance.db`.\n\nLoad Profile (Q6): Use one record load per render and lazy one-image lookup for selected details; do not load all page image blobs into the table.\n\nNegative Tests (Q7): Extend `tests/test_compliance_dashboard.py` with render-level tests using Streamlit monkeypatches or `streamlit.testing.v1.AppTest` only if stable; assert empty-state rendering path and populated source-detail path do not crash.\n\nDone when: Compliance tab is wired to real SQLite-backed rendering and app smoke tests still pass.",
+      "estimate": "2h",
+      "files": [
+        "src/dashboard/compliance.py",
+        "src/app.py",
+        "tests/test_compliance_dashboard.py"
+      ],
+      "verify": "venv/Scripts/python.exe -m pytest tests/test_compliance_dashboard.py tests/test_app.py -q",
+      "inputs": [
+        "src/dashboard/compliance.py",
+        "tests/test_compliance_dashboard.py",
+        "src/app.py",
+        "src/config.py",
+        "src/db/queries.py",
+        "tests/test_app.py"
+      ],
+      "expected_output": [
+        "src/dashboard/compliance.py",
+        "src/app.py",
+        "tests/test_compliance_dashboard.py"
+      ],
+      "observability_impact": "Adds UI-level operational visibility: summary counts, review-state counts, run_id/trace_id, risk reasons, source page labels, and source spans are visible for diagnosis while secrets and full raw document/page text remain hidden.",
+      "full_plan_md": "",
+      "sequence": 0,
+      "blocker_source": "",
+      "escalation_pending": 0,
+      "escalation_awaiting_review": 0,
+      "escalation_artifact_path": null,
+      "escalation_override_applied_at": null
+    },
+    {
+      "milestone_id": "M001",
+      "slice_id": "S04",
+      "id": "T03",
+      "title": "Verified the SQLite-backed Compliance dashboard and app startup against targeted and full project regressions without requiring code changes.",
+      "status": "complete",
+      "one_liner": "Verified the SQLite-backed Compliance dashboard and app startup against targeted and full project regressions without requiring code changes.",
+      "narrative": "Ran the S04 targeted dashboard/app regression first using the required `venv/Scripts/python.exe` interpreter. The existing dashboard tests already confirmed deterministic empty-state behavior for missing records/missing tables, null source-evidence formatting, lazy source image lookup, summary metric rendering, and Streamlit app startup. Because those targeted checks passed, no narrow fixes were needed in `src/dashboard/compliance.py`, `src/app.py`, or `tests/test_compliance_dashboard.py`. Then ran the full project regression through the same virtualenv to prove the final Compliance dashboard slice did not regress extraction persistence, app startup, or offline credential-free behavior.",
+      "verification_result": "Executed `venv/Scripts/python.exe -m pytest -q tests/test_compliance_dashboard.py tests/test_app.py`, which passed 7 tests. Executed `venv/Scripts/python.exe -m pytest -q`, which passed the full suite with 71 tests and 19 warnings. The warnings were non-failing deprecation warnings from dependencies and did not block the regression.",
+      "duration": "",
+      "completed_at": "2026-05-20T17:59:25.160Z",
+      "blocker_discovered": false,
+      "deviations": "No code changes were necessary after targeted and full regressions passed.",
+      "known_issues": "Full regression emits 19 non-failing warnings, including dependency deprecation warnings such as `torch.jit.script_method`; these were preexisting/non-blocking for S04.",
+      "key_files": [
+        "src/dashboard/compliance.py",
+        "src/app.py",
+        "tests/test_compliance_dashboard.py",
+        "tests/test_app.py"
+      ],
+      "key_decisions": [
+        "No dashboard/app code was changed because the existing targeted edge-case tests and full regression passed."
+      ],
+      "full_summary_md": "---\nid: T03\nparent: S04\nmilestone: M001\nkey_files:\n  - src/dashboard/compliance.py\n  - src/app.py\n  - tests/test_compliance_dashboard.py\n  - tests/test_app.py\nkey_decisions:\n  - No dashboard/app code was changed because the existing targeted edge-case tests and full regression passed.\nduration: \nverification_result: passed\ncompleted_at: 2026-05-20T17:59:25.159Z\nblocker_discovered: false\n---\n\n# T03: Verified the SQLite-backed Compliance dashboard and app startup against targeted and full project regressions without requiring code changes.\n\n**Verified the SQLite-backed Compliance dashboard and app startup against targeted and full project regressions without requiring code changes.**\n\n## What Happened\n\nRan the S04 targeted dashboard/app regression first using the required `venv/Scripts/python.exe` interpreter. The existing dashboard tests already confirmed deterministic empty-state behavior for missing records/missing tables, null source-evidence formatting, lazy source image lookup, summary metric rendering, and Streamlit app startup. Because those targeted checks passed, no narrow fixes were needed in `src/dashboard/compliance.py`, `src/app.py`, or `tests/test_compliance_dashboard.py`. Then ran the full project regression through the same virtualenv to prove the final Compliance dashboard slice did not regress extraction persistence, app startup, or offline credential-free behavior.\n\n## Verification\n\nExecuted `venv/Scripts/python.exe -m pytest -q tests/test_compliance_dashboard.py tests/test_app.py`, which passed 7 tests. Executed `venv/Scripts/python.exe -m pytest -q`, which passed the full suite with 71 tests and 19 warnings. The warnings were non-failing deprecation warnings from dependencies and did not block the regression.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `venv/Scripts/python.exe -m pytest -q tests/test_compliance_dashboard.py tests/test_app.py` | 0 | ✅ pass — 7 passed in 6.52s | 8252ms |\n| 2 | `venv/Scripts/python.exe -m pytest -q` | 0 | ✅ pass — 71 passed, 19 warnings in 113.72s | 118358ms |\n\n## Deviations\n\nNo code changes were necessary after targeted and full regressions passed.\n\n## Known Issues\n\nFull regression emits 19 non-failing warnings, including dependency deprecation warnings such as `torch.jit.script_method`; these were preexisting/non-blocking for S04.\n\n## Files Created/Modified\n\n- `src/dashboard/compliance.py`\n- `src/app.py`\n- `tests/test_compliance_dashboard.py`\n- `tests/test_app.py`\n",
+      "description": "Expected executor skills/frontmatter: estimated_steps: 5; estimated_files: 2; skills_used: [verify-before-complete].\n\nWhy: S04 is the final M001 slice and must prove the new dashboard surface did not regress extraction persistence, app startup, or offline credential behavior.\n\nDo: Run the targeted checks first, then the full project regression with the required Python 3.11 virtualenv. If tests reveal dashboard-specific edge cases, make narrow fixes in `src/dashboard/compliance.py` and/or `tests/test_compliance_dashboard.py`; if app startup fails due to import order, fix `src/app.py` while preserving `st.set_page_config` as the first Streamlit call. Do not broaden scope into extraction providers, schema changes, or visual redesign.\n\nFailure Modes (Q5): Regression failures should be localized to dashboard formatting/rendering, app import order, or preexisting tests. Do not mask provider or credential errors by calling live providers.\n\nNegative Tests (Q7): Confirm the test suite includes no-doc/no-table dashboard behavior and null-evidence handling before claiming completion.\n\nDone when: targeted dashboard/app tests and full regression pass through `venv/Scripts/python.exe`.",
+      "estimate": "45m",
+      "files": [
+        "src/dashboard/compliance.py",
+        "src/app.py",
+        "tests/test_compliance_dashboard.py"
+      ],
+      "verify": "venv/Scripts/python.exe -m pytest -q",
+      "inputs": [
+        "src/dashboard/compliance.py",
+        "src/app.py",
+        "tests/test_compliance_dashboard.py",
+        "tests/test_app.py"
+      ],
+      "expected_output": [
+        "src/dashboard/compliance.py",
+        "src/app.py",
+        "tests/test_compliance_dashboard.py"
+      ],
+      "observability_impact": "Ensures final dashboard behavior is verified with executable evidence and any edge-case failures remain visible through tests rather than manual inspection only.",
+      "full_plan_md": "",
+      "sequence": 0,
+      "blocker_source": "",
+      "escalation_pending": 0,
+      "escalation_awaiting_review": 0,
+      "escalation_artifact_path": null,
+      "escalation_override_applied_at": null
+    },
+    {
+      "milestone_id": "M001",
+      "slice_id": "S05",
+      "id": "T01",
+      "title": "Added and verified the S05 realistic offline PDF ingestion-to-extraction-to-dashboard proof test.",
+      "status": "complete",
+      "one_liner": "Added and verified the S05 realistic offline PDF ingestion-to-extraction-to-dashboard proof test.",
+      "narrative": "Added `tests/test_s05_end_to_end_proof.py`, a deterministic final-assembly proof that generates a realistic one-page SDF PDF at runtime, ingests it with the real Docling ingestion path, verifies persisted page text contains all required SDF spans, runs the real extraction pipeline with a credential-free fake provider grounded in those spans, persists extraction and compliance rows, verifies amber risk and age metadata, and checks dashboard adapter formatting.",
+      "verification_result": "Ran `venv/Scripts/python.exe -m pytest tests/test_s05_end_to_end_proof.py -q`; result: 1 passed, 15 warnings in 53.65s.",
+      "duration": "",
+      "completed_at": "2026-05-20T19:17:20.535Z",
+      "blocker_discovered": false,
+      "deviations": "None.",
+      "known_issues": "None.",
+      "key_files": [
+        "tests/test_s05_end_to_end_proof.py"
+      ],
+      "key_decisions": [
+        "Use an in-test dependency-free raw PDF generator instead of committing a generated fixture or relying on tests/fixtures/sample.pdf."
+      ],
+      "full_summary_md": "---\nid: T01\nparent: S05\nmilestone: M001\nkey_files:\n  - tests/test_s05_end_to_end_proof.py\nkey_decisions:\n  - Use an in-test dependency-free raw PDF generator instead of committing a generated fixture or relying on tests/fixtures/sample.pdf.\nduration: \nverification_result: passed\ncompleted_at: 2026-05-20T19:17:20.533Z\nblocker_discovered: false\n---\n\n# T01: Added and verified the S05 realistic offline PDF ingestion-to-extraction-to-dashboard proof test.\n\n**Added and verified the S05 realistic offline PDF ingestion-to-extraction-to-dashboard proof test.**\n\n## What Happened\n\nAdded `tests/test_s05_end_to_end_proof.py`, a deterministic final-assembly proof that generates a realistic one-page SDF PDF at runtime, ingests it with the real Docling ingestion path, verifies persisted page text contains all required SDF spans, runs the real extraction pipeline with a credential-free fake provider grounded in those spans, persists extraction and compliance rows, verifies amber risk and age metadata, and checks dashboard adapter formatting.\n\n## Verification\n\nRan `venv/Scripts/python.exe -m pytest tests/test_s05_end_to_end_proof.py -q`; result: 1 passed, 15 warnings in 53.65s.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `venv/Scripts/python.exe -m pytest tests/test_s05_end_to_end_proof.py -q` | 0 | ✅ pass | 58400ms |\n\n## Deviations\n\nNone.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `tests/test_s05_end_to_end_proof.py`\n",
+      "description": "---\nestimated_steps: 8\nestimated_files: 1\nskills_used:\n  - tdd\n  - verify-before-complete\n---\n\nWhy: The validation blocker is lack of durable proof that a realistic PDF can traverse ingestion, extraction, compliance persistence, and dashboard formatting together. Existing tests prove those seams separately, and `tests/fixtures/sample.pdf` is unsuitable because it persists empty page text.\n\nDo:\n1. Add `tests/test_s05_end_to_end_proof.py` with a deterministic raw-PDF generator or in-test fixture that requires no new dependencies and writes a one-page SDF-style PDF under pytest's temporary directory.\n2. Include these exact visible spans in the PDF: `Supplier Declaration Form`, `Vendor Name: Acme Pharma Ltd.`, `Manufacturing Date: 2024-01-05`, `Effective Date: 2024-02-01`, `Revision Date: 2024-03-15`, and `Expiry Date: 2027-01-31`.\n3. Initialize a temporary SQLite DB through the existing schema helper, run `ingest_document()`, and assert one page, one image, non-empty persisted page text, and presence of all required spans.\n4. Implement a fake `SDFExtractionProvider` in the test that cites the actual ingested `doc_id`, page 0, and exact spans; do not call Gemini or require credentials.\n5. Run `extract_document(db_path, doc_id, provider, today=date(2026, 1, 6), run_id=...)` and verify six field rows, one compliance row, risk `amber`, `age_days == 732`, source page 0, `source_verbatim_span == \"2027-01-31\"`, and populated run/trace metadata.\n6. Verify `format_compliance_rows()` exposes evaluator-facing values including vendor `Acme Pharma Ltd.`, `source_page_label == \"Page 1\"`, expiry source span, and `aggregate_confidence_display == \"90%\"`.\n7. Keep assertions and failures sanitized: no full page text dumps, no provider raw JSON dumps, no secrets.\n\nFailure Modes: Docling may emit warnings or be slow; the test should tolerate warnings but fail on empty page text, missing images, malformed provider output, bad source grounding, or missing SQLite rows. If the generated PDF stops parsing in Docling, the test should fail with a clear assertion that the grounded spans were not persisted.\n\nLoad Profile: Single temporary one-page PDF, one SQLite database, and one fake extraction run; performance is intentionally small but exercises the real heavy Docling path. At 10x load, Docling runtime would dominate, but S05 proof is not a bulk-ingestion benchmark.\n\nNegative Tests: The proof implicitly guards the known bad fixture class by asserting non-empty page text and exact span grounding. Existing extraction tests continue covering missing page text, invalid spans, malformed provider payloads, and abstentions.\n\nDone when: The new S05 test is committed in the test tree and passes by itself with the project Python 3.11 venv command.",
+      "estimate": "2h",
+      "files": [
+        "tests/test_s05_end_to_end_proof.py"
+      ],
+      "verify": "venv/Scripts/python.exe -m pytest tests/test_s05_end_to_end_proof.py -q",
+      "inputs": [
+        "src/pipeline/ingest.py",
+        "src/extraction/pipeline.py",
+        "src/extraction/providers.py",
+        "src/extraction/repository.py",
+        "src/dashboard/compliance.py",
+        "src/db/schema.py",
+        "src/db/queries.py",
+        "tests/test_ingest.py",
+        "tests/test_extraction_pipeline.py",
+        "tests/test_compliance_dashboard.py"
+      ],
+      "expected_output": [
+        "tests/test_s05_end_to_end_proof.py"
+      ],
+      "observability_impact": "Creates a repeatable proof surface for future agents: pytest failures localize whether ingestion text, provider grounding, repository persistence, risk computation, or dashboard formatting broke. The test verifies persisted run_id/trace_id metadata without requiring Langfuse.",
+      "full_plan_md": "",
+      "sequence": 0,
+      "blocker_source": "",
+      "escalation_pending": 0,
+      "escalation_awaiting_review": 0,
+      "escalation_artifact_path": null,
+      "escalation_override_applied_at": null
+    },
+    {
+      "milestone_id": "M001",
+      "slice_id": "S05",
+      "id": "T02",
+      "title": "Documented the M001 boundary map and requirement-scope clarification needed by validation.",
+      "status": "complete",
+      "one_liner": "Documented the M001 boundary map and requirement-scope clarification needed by validation.",
+      "narrative": "Replaced the empty M001 boundary map with a producer/consumer contract table covering S01 through S05, including runtime/secret hygiene, extraction schema, extraction persistence, dashboard display, and final validation remediation boundaries. Added a validation remediation scope section that explains M001's completion boundary and distinguishes covered requirements from future M002/M003 requirements, while preserving R008 as partial/active for broader tracing later.",
+      "verification_result": "Manual review: `.gsd/milestones/M001/M001-ROADMAP.md` now contains a non-empty `## Boundary Map` with S01-S05 contracts and a requirement scope table; `.gsd/milestones/M001/M001-VALIDATION.md` now contains `## S05 Remediation Scope Update` with R001-R010 dispositions.",
+      "duration": "",
+      "completed_at": "2026-05-20T19:19:13.635Z",
+      "blocker_discovered": false,
+      "deviations": "None.",
+      "known_issues": "The roadmap title/dependency metadata for S05 appears to have been rendered by the GSD planner as `S05` with empty depends; the S05 boundary map and plan still identify the intended validation remediation scope.",
+      "key_files": [
+        ".gsd/milestones/M001/M001-ROADMAP.md",
+        ".gsd/milestones/M001/M001-VALIDATION.md"
+      ],
+      "key_decisions": [
+        "Clarify R005/R006/R007 as future milestone scope instead of changing their active requirement status.",
+        "Clarify R008 as partial in M001 and still active for later tracing coverage."
+      ],
+      "full_summary_md": "---\nid: T02\nparent: S05\nmilestone: M001\nkey_files:\n  - .gsd/milestones/M001/M001-ROADMAP.md\n  - .gsd/milestones/M001/M001-VALIDATION.md\nkey_decisions:\n  - Clarify R005/R006/R007 as future milestone scope instead of changing their active requirement status.\n  - Clarify R008 as partial in M001 and still active for later tracing coverage.\nduration: \nverification_result: mixed\ncompleted_at: 2026-05-20T19:19:13.634Z\nblocker_discovered: false\n---\n\n# T02: Documented the M001 boundary map and requirement-scope clarification needed by validation.\n\n**Documented the M001 boundary map and requirement-scope clarification needed by validation.**\n\n## What Happened\n\nReplaced the empty M001 boundary map with a producer/consumer contract table covering S01 through S05, including runtime/secret hygiene, extraction schema, extraction persistence, dashboard display, and final validation remediation boundaries. Added a validation remediation scope section that explains M001's completion boundary and distinguishes covered requirements from future M002/M003 requirements, while preserving R008 as partial/active for broader tracing later.\n\n## Verification\n\nManual review: `.gsd/milestones/M001/M001-ROADMAP.md` now contains a non-empty `## Boundary Map` with S01-S05 contracts and a requirement scope table; `.gsd/milestones/M001/M001-VALIDATION.md` now contains `## S05 Remediation Scope Update` with R001-R010 dispositions.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `Manual review — boundary map and requirement-scope sections exist and are non-empty; tests intentionally not run against .gsd paths.` | -1 | unknown (coerced from string) | 0ms |\n\n## Deviations\n\nNone.\n\n## Known Issues\n\nThe roadmap title/dependency metadata for S05 appears to have been rendered by the GSD planner as `S05` with empty depends; the S05 boundary map and plan still identify the intended validation remediation scope.\n\n## Files Created/Modified\n\n- `.gsd/milestones/M001/M001-ROADMAP.md`\n- `.gsd/milestones/M001/M001-VALIDATION.md`\n",
+      "description": "---\nestimated_steps: 7\nestimated_files: 2\nskills_used:\n  - write-docs\n  - observability\n---\n\nWhy: M001 validation is blocked by documentation gaps, not just code. The roadmap boundary map currently says `Not provided`, and the validator needs explicit distinction between M001 deliverables and future M002/M003 requirements.\n\nDo:\n1. Replace the empty `## Boundary Map` body in `.gsd/milestones/M001/M001-ROADMAP.md` with a concise producer/consumer contract map for S01 through S05.\n2. Cover these contracts: S01 provides Python 3.11 venv and secret hygiene to all later slices; S02 provides strict six-field extraction schema/repository shape to S03/S04; S03 provides persisted extraction/compliance rows and source evidence to S04; S04 provides credential-free SQLite dashboard display and friendly empty states to validation; S05 provides final proof and scope clarification.\n3. Include watch-outs from research: `tests/fixtures/sample.pdf` is not proof-suitable because it has empty page text; live Gemini is optional/manual; use `venv/Scripts/python.exe`; do not expose raw provider responses or secrets.\n4. Update `.gsd/milestones/M001/M001-VALIDATION.md` or an adjacent S05 remediation section if appropriate to explain requirement scope: R001-R004 are validated/covered in M001, R009/R010 are M001 constraints to preserve, R008 is covered only for non-fatal credential behavior and sanitized metadata in M001 with broader tracing later, and R005-R007 remain active future M002/M003 work.\n5. Do not globally mark R005/R006/R007 complete or failed. Use requirement update tools only if a durable note is needed, preserving their future active status.\n6. Keep prose validator-readable: no implementation internals unless they clarify a boundary or proof path.\n\nThreat Surface: Documentation references provider credentials and trace metadata; do not include secrets, token-like values, local machine-specific paths outside the repo, or raw model/page dumps. The docs should describe redaction boundaries rather than reveal sensitive state.\n\nRequirement Impact: Touches R001-R010 traceability language. Re-verify that R005-R007 remain future/out-of-scope rather than invalidated, and that R008 is not overclaimed beyond current non-fatal/sanitized behavior.\n\nFailure Modes: If the roadmap is DB-rendered later, manual edits may be overwritten. If that happens, preserve the boundary text in the S05 summary/validation artifact and use the appropriate GSD roadmap/validation tool during closeout if available.\n\nDone when: A fresh validator can read M001 artifacts and understand which slice owns each integration boundary and why future RAG/visual/eval requirements are not M001 blockers.",
+      "estimate": "1h",
+      "files": [
+        ".gsd/milestones/M001/M001-ROADMAP.md",
+        ".gsd/milestones/M001/M001-VALIDATION.md",
+        ".gsd/REQUIREMENTS.md"
+      ],
+      "verify": "Manual review — boundary map and requirement-scope sections exist and are non-empty; do not run tests against .gsd paths.",
+      "inputs": [
+        ".gsd/milestones/M001/M001-ROADMAP.md",
+        ".gsd/milestones/M001/M001-VALIDATION.md",
+        ".gsd/REQUIREMENTS.md",
+        ".gsd/milestones/M001/slices/S05/S05-RESEARCH.md",
+        ".gsd/milestones/M001/slices/S04/S04-SUMMARY.md",
+        "tests/test_s05_end_to_end_proof.py",
+        "src/app.py",
+        "src/tracing.py",
+        "src/extraction/cli.py",
+        "src/extraction/gemini.py"
+      ],
+      "expected_output": [
+        ".gsd/milestones/M001/M001-ROADMAP.md",
+        ".gsd/milestones/M001/M001-VALIDATION.md"
+      ],
+      "observability_impact": "Clarifies current diagnostic boundaries for future agents: offline proof artifacts, run_id/trace_id metadata, missing-credential non-fatal behavior, and redaction constraints.",
+      "full_plan_md": "",
+      "sequence": 0,
+      "blocker_source": "",
+      "escalation_pending": 0,
+      "escalation_awaiting_review": 0,
+      "escalation_artifact_path": null,
+      "escalation_override_applied_at": null
+    },
+    {
+      "milestone_id": "M001",
+      "slice_id": "S05",
+      "id": "T03",
+      "title": "Completed S05 closeout verification with targeted, focused, and full regression passes.",
+      "status": "complete",
+      "one_liner": "Completed S05 closeout verification with targeted, focused, and full regression passes.",
+      "narrative": "Ran the full closeout verification sequence after the final S05 code and documentation changes. The targeted S05 proof test passed, focused regression across ingestion/extraction/dashboard/app startup passed, and the full pytest suite passed. This provides fresh evidence that the final-assembly proof and existing M001 contracts still work together without live Gemini or Langfuse credentials.",
+      "verification_result": "Targeted: `venv/Scripts/python.exe -m pytest tests/test_s05_end_to_end_proof.py -q` passed with 1 test. Focused: `venv/Scripts/python.exe -m pytest tests/test_ingest.py tests/test_extraction_pipeline.py tests/test_compliance_dashboard.py tests/test_app.py -q` passed with 20 tests. Full: `venv/Scripts/python.exe -m pytest -q` passed with 72 tests.",
+      "duration": "",
+      "completed_at": "2026-05-20T19:26:11.477Z",
+      "blocker_discovered": false,
+      "deviations": "None.",
+      "known_issues": "Docling emits deprecation warnings for legacy VLM options and torch emits script_method deprecation warnings; these are pre-existing warnings and do not fail verification.",
+      "key_files": [
+        "tests/test_s05_end_to_end_proof.py",
+        ".gsd/milestones/M001/M001-ROADMAP.md",
+        ".gsd/milestones/M001/M001-VALIDATION.md"
+      ],
+      "key_decisions": [],
+      "full_summary_md": "---\nid: T03\nparent: S05\nmilestone: M001\nkey_files:\n  - tests/test_s05_end_to_end_proof.py\n  - .gsd/milestones/M001/M001-ROADMAP.md\n  - .gsd/milestones/M001/M001-VALIDATION.md\nkey_decisions: []\nduration: \nverification_result: passed\ncompleted_at: 2026-05-20T19:26:11.476Z\nblocker_discovered: false\n---\n\n# T03: Completed S05 closeout verification with targeted, focused, and full regression passes.\n\n**Completed S05 closeout verification with targeted, focused, and full regression passes.**\n\n## What Happened\n\nRan the full closeout verification sequence after the final S05 code and documentation changes. The targeted S05 proof test passed, focused regression across ingestion/extraction/dashboard/app startup passed, and the full pytest suite passed. This provides fresh evidence that the final-assembly proof and existing M001 contracts still work together without live Gemini or Langfuse credentials.\n\n## Verification\n\nTargeted: `venv/Scripts/python.exe -m pytest tests/test_s05_end_to_end_proof.py -q` passed with 1 test. Focused: `venv/Scripts/python.exe -m pytest tests/test_ingest.py tests/test_extraction_pipeline.py tests/test_compliance_dashboard.py tests/test_app.py -q` passed with 20 tests. Full: `venv/Scripts/python.exe -m pytest -q` passed with 72 tests.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `venv/Scripts/python.exe -m pytest tests/test_s05_end_to_end_proof.py -q` | 0 | ✅ pass — 1 passed, 15 warnings in 53.18s | 57800ms |\n| 2 | `venv/Scripts/python.exe -m pytest tests/test_ingest.py tests/test_extraction_pipeline.py tests/test_compliance_dashboard.py tests/test_app.py -q` | 0 | ✅ pass — 20 passed, 18 warnings in 93.88s | 98500ms |\n| 3 | `venv/Scripts/python.exe -m pytest -q` | 0 | ✅ pass — 72 passed, 20 warnings in 145.56s | 150500ms |\n\n## Deviations\n\nNone.\n\n## Known Issues\n\nDocling emits deprecation warnings for legacy VLM options and torch emits script_method deprecation warnings; these are pre-existing warnings and do not fail verification.\n\n## Files Created/Modified\n\n- `tests/test_s05_end_to_end_proof.py`\n- `.gsd/milestones/M001/M001-ROADMAP.md`\n- `.gsd/milestones/M001/M001-VALIDATION.md`\n",
+      "description": "---\nestimated_steps: 6\nestimated_files: 0\nskills_used:\n  - verify-before-complete\n---\n\nWhy: S05 is the final M001 remediation slice, so completion must be based on fresh evidence rather than prior S04 regression output or research probes.\n\nDo:\n1. Run the targeted S05 proof test using `venv/Scripts/python.exe -m pytest tests/test_s05_end_to_end_proof.py -q`.\n2. Run focused regression across ingestion, extraction, dashboard, and app startup: `venv/Scripts/python.exe -m pytest tests/test_ingest.py tests/test_extraction_pipeline.py tests/test_compliance_dashboard.py tests/test_app.py -q`.\n3. Run the full test suite with `venv/Scripts/python.exe -m pytest -q`; expect Docling warnings and roughly multi-minute runtime.\n4. Capture command, exit code, duration, and concise stdout/stderr paths through `gsd_exec` or equivalent GSD evidence in the task/slice completion summaries.\n5. Confirm no generated PDF/SQLite temporary artifacts are left in tracked project paths; test-generated files should remain under pytest temp directories.\n6. If full regression fails for an unrelated environment reason, preserve targeted proof evidence, document the failure mode, and do not claim M001 is complete until the regression issue is resolved or explicitly scoped.\n\nFailure Modes: Docling conversions are slow/noisy and may fail if local model/cache dependencies change. Missing Gemini/Langfuse credentials must not fail these offline tests. Test commands must use `venv/Scripts/python.exe` rather than global Python.\n\nLoad Profile: Full pytest is the heaviest operation in this slice and exercises Docling-backed ingestion. At larger corpus sizes this proof would not establish throughput; it only establishes one-document final assembly correctness.\n\nNegative Tests: Full regression should preserve existing tests for empty DB/table dashboard states, app startup without credentials, invalid extraction spans, missing page text, malformed Gemini output, and sanitized provider/CLI errors.\n\nDone when: Targeted proof, focused regression, and full suite results are freshly recorded, and S05 completion artifacts can cite evidence without secrets.",
+      "estimate": "1h",
+      "files": [],
+      "verify": "venv/Scripts/python.exe -m pytest -q",
+      "inputs": [
+        "tests/test_s05_end_to_end_proof.py",
+        "tests/test_ingest.py",
+        "tests/test_extraction_pipeline.py",
+        "tests/test_compliance_dashboard.py",
+        "tests/test_app.py",
+        "src/pipeline/ingest.py",
+        "src/extraction/pipeline.py",
+        "src/dashboard/compliance.py",
+        ".gsd/milestones/M001/M001-ROADMAP.md",
+        ".gsd/milestones/M001/M001-VALIDATION.md"
+      ],
+      "expected_output": [],
+      "observability_impact": "Produces fresh executable evidence for S05 closeout. The evidence should name gsd_exec IDs/stdout paths, test counts, and any failure diagnostics while avoiding raw secrets or provider payloads.",
+      "full_plan_md": "",
+      "sequence": 0,
+      "blocker_source": "",
+      "escalation_pending": 0,
+      "escalation_awaiting_review": 0,
+      "escalation_artifact_path": null,
+      "escalation_override_applied_at": null
     }
   ],
   "decisions": [],
@@ -512,6 +1235,259 @@
       "verdict": "✅ pass",
       "duration_ms": 0,
       "created_at": "2026-05-19T21:05:49.826Z"
+    },
+    {
+      "id": 8,
+      "task_id": "T01",
+      "slice_id": "S02",
+      "milestone_id": "M001",
+      "command": "./venv/Scripts/python.exe -m pytest tests/test_extraction_models.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass (9 passed)",
+      "duration_ms": 2223,
+      "created_at": "2026-05-19T22:28:30.869Z"
+    },
+    {
+      "id": 9,
+      "task_id": "T02",
+      "slice_id": "S02",
+      "milestone_id": "M001",
+      "command": "venv/Scripts/python.exe -m pytest tests/test_db.py tests/test_extraction_schema.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass (8 passed)",
+      "duration_ms": 2669,
+      "created_at": "2026-05-19T22:34:48.306Z"
+    },
+    {
+      "id": 10,
+      "task_id": "T02",
+      "slice_id": "S02",
+      "milestone_id": "M001",
+      "command": "venv/Scripts/python.exe -m pytest tests/test_db.py tests/test_extraction_schema.py tests/test_extraction_models.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass (17 passed)",
+      "duration_ms": 3175,
+      "created_at": "2026-05-19T22:34:48.306Z"
+    },
+    {
+      "id": 11,
+      "task_id": "T03",
+      "slice_id": "S02",
+      "milestone_id": "M001",
+      "command": "venv/Scripts/python.exe -m pytest tests/test_extraction_models.py tests/test_extraction_schema.py tests/test_extraction_persistence.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass — 21 passed",
+      "duration_ms": 3078,
+      "created_at": "2026-05-19T22:46:58.356Z"
+    },
+    {
+      "id": 12,
+      "task_id": "T03",
+      "slice_id": "S02",
+      "milestone_id": "M001",
+      "command": "venv/Scripts/python.exe -m pytest -q",
+      "exit_code": 0,
+      "verdict": "✅ pass — 36 passed, 19 warnings",
+      "duration_ms": 101042,
+      "created_at": "2026-05-19T22:46:58.356Z"
+    },
+    {
+      "id": 13,
+      "task_id": "T03",
+      "slice_id": "S02",
+      "milestone_id": "M001",
+      "command": "venv/Scripts/python.exe -m pytest tests/test_db.py tests/test_extraction_schema.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass — 8 passed",
+      "duration_ms": 2356,
+      "created_at": "2026-05-19T22:46:58.356Z"
+    },
+    {
+      "id": 14,
+      "task_id": "T01",
+      "slice_id": "S03",
+      "milestone_id": "M001",
+      "command": "venv/Scripts/python.exe -m pytest tests/test_extraction_models.py tests/test_extraction_persistence.py tests/test_extraction_risk.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 2560,
+      "created_at": "2026-05-20T04:44:06.356Z"
+    },
+    {
+      "id": 15,
+      "task_id": "T01",
+      "slice_id": "S03",
+      "milestone_id": "M001",
+      "command": "venv/Scripts/python.exe -m pytest tests/test_extraction_schema.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1929,
+      "created_at": "2026-05-20T04:44:06.356Z"
+    },
+    {
+      "id": 16,
+      "task_id": "T02",
+      "slice_id": "S03",
+      "milestone_id": "M001",
+      "command": "./venv/Scripts/python.exe -m pytest tests/test_extraction_risk.py tests/test_extraction_pipeline.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass (16 passed)",
+      "duration_ms": 1070,
+      "created_at": "2026-05-20T07:55:01.664Z"
+    },
+    {
+      "id": 17,
+      "task_id": "T02",
+      "slice_id": "S03",
+      "milestone_id": "M001",
+      "command": "./venv/Scripts/python.exe -m pytest tests/test_extraction_models.py tests/test_extraction_persistence.py tests/test_extraction_risk.py tests/test_extraction_pipeline.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass (32 passed)",
+      "duration_ms": 1670,
+      "created_at": "2026-05-20T07:55:01.664Z"
+    },
+    {
+      "id": 18,
+      "task_id": "T03",
+      "slice_id": "S03",
+      "milestone_id": "M001",
+      "command": "venv/Scripts/python.exe -m pytest tests/test_app.py tests/test_extraction_pipeline.py tests/test_extraction_provider_gemini.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass (16 passed)",
+      "duration_ms": 9119,
+      "created_at": "2026-05-20T17:05:57.945Z"
+    },
+    {
+      "id": 19,
+      "task_id": "T04",
+      "slice_id": "S03",
+      "milestone_id": "M001",
+      "command": "venv/Scripts/python.exe -m pytest tests/test_extraction_cli.py tests/test_extraction_pipeline.py tests/test_extraction_provider_gemini.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass (21 passed)",
+      "duration_ms": 4306,
+      "created_at": "2026-05-20T17:18:41.493Z"
+    },
+    {
+      "id": 20,
+      "task_id": "T04",
+      "slice_id": "S03",
+      "milestone_id": "M001",
+      "command": "cmd.exe //c \"venv/Scripts/python.exe -m pytest tests/test_app.py tests/test_extraction_pipeline.py tests/test_extraction_provider_gemini.py -q\"",
+      "exit_code": 0,
+      "verdict": "✅ pass (16 passed)",
+      "duration_ms": 8768,
+      "created_at": "2026-05-20T17:18:41.493Z"
+    },
+    {
+      "id": 21,
+      "task_id": "T04",
+      "slice_id": "S03",
+      "milestone_id": "M001",
+      "command": "venv/Scripts/python.exe -m pytest -q",
+      "exit_code": 0,
+      "verdict": "✅ pass (65 passed, 19 warnings)",
+      "duration_ms": 159170,
+      "created_at": "2026-05-20T17:18:41.493Z"
+    },
+    {
+      "id": 23,
+      "task_id": "T01",
+      "slice_id": "S04",
+      "milestone_id": "M001",
+      "command": "venv/Scripts/python.exe -m pytest tests/test_compliance_dashboard.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 2286,
+      "created_at": "2026-05-20T17:52:02.885Z"
+    },
+    {
+      "id": 24,
+      "task_id": "T02",
+      "slice_id": "S04",
+      "milestone_id": "M001",
+      "command": "venv/Scripts/python.exe -m pytest tests/test_compliance_dashboard.py tests/test_app.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass (7 passed)",
+      "duration_ms": 8080,
+      "created_at": "2026-05-20T17:56:30.932Z"
+    },
+    {
+      "id": 25,
+      "task_id": "T03",
+      "slice_id": "S04",
+      "milestone_id": "M001",
+      "command": "venv/Scripts/python.exe -m pytest -q tests/test_compliance_dashboard.py tests/test_app.py",
+      "exit_code": 0,
+      "verdict": "✅ pass — 7 passed in 6.52s",
+      "duration_ms": 8252,
+      "created_at": "2026-05-20T17:59:25.160Z"
+    },
+    {
+      "id": 26,
+      "task_id": "T03",
+      "slice_id": "S04",
+      "milestone_id": "M001",
+      "command": "venv/Scripts/python.exe -m pytest -q",
+      "exit_code": 0,
+      "verdict": "✅ pass — 71 passed, 19 warnings in 113.72s",
+      "duration_ms": 118358,
+      "created_at": "2026-05-20T17:59:25.160Z"
+    },
+    {
+      "id": 27,
+      "task_id": "T01",
+      "slice_id": "S05",
+      "milestone_id": "M001",
+      "command": "venv/Scripts/python.exe -m pytest tests/test_s05_end_to_end_proof.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 58400,
+      "created_at": "2026-05-20T19:17:20.535Z"
+    },
+    {
+      "id": 28,
+      "task_id": "T02",
+      "slice_id": "S05",
+      "milestone_id": "M001",
+      "command": "Manual review — boundary map and requirement-scope sections exist and are non-empty; tests intentionally not run against .gsd paths.",
+      "exit_code": -1,
+      "verdict": "unknown (coerced from string)",
+      "duration_ms": 0,
+      "created_at": "2026-05-20T19:19:13.635Z"
+    },
+    {
+      "id": 29,
+      "task_id": "T03",
+      "slice_id": "S05",
+      "milestone_id": "M001",
+      "command": "venv/Scripts/python.exe -m pytest tests/test_s05_end_to_end_proof.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass — 1 passed, 15 warnings in 53.18s",
+      "duration_ms": 57800,
+      "created_at": "2026-05-20T19:26:11.477Z"
+    },
+    {
+      "id": 30,
+      "task_id": "T03",
+      "slice_id": "S05",
+      "milestone_id": "M001",
+      "command": "venv/Scripts/python.exe -m pytest tests/test_ingest.py tests/test_extraction_pipeline.py tests/test_compliance_dashboard.py tests/test_app.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass — 20 passed, 18 warnings in 93.88s",
+      "duration_ms": 98500,
+      "created_at": "2026-05-20T19:26:11.477Z"
+    },
+    {
+      "id": 31,
+      "task_id": "T03",
+      "slice_id": "S05",
+      "milestone_id": "M001",
+      "command": "venv/Scripts/python.exe -m pytest -q",
+      "exit_code": 0,
+      "verdict": "✅ pass — 72 passed, 20 warnings in 145.56s",
+      "duration_ms": 150500,
+      "created_at": "2026-05-20T19:26:11.477Z"
     }
   ]
 }
