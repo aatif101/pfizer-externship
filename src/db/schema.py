@@ -84,6 +84,34 @@ CREATE TABLE IF NOT EXISTS evaluations (
     created_at     TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 
+CREATE TABLE IF NOT EXISTS retrieval_index_runs (
+    run_id                  TEXT PRIMARY KEY,
+    status                  TEXT NOT NULL,
+    built_at                TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    source_document_count   INTEGER NOT NULL DEFAULT 0,
+    source_page_count       INTEGER NOT NULL DEFAULT 0,
+    indexed_page_count      INTEGER NOT NULL DEFAULT 0,
+    content_hash            TEXT,
+    previous_content_hash   TEXT,
+    is_stale                BOOLEAN NOT NULL DEFAULT 0,
+    stale_reason            TEXT,
+    error_reason            TEXT
+);
+
+CREATE TABLE IF NOT EXISTS retrieval_index_pages (
+    doc_id             TEXT NOT NULL,
+    page_num           INTEGER NOT NULL,
+    display_page_num   INTEGER NOT NULL,
+    filename           TEXT NOT NULL,
+    text_sha256        TEXT NOT NULL,
+    text_length        INTEGER NOT NULL,
+    snippet            TEXT NOT NULL DEFAULT '',
+    run_id             TEXT NOT NULL REFERENCES retrieval_index_runs(run_id) ON DELETE CASCADE,
+    indexed_at         TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    PRIMARY KEY (doc_id, page_num),
+    FOREIGN KEY (doc_id, page_num) REFERENCES pages(doc_id, page_num) ON DELETE CASCADE
+);
+
 CREATE INDEX IF NOT EXISTS idx_pages_doc_id                 ON pages(doc_id);
 CREATE INDEX IF NOT EXISTS idx_extractions_doc_id           ON extractions(doc_id);
 CREATE INDEX IF NOT EXISTS idx_extractions_trace_id         ON extractions(trace_id);
@@ -95,6 +123,15 @@ CREATE INDEX IF NOT EXISTS idx_compliance_expiry_date       ON compliance_record
 CREATE INDEX IF NOT EXISTS idx_compliance_trace_id          ON compliance_records(trace_id);
 CREATE INDEX IF NOT EXISTS idx_compliance_run_id            ON compliance_records(run_id);
 CREATE INDEX IF NOT EXISTS idx_evaluations_run_id           ON evaluations(run_id);
+CREATE INDEX IF NOT EXISTS idx_retrieval_runs_built_at      ON retrieval_index_runs(built_at);
+CREATE INDEX IF NOT EXISTS idx_retrieval_runs_status        ON retrieval_index_runs(status);
+CREATE INDEX IF NOT EXISTS idx_retrieval_pages_run_id       ON retrieval_index_pages(run_id);
+CREATE INDEX IF NOT EXISTS idx_retrieval_pages_filename     ON retrieval_index_pages(filename);
+"""
+
+RETRIEVAL_INDEX_FTS_SQL = """
+CREATE VIRTUAL TABLE IF NOT EXISTS retrieval_index_page_fts
+USING fts5(doc_id UNINDEXED, page_num UNINDEXED, page_text);
 """
 
 _EXTRACTION_MIGRATION_COLUMNS: tuple[tuple[str, str], ...] = (
@@ -123,6 +160,8 @@ def init_db(db_path: str) -> None:
     try:
         conn.executescript(SCHEMA_SQL)
         _migrate_extractions_table(conn)
+        _migrate_retrieval_index_pages_table(conn)
+        _init_retrieval_index_fts(conn)
         conn.executescript(POST_MIGRATION_INDEX_SQL)
         conn.commit()
     except Exception:
@@ -130,6 +169,21 @@ def init_db(db_path: str) -> None:
         raise
     finally:
         conn.close()
+
+
+def _init_retrieval_index_fts(conn: sqlite3.Connection) -> None:
+    """Create the optional FTS5 page-text index when SQLite supports FTS5.
+
+    Some minimal SQLite builds omit FTS5. Retrieval repository methods check for
+    the virtual table before touching it, so schema initialization remains
+    offline-safe and idempotent even on those builds.
+    """
+
+    try:
+        conn.executescript(RETRIEVAL_INDEX_FTS_SQL)
+    except sqlite3.OperationalError as exc:
+        if "fts5" not in str(exc).lower():
+            raise
 
 
 def _migrate_extractions_table(conn: sqlite3.Connection) -> None:
@@ -148,6 +202,17 @@ def _migrate_extractions_table(conn: sqlite3.Connection) -> None:
         if column_name not in existing_columns:
             conn.execute(f"ALTER TABLE extractions ADD COLUMN {column_name} {column_type}")
             existing_columns.add(column_name)
+
+
+def _migrate_retrieval_index_pages_table(conn: sqlite3.Connection) -> None:
+    """Add nullable-safe retrieval index columns to pre-existing local databases."""
+
+    existing_columns = _table_columns(conn, "retrieval_index_pages")
+    if not existing_columns:
+        return
+
+    if "snippet" not in existing_columns:
+        conn.execute("ALTER TABLE retrieval_index_pages ADD COLUMN snippet TEXT NOT NULL DEFAULT ''")
 
 
 def _table_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:

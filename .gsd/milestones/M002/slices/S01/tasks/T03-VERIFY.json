@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "taskId": "T03",
+  "unitId": "M002/S01/T03",
+  "timestamp": 1779311001954,
+  "passed": false,
+  "discoverySource": "task-plan",
+  "checks": [
+    {
+      "command": "./venv/Scripts/python.exe -m pytest tests/test_retrieval_index_repository.py tests/test_retrieval_indexer.py tests/test_retrieval_cli.py",
+      "exitCode": 1,
+      "durationMs": 34,
+      "verdict": "fail"
+    }
+  ],
+  "retryAttempt": 1,
+  "maxRetries": 2
+}
