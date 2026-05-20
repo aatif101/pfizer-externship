@@ -9,6 +9,19 @@ from __future__ import annotations
 import re
 import sqlite3
 from dataclasses import dataclass
+from typing import Any
+
+try:
+    from langfuse.decorators import langfuse_context, observe
+    _LANGFUSE_AVAILABLE = True
+except ImportError:
+    _LANGFUSE_AVAILABLE = False
+    langfuse_context = None  # type: ignore[assignment]
+
+    def observe(name=None, **kwargs):  # type: ignore[misc]
+        def decorator(fn):
+            return fn
+        return decorator
 
 from src.db.schema import _connect, init_db
 from src.retrieval.indexer import get_retrieval_index_status, normalize_index_text
@@ -319,6 +332,7 @@ class EvidenceGate(HybridTextRetriever):
     """Named evidence-gate API for callers that should not use raw retrieval directly."""
 
 
+@observe(name="retrieval_evidence_gate")
 def retrieve_evidence(
     db_path: str,
     question: str,
@@ -336,13 +350,36 @@ def retrieve_evidence(
     never fabricate or leak page evidence.
     """
 
-    return EvidenceGate(
-        db_path,
-        candidate_limit=candidate_limit,
-        min_score=min_top_score,
-        min_query_term_coverage=min_query_term_coverage,
-        min_hit_count=min_hit_count,
-    ).retrieve(question, top_k=top_k)
+    try:
+        result = EvidenceGate(
+            db_path,
+            candidate_limit=candidate_limit,
+            min_score=min_top_score,
+            min_query_term_coverage=min_query_term_coverage,
+            min_hit_count=min_hit_count,
+        ).retrieve(question, top_k=top_k)
+    except Exception as exc:
+        _safe_update_trace_metadata(
+            {
+                "boundary": "retrieval_evidence",
+                "evidence_reason": RetrievalEvidenceReason.RETRIEVAL_ERROR.value,
+                "top_score": 0.0,
+                "citation_count": 0,
+                "error_class": exc.__class__.__name__,
+            }
+        )
+        raise
+    _safe_update_trace_metadata(
+        {
+            "boundary": "retrieval_evidence",
+            "run_id": result.run_id,
+            "evidence_reason": result.reason_code.value,
+            "top_score": result.top_score,
+            "citation_count": len(result.hits),
+            "is_strong": result.is_strong,
+        }
+    )
+    return result
 
 
 def extract_search_terms(question: str) -> tuple[str, ...]:
@@ -429,3 +466,28 @@ def _proximity_bonus(lower_text: str, matched_terms: list[str]) -> float:
     if span <= 120:
         return 0.1
     return 0.0
+
+
+def _safe_update_trace_metadata(metadata: dict[str, Any]) -> None:
+    """Attach whitelisted retrieval metadata without affecting retrieval behavior."""
+
+    if not _LANGFUSE_AVAILABLE or langfuse_context is None:
+        return
+    safe_metadata = {
+        key: value
+        for key, value in metadata.items()
+        if key
+        in {
+            "boundary",
+            "run_id",
+            "evidence_reason",
+            "top_score",
+            "citation_count",
+            "is_strong",
+            "error_class",
+        }
+    }
+    try:
+        langfuse_context.update_current_trace(tags=["retrieval", "evidence"], metadata=safe_metadata)
+    except Exception:
+        return

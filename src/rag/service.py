@@ -7,6 +7,19 @@ failure diagnostics are bounded to safe status metadata.
 from __future__ import annotations
 
 from uuid import uuid4
+from typing import Any
+
+try:
+    from langfuse.decorators import langfuse_context, observe
+    _LANGFUSE_AVAILABLE = True
+except ImportError:
+    _LANGFUSE_AVAILABLE = False
+    langfuse_context = None  # type: ignore[assignment]
+
+    def observe(name=None, **kwargs):  # type: ignore[misc]
+        def decorator(fn):
+            return fn
+        return decorator
 
 from src.rag.models import (
     AnswerCitation,
@@ -43,6 +56,7 @@ _PROVIDER_ERROR_REASON_BY_EXCEPTION: tuple[tuple[type[BaseException], AnswerReas
 )
 
 
+@observe(name="rag_answer_question")
 def answer_question(
     db_path: str,
     question: str,
@@ -62,6 +76,7 @@ def answer_question(
     full page text, image blobs, secrets, and full corpus hashes.
     """
 
+    provider_name = _provider_name(provider)
     bounded_top_k = max(1, int(top_k))
     try:
         evidence = retrieve_evidence(
@@ -74,27 +89,30 @@ def answer_question(
             min_hit_count=min_hit_count,
         )
     except Exception as exc:  # noqa: BLE001 - service boundary must not crash callers on retrieval failures.
-        return _abstained_result(
+        result = _abstained_result(
             reason_code=AnswerReasonCode.RETRIEVAL_ERROR,
             run_id=None,
-            provider_name=_provider_name(provider),
+            provider_name=provider_name,
             top_score=0.0,
             evidence_reason=RetrievalEvidenceReason.RETRIEVAL_ERROR.value,
             error_class=exc.__class__.__name__,
         )
+        _update_answer_trace_metadata(result)
+        return result
 
-    provider_name = _provider_name(provider)
     if not evidence.is_strong:
-        return _abstained_result(
+        result = _abstained_result(
             reason_code=_answer_reason_for_weak_evidence(evidence.reason_code),
             run_id=evidence.run_id,
             provider_name=provider_name,
             top_score=evidence.top_score,
             evidence_reason=evidence.reason_code.value,
         )
+        _update_answer_trace_metadata(result)
+        return result
 
     if provider is None:
-        return _provider_error_result(
+        result = _provider_error_result(
             reason_code=AnswerReasonCode.PROVIDER_CONFIGURATION_ERROR,
             run_id=evidence.run_id,
             provider_name=provider_name,
@@ -104,13 +122,15 @@ def answer_question(
             evidence_reason=evidence.reason_code.value,
             error_class=AnswerConfigurationError.__name__,
         )
+        _update_answer_trace_metadata(result)
+        return result
 
     run_id = evidence.run_id or f"answer-{uuid4()}"
     request = AnswerProviderRequest(question=question, run_id=run_id, evidence=evidence.hits)
     try:
         provider_result = provider.answer(request)
     except Exception as exc:  # noqa: BLE001 - sanitize typed and arbitrary provider failures.
-        return _provider_error_result(
+        result = _provider_error_result(
             reason_code=_provider_exception_reason(exc),
             run_id=evidence.run_id,
             provider_name=provider_name,
@@ -120,9 +140,11 @@ def answer_question(
             evidence_reason=evidence.reason_code.value,
             error_class=exc.__class__.__name__,
         )
+        _update_answer_trace_metadata(result)
+        return result
 
     if not isinstance(provider_result, AnswerProviderResult) or not isinstance(provider_result.answer_text, str):
-        return _provider_error_result(
+        result = _provider_error_result(
             reason_code=AnswerReasonCode.PROVIDER_MALFORMED_RESULT,
             run_id=evidence.run_id,
             provider_name=provider_name,
@@ -132,10 +154,12 @@ def answer_question(
             evidence_reason=evidence.reason_code.value,
             error_class=AnswerValidationError.__name__,
         )
+        _update_answer_trace_metadata(result)
+        return result
 
     answer_text = provider_result.answer_text.strip()
     if not answer_text:
-        return _provider_error_result(
+        result = _provider_error_result(
             reason_code=AnswerReasonCode.PROVIDER_BLANK_ANSWER,
             run_id=evidence.run_id,
             provider_name=provider_result.provider_name or provider_name,
@@ -145,9 +169,11 @@ def answer_question(
             evidence_reason=evidence.reason_code.value,
             error_class=AnswerValidationError.__name__,
         )
+        _update_answer_trace_metadata(result)
+        return result
 
     citations = _citations_from_hits(evidence.hits[:bounded_top_k])
-    return AnswerResult(
+    result = AnswerResult(
         status=AnswerStatus.ANSWERED,
         answer_text=answer_text,
         citations=citations,
@@ -163,6 +189,8 @@ def answer_question(
             error_class=None,
         ),
     )
+    _update_answer_trace_metadata(result)
+    return result
 
 
 def _citations_from_hits(hits: tuple[RetrievalHit, ...]) -> tuple[AnswerCitation, ...]:
@@ -251,6 +279,58 @@ def _provider_name(provider: AnswerProvider | None) -> str | None:
         return _PROVIDERLESS_NAME
     name = getattr(provider, "provider_name", None)
     return name if isinstance(name, str) and name.strip() else provider.__class__.__name__
+
+
+def _update_answer_trace_metadata(result: AnswerResult) -> None:
+    """Attach whitelisted answer diagnostics to the current trace, if available."""
+
+    diagnostics = result.diagnostics
+    _safe_update_trace_metadata(
+        {
+            "boundary": "rag_answer",
+            "answer_status": diagnostics.status.value,
+            "reason_code": diagnostics.reason_code.value,
+            "run_id": diagnostics.run_id,
+            "provider_name": diagnostics.provider_name,
+            "trace_id": diagnostics.trace_id,
+            "top_score": diagnostics.top_score,
+            "citation_count": diagnostics.citation_count,
+            "evidence_reason": diagnostics.evidence_reason,
+            "error_class": diagnostics.error_class,
+        }
+    )
+
+
+def _safe_update_trace_metadata(metadata: dict[str, Any]) -> None:
+    """Update Langfuse metadata defensively with a strict allowlist.
+
+    The allowlist intentionally excludes question text, snippets, page text,
+    provider payloads, secrets, image blobs, Docling JSON, and full corpus hashes.
+    """
+
+    if not _LANGFUSE_AVAILABLE or langfuse_context is None:
+        return
+    safe_metadata = {
+        key: value
+        for key, value in metadata.items()
+        if key
+        in {
+            "boundary",
+            "answer_status",
+            "reason_code",
+            "run_id",
+            "provider_name",
+            "trace_id",
+            "top_score",
+            "citation_count",
+            "evidence_reason",
+            "error_class",
+        }
+    }
+    try:
+        langfuse_context.update_current_trace(tags=["rag", "answer"], metadata=safe_metadata)
+    except Exception:
+        return
 
 
 __all__ = ["answer_question"]

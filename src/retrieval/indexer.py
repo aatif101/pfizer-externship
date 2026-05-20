@@ -10,6 +10,19 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
+from typing import Any
+
+try:
+    from langfuse.decorators import langfuse_context, observe
+    _LANGFUSE_AVAILABLE = True
+except ImportError:
+    _LANGFUSE_AVAILABLE = False
+    langfuse_context = None  # type: ignore[assignment]
+
+    def observe(name=None, **kwargs):  # type: ignore[misc]
+        def decorator(fn):
+            return fn
+        return decorator
 
 from src.db.schema import _connect, init_db
 from src.retrieval.models import (
@@ -47,6 +60,7 @@ class RetrievalIndexBuildResult:
     pages: tuple[RetrievalIndexPageRecord, ...]
 
 
+@observe(name="retrieval_index_build")
 def build_retrieval_index(db_path: str) -> RetrievalIndexBuildResult:
     """Build and persist the current text retrieval index state transactionally.
 
@@ -55,30 +69,50 @@ def build_retrieval_index(db_path: str) -> RetrievalIndexBuildResult:
     same transaction as run metadata.
     """
 
-    init_db(db_path)
-    latest = load_latest_index_run(db_path)
-    pages = load_indexable_pages(db_path)
-    fingerprint = compute_indexable_corpus_fingerprint(pages)
-    status = RetrievalIndexStatus.EMPTY if not pages else RetrievalIndexStatus.BUILT
-    run_id = _deterministic_run_id(status, fingerprint.content_hash)
-    previous_hash = latest.content_hash if latest else None
-    run = RetrievalIndexRun(
-        run_id=run_id,
-        status=status,
-        built_at=None,
-        source_document_count=fingerprint.document_count,
-        source_page_count=fingerprint.page_count,
-        indexed_page_count=len(pages),
-        content_hash=fingerprint.content_hash,
-        previous_content_hash=previous_hash,
-        is_stale=False,
-        stale_reason=None,
-        error_reason=None,
-    )
-    page_inputs = [PageIndexInput(page.doc_id, page.page_num, page.filename, page.normalized_text) for page in pages]
-    snippets = {(page.doc_id, page.page_num): page.snippet for page in pages}
-    records = save_index_run_with_pages(db_path, run, page_inputs, snippets=snippets)
-    return RetrievalIndexBuildResult(run=run, pages=tuple(records))
+    try:
+        init_db(db_path)
+        latest = load_latest_index_run(db_path)
+        pages = load_indexable_pages(db_path)
+        fingerprint = compute_indexable_corpus_fingerprint(pages)
+        status = RetrievalIndexStatus.EMPTY if not pages else RetrievalIndexStatus.BUILT
+        run_id = _deterministic_run_id(status, fingerprint.content_hash)
+        previous_hash = latest.content_hash if latest else None
+        run = RetrievalIndexRun(
+            run_id=run_id,
+            status=status,
+            built_at=None,
+            source_document_count=fingerprint.document_count,
+            source_page_count=fingerprint.page_count,
+            indexed_page_count=len(pages),
+            content_hash=fingerprint.content_hash,
+            previous_content_hash=previous_hash,
+            is_stale=False,
+            stale_reason=None,
+            error_reason=None,
+        )
+        page_inputs = [PageIndexInput(page.doc_id, page.page_num, page.filename, page.normalized_text) for page in pages]
+        snippets = {(page.doc_id, page.page_num): page.snippet for page in pages}
+        records = save_index_run_with_pages(db_path, run, page_inputs, snippets=snippets)
+        _safe_update_trace_metadata(
+            {
+                "boundary": "retrieval_index",
+                "index_status": run.status.value,
+                "run_id": run.run_id,
+                "source_document_count": run.source_document_count,
+                "source_page_count": run.source_page_count,
+                "indexed_page_count": run.indexed_page_count,
+            }
+        )
+        return RetrievalIndexBuildResult(run=run, pages=tuple(records))
+    except Exception as exc:
+        _safe_update_trace_metadata(
+            {
+                "boundary": "retrieval_index",
+                "index_status": RetrievalIndexStatus.ERROR.value,
+                "error_class": exc.__class__.__name__,
+            }
+        )
+        raise
 
 
 def get_retrieval_index_status(db_path: str) -> RetrievalIndexStatusReport:
@@ -208,3 +242,32 @@ def make_page_snippet(text: str | None, *, max_chars: int = _SNIPPET_MAX_CHARS) 
 
 def _deterministic_run_id(status: RetrievalIndexStatus, content_hash: str) -> str:
     return f"retrieval-{status.value}-{content_hash[:16]}"
+
+
+def _safe_update_trace_metadata(metadata: dict[str, Any]) -> None:
+    """Attach whitelisted retrieval-index metadata to the current trace, if available.
+
+    This helper is intentionally defensive: Langfuse absence, auth absence, and
+    context update failures must never change indexing behavior.
+    """
+
+    if not _LANGFUSE_AVAILABLE or langfuse_context is None:
+        return
+    safe_metadata = {
+        key: value
+        for key, value in metadata.items()
+        if key
+        in {
+            "boundary",
+            "index_status",
+            "run_id",
+            "source_document_count",
+            "source_page_count",
+            "indexed_page_count",
+            "error_class",
+        }
+    }
+    try:
+        langfuse_context.update_current_trace(tags=["retrieval", "index"], metadata=safe_metadata)
+    except Exception:
+        return
