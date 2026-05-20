@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "milestoneId": "M001",
+  "sliceId": "S05",
+  "timestamp": 1779301167817,
+  "status": "fail",
+  "durationMs": 6,
+  "checks": [
+    {
+      "category": "tool",
+      "target": "T02 Verify",
+      "passed": false,
+      "message": "Unsafe or non-runnable Verify command: Manual review — boundary map and requirement-scope sections exist and are non-empty; do not run tests against .gsd paths. (contains shell control syntax such as pipes, redirects, semicolons, backticks, or command substitution)",
+      "blocking": true
+    }
+  ]
+}

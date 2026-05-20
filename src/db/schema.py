@@ -31,18 +31,47 @@ CREATE TABLE IF NOT EXISTS pages (
 );
 
 CREATE TABLE IF NOT EXISTS extractions (
-    extraction_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    doc_id        TEXT NOT NULL REFERENCES documents(doc_id) ON DELETE CASCADE,
-    field_name    TEXT NOT NULL,
-    field_value   TEXT,
-    confidence    REAL,
-    source_page   INTEGER,
-    source_bbox   TEXT,
-    verbatim_span TEXT,
-    trace_id      TEXT,
-    created_at    TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-    needs_review  BOOLEAN DEFAULT 0,
+    extraction_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    doc_id            TEXT NOT NULL REFERENCES documents(doc_id) ON DELETE CASCADE,
+    field_name        TEXT NOT NULL,
+    field_value       TEXT,
+    confidence        REAL,
+    source_page       INTEGER,
+    source_bbox       TEXT,
+    verbatim_span     TEXT,
+    trace_id          TEXT,
+    created_at        TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    needs_review      BOOLEAN DEFAULT 0,
+    review_state      TEXT,
+    abstention_reason TEXT,
+    normalized_value  TEXT,
+    updated_at        TIMESTAMP,
     UNIQUE (doc_id, field_name)
+);
+
+CREATE TABLE IF NOT EXISTS compliance_records (
+    doc_id                  TEXT PRIMARY KEY REFERENCES documents(doc_id) ON DELETE CASCADE,
+    doc_type                TEXT,
+    vendor_name             TEXT,
+    manufacturing_date      TEXT,
+    effective_date          TEXT,
+    revision_date           TEXT,
+    expiry_date             TEXT,
+    aggregate_confidence    REAL,
+    review_state            TEXT,
+    needs_review            BOOLEAN DEFAULT 0,
+    trace_id                TEXT,
+    run_id                  TEXT,
+    extracted_at            TIMESTAMP,
+    created_at              TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    updated_at              TIMESTAMP,
+    risk_level              TEXT,
+    risk_reason             TEXT,
+    compliance_status       TEXT,
+    age_days                INTEGER,
+    source_page             INTEGER,
+    source_bbox             TEXT,
+    source_verbatim_span    TEXT
 );
 
 CREATE TABLE IF NOT EXISTS evaluations (
@@ -55,9 +84,29 @@ CREATE TABLE IF NOT EXISTS evaluations (
     created_at     TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_pages_doc_id       ON pages(doc_id);
-CREATE INDEX IF NOT EXISTS idx_extractions_doc_id  ON extractions(doc_id);
-CREATE INDEX IF NOT EXISTS idx_evaluations_run_id  ON evaluations(run_id);
+CREATE INDEX IF NOT EXISTS idx_pages_doc_id                 ON pages(doc_id);
+CREATE INDEX IF NOT EXISTS idx_extractions_doc_id           ON extractions(doc_id);
+CREATE INDEX IF NOT EXISTS idx_extractions_trace_id         ON extractions(trace_id);
+CREATE INDEX IF NOT EXISTS idx_compliance_review_state      ON compliance_records(review_state);
+CREATE INDEX IF NOT EXISTS idx_compliance_needs_review      ON compliance_records(needs_review);
+CREATE INDEX IF NOT EXISTS idx_compliance_risk_level        ON compliance_records(risk_level);
+CREATE INDEX IF NOT EXISTS idx_compliance_vendor_name       ON compliance_records(vendor_name);
+CREATE INDEX IF NOT EXISTS idx_compliance_expiry_date       ON compliance_records(expiry_date);
+CREATE INDEX IF NOT EXISTS idx_compliance_trace_id          ON compliance_records(trace_id);
+CREATE INDEX IF NOT EXISTS idx_compliance_run_id            ON compliance_records(run_id);
+CREATE INDEX IF NOT EXISTS idx_evaluations_run_id           ON evaluations(run_id);
+"""
+
+_EXTRACTION_MIGRATION_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("review_state", "TEXT"),
+    ("abstention_reason", "TEXT"),
+    ("normalized_value", "TEXT"),
+    ("updated_at", "TIMESTAMP"),
+)
+
+POST_MIGRATION_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_extractions_review_state ON extractions(review_state);
+CREATE INDEX IF NOT EXISTS idx_extractions_needs_review ON extractions(needs_review);
 """
 
 
@@ -69,8 +118,39 @@ def _connect(db_path: str) -> sqlite3.Connection:
 
 
 def init_db(db_path: str) -> None:
-    """Create all tables and indexes if they do not already exist."""
+    """Create all tables and indexes, then migrate legacy Phase 1 extraction tables."""
     conn = _connect(db_path)
-    conn.executescript(SCHEMA_SQL)
-    conn.commit()
-    conn.close()
+    try:
+        conn.executescript(SCHEMA_SQL)
+        _migrate_extractions_table(conn)
+        conn.executescript(POST_MIGRATION_INDEX_SQL)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _migrate_extractions_table(conn: sqlite3.Connection) -> None:
+    """Add nullable Phase 2 extraction columns to pre-existing Phase 1 databases.
+
+    SQLite's ``CREATE TABLE IF NOT EXISTS`` does not modify existing tables. This
+    helper inspects the table shape and applies idempotent ``ALTER TABLE``
+    statements only for missing nullable columns.
+    """
+
+    existing_columns = _table_columns(conn, "extractions")
+    if not existing_columns:
+        return
+
+    for column_name, column_type in _EXTRACTION_MIGRATION_COLUMNS:
+        if column_name not in existing_columns:
+            conn.execute(f"ALTER TABLE extractions ADD COLUMN {column_name} {column_type}")
+            existing_columns.add(column_name)
+
+
+def _table_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
+    """Return column names for a SQLite table from PRAGMA table_info."""
+
+    return {row[1] for row in conn.execute(f"PRAGMA table_info({table_name})")}

@@ -16,7 +16,7 @@ key_decisions:
   - D002: settings.local.json is local-only and ignored.
   - D003: setuptools.build_meta is the package build backend.
   - D004: Current GSD artifacts seeded from GSD 1.0 .planning state.
-duration: 
+duration: ""
 verification_result: passed
 completed_at: 2026-05-19T21:04:41.514Z
 blocker_discovered: false

@@ -10,7 +10,7 @@ key_files:
   - .gsd/milestones/M001/slices/S01/S01-PLAN.md
 key_decisions:
   - D004: Current GSD artifacts seeded from GSD 1.0 .planning state.
-duration: 
+duration: ""
 verification_result: passed
 completed_at: 2026-05-19T21:05:33.050Z
 blocker_discovered: false

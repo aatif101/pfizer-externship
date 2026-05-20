@@ -6,7 +6,7 @@ key_files:
   - tests/
   - venv/Scripts/python.exe
 key_decisions: []
-duration: 
+duration: ""
 verification_result: passed
 completed_at: 2026-05-19T21:05:49.826Z
 blocker_discovered: false

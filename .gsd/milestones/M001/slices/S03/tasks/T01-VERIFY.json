@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "taskId": "T01",
+  "unitId": "M001/S03/T01",
+  "timestamp": 1779252249832,
+  "passed": false,
+  "discoverySource": "task-plan",
+  "checks": [
+    {
+      "command": "venv/Scripts/python.exe -m pytest tests/test_extraction_models.py tests/test_extraction_persistence.py tests/test_extraction_risk.py -q",
+      "exitCode": 1,
+      "durationMs": 27,
+      "verdict": "fail"
+    }
+  ],
+  "retryAttempt": 1,
+  "maxRetries": 2
+}

@@ -7,7 +7,7 @@ import pytest
 
 
 def test_schema_exists(tmp_db_path: str) -> None:
-    """INGEST SC-4: SQLite schema must have documents, pages, extractions, evaluations tables."""
+    """INGEST SC-4: SQLite schema must have core ingestion, extraction, compliance, and eval tables."""
     from src.db.schema import init_db  # noqa: PLC0415
 
     init_db(tmp_db_path)
@@ -19,6 +19,7 @@ def test_schema_exists(tmp_db_path: str) -> None:
     assert "documents" in tables, "documents table missing"
     assert "pages" in tables, "pages table missing"
     assert "extractions" in tables, "extractions table missing"
+    assert "compliance_records" in tables, "compliance_records table missing"
     assert "evaluations" in tables, "evaluations table missing"
 
 

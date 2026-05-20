@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import streamlit as st
 
+from src.config import get_settings
+from src.dashboard.compliance import render_compliance_tab
 from src.tracing import verify_langfuse_connection
 
 # Page config must be the first Streamlit call
@@ -43,10 +45,7 @@ tab_compliance, tab_chat, tab_eval = st.tabs(["Compliance", "Chat", "Eval"])
 
 with tab_compliance:
     st.header("Compliance Dashboard")
-    st.info(
-        "Phase 2 will populate this tab with extracted document metadata "
-        "(vendor, dates, risk flags) for all ingested PDFs."
-    )
+    render_compliance_tab(get_settings().db_path)
 
 with tab_chat:
     st.header("Document Q&A")

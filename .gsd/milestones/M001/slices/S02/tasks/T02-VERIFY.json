@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "taskId": "T02",
+  "unitId": "M001/S02/T02",
+  "timestamp": 1779230091524,
+  "passed": false,
+  "discoverySource": "task-plan",
+  "checks": [
+    {
+      "command": "./venv/Scripts/python.exe -m pytest tests/test_db.py tests/test_extraction_schema.py -q",
+      "exitCode": 1,
+      "durationMs": 32,
+      "verdict": "fail"
+    }
+  ],
+  "retryAttempt": 1,
+  "maxRetries": 2
+}

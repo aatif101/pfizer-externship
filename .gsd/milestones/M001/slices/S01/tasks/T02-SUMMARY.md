@@ -7,7 +7,7 @@ key_files:
   - settings.local.json
 key_decisions:
   - D002: settings.local.json is local-only and ignored.
-duration: 
+duration: ""
 verification_result: passed
 completed_at: 2026-05-19T21:04:54.915Z
 blocker_discovered: false

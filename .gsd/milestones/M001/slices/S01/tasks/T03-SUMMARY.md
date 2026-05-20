@@ -7,7 +7,7 @@ key_files:
 key_decisions:
   - D001: Python 3.11 venv is the supported runtime.
   - D003: setuptools.build_meta is the package build backend.
-duration: 
+duration: ""
 verification_result: passed
 completed_at: 2026-05-19T21:05:11.039Z
 blocker_discovered: false

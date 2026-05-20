@@ -4,37 +4,6 @@ This file is the explicit capability and coverage contract for the project.
 
 ## Active
 
-### R002 — Extract structured SDF metadata including document type, vendor, manufacturing date, effective date, revision date, and expiry date with source spans and source page references.
-- Class: core-capability
-- Status: active
-- Description: Extract structured SDF metadata including document type, vendor, manufacturing date, effective date, revision date, and expiry date with source spans and source page references.
-- Why it matters: Compliance officers need reliable structured fields to assess supplier document freshness and risk.
-- Source: migration from GSD 1.0 EXTRACT-01
-- Primary owning slice: M001
-- Validation: Validated when extracted fields persist to SQLite for sample PDFs and include page-level/source-span evidence.
-- Notes: Next primary implementation target after migration cleanup.
-
-### R003 — Compute compliance risk levels from document age using green, amber, and red thresholds and store the result with extracted fields.
-- Class: core-capability
-- Status: active
-- Description: Compute compliance risk levels from document age using green, amber, and red thresholds and store the result with extracted fields.
-- Why it matters: The primary demo value is immediate identification of expired or at-risk supplier documentation.
-- Source: migration from GSD 1.0 EXTRACT-02
-- Primary owning slice: M001
-- Validation: Validated when tests cover threshold boundaries and dashboard/query rows show expected risk levels.
-- Notes: Thresholds retained from GSD 1.0: green under 2 years, amber 2 to 3 years, red over 3 years.
-
-### R004 — Display extracted compliance records in Streamlit with sortable fields, risk coloring, confidence, and source page links.
-- Class: primary-user-loop
-- Status: active
-- Description: Display extracted compliance records in Streamlit with sortable fields, risk coloring, confidence, and source page links.
-- Why it matters: The dashboard is the evaluator-facing surface for the compliance workflow.
-- Source: migration from GSD 1.0 DASH-01 and DASH-02
-- Primary owning slice: M001
-- Supporting slices: M003
-- Validation: Validated when Streamlit renders ingested/extracted records from SQLite with correct risk colors and source links.
-- Notes: Compliance tab currently exists as a skeleton and should be extended in M001/M003.
-
 ### R005 — Provide grounded natural-language Q&A over the document corpus with page-level citations and abstention on insufficient evidence.
 - Class: core-capability
 - Status: active
@@ -108,6 +77,37 @@ This file is the explicit capability and coverage contract for the project.
 - Validation: Phase 1 implementation exists and Python 3.11 venv pytest suite passed with 15 tests before migration cleanup.
 - Notes: Implemented with Docling conversion, pypdfium2 rasterization, SQLite document/page tables, and Typer CLI.
 
+### R002 — Extract structured SDF metadata including document type, vendor, manufacturing date, effective date, revision date, and expiry date with source spans and source page references.
+- Class: core-capability
+- Status: validated
+- Description: Extract structured SDF metadata including document type, vendor, manufacturing date, effective date, revision date, and expiry date with source spans and source page references.
+- Why it matters: Compliance officers need reliable structured fields to assess supplier document freshness and risk.
+- Source: migration from GSD 1.0 EXTRACT-01
+- Primary owning slice: M001
+- Validation: Validated across M001 S02-S04: typed metadata schema supports document type, vendor, manufacturing/effective/revision/expiry dates with confidence/review/source evidence; extraction persists rows to SQLite; S04 dashboard tests render persisted field metadata with 1-indexed source page evidence from real SQLite records.
+- Notes: M001 provides the baseline extraction-to-dashboard contract; future milestones may improve model accuracy and visual citation UX.
+
+### R003 — Compute compliance risk levels from document age using green, amber, and red thresholds and store the result with extracted fields.
+- Class: core-capability
+- Status: validated
+- Description: Compute compliance risk levels from document age using green, amber, and red thresholds and store the result with extracted fields.
+- Why it matters: The primary demo value is immediate identification of expired or at-risk supplier documentation.
+- Source: migration from GSD 1.0 EXTRACT-02
+- Primary owning slice: M001
+- Validation: Validated across M001 S02-S04: compliance risk thresholds are implemented/tested, extraction stores computed risk fields, and S04 dashboard/query tests prove persisted risk levels/reasons render from SQLite records.
+- Notes: D010 risk policy remains consumed as persisted data by the dashboard.
+
+### R004 — Display extracted compliance records in Streamlit with sortable fields, risk coloring, confidence, and source page links.
+- Class: primary-user-loop
+- Status: validated
+- Description: Display extracted compliance records in Streamlit with sortable fields, risk coloring, confidence, and source page links.
+- Why it matters: The dashboard is the evaluator-facing surface for the compliance workflow.
+- Source: migration from GSD 1.0 DASH-01 and DASH-02
+- Primary owning slice: M001
+- Supporting slices: M003
+- Validation: Validated in S04 by SQLite-backed dashboard tests and full regression: Compliance tab renders persisted records with metadata, age/risk display, confidence, review state, run/trace metadata, and source page/span details; empty/missing DB states are friendly and app startup is smoke-tested.
+- Notes: S04 establishes the offline evaluator-facing dashboard surface; later M003 work can add richer sorting/filtering/evaluation polish.
+
 ## Deferred
 
 ## Out of Scope
@@ -117,9 +117,9 @@ This file is the explicit capability and coverage contract for the project.
 | ID | Class | Status | Primary owner | Supporting | Proof |
 |---|---|---|---|---|---|
 | R001 | core-capability | validated | M001 | none | Phase 1 implementation exists and Python 3.11 venv pytest suite passed with 15 tests before migration cleanup. |
-| R002 | core-capability | active | M001 | none | Validated when extracted fields persist to SQLite for sample PDFs and include page-level/source-span evidence. |
-| R003 | core-capability | active | M001 | none | Validated when tests cover threshold boundaries and dashboard/query rows show expected risk levels. |
-| R004 | primary-user-loop | active | M001 | M003 | Validated when Streamlit renders ingested/extracted records from SQLite with correct risk colors and source links. |
+| R002 | core-capability | validated | M001 | none | Validated across M001 S02-S04: typed metadata schema supports document type, vendor, manufacturing/effective/revision/expiry dates with confidence/review/source evidence; extraction persists rows to SQLite; S04 dashboard tests render persisted field metadata with 1-indexed source page evidence from real SQLite records. |
+| R003 | core-capability | validated | M001 | none | Validated across M001 S02-S04: compliance risk thresholds are implemented/tested, extraction stores computed risk fields, and S04 dashboard/query tests prove persisted risk levels/reasons render from SQLite records. |
+| R004 | primary-user-loop | validated | M001 | M003 | Validated in S04 by SQLite-backed dashboard tests and full regression: Compliance tab renders persisted records with metadata, age/risk display, confidence, review state, run/trace metadata, and source page/span details; empty/missing DB states are friendly and app startup is smoke-tested. |
 | R005 | core-capability | active | M002 | none | Validated when sample questions return cited answers and low-confidence queries abstain rather than hallucinate. |
 | R006 | differentiator | active | M002 | none | Validated when visual retrieval improves or complements recall on scanned/table-heavy pages in the gold set. |
 | R007 | quality-attribute | active | M003 | none | Validated when eval commands produce repeatable metric reports over a documented gold set. |
@@ -129,7 +129,7 @@ This file is the explicit capability and coverage contract for the project.
 
 ## Coverage Summary
 
-- Active requirements: 9
-- Mapped to slices: 9
-- Validated: 1 (R001)
+- Active requirements: 6
+- Mapped to slices: 6
+- Validated: 4 (R001, R002, R003, R004)
 - Unmapped active requirements: 0

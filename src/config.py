@@ -23,6 +23,15 @@ class Settings(BaseSettings):
     langfuse_host: str = Field(default="https://cloud.langfuse.com", description="Langfuse host URL")
     langfuse_enabled: bool = Field(default=True, description="Enable/disable Langfuse tracing")
 
+    gemini_api_key: str = Field(default="", description="Gemini API key for live extraction provider")
+    gemini_model: str = Field(default="gemini-2.5-flash", description="Gemini model for live SDF extraction")
+    extraction_low_confidence_threshold: float = Field(
+        default=0.75,
+        ge=0.0,
+        le=1.0,
+        description="Confidence below which extracted fields require human review",
+    )
+
     max_pdf_mb: int = Field(default=100, description="Max PDF file size in MB before rejection")
 
 
