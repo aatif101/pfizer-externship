@@ -2,8 +2,8 @@
 
 Layout (D-03):
     Sidebar: Langfuse connection status (checked once per session)
-    Tab 1 — Compliance: Placeholder for Phase 2 extraction results
-    Tab 2 — Chat: Placeholder for Phase 3 RAG chatbot
+    Tab 1 — Compliance: SQLite-backed compliance dashboard
+    Tab 2 — Chat: Document-grounded RAG chatbot
     Tab 3 — Eval: Placeholder for Phase 4 evaluation metrics
 
 Pitfall 5 mitigation: all expensive initialization is guarded with
@@ -15,8 +15,7 @@ from __future__ import annotations
 import streamlit as st
 
 from src.config import get_settings
-from src.dashboard.chat import render_chat_tab
-from src.dashboard.compliance import render_compliance_tab
+from src.dashboard import render_chat_tab, render_compliance_tab
 from src.tracing import verify_langfuse_connection
 
 # Page config must be the first Streamlit call
