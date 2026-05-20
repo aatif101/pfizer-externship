@@ -31,12 +31,12 @@ Consumes S01 persisted retrieval_index_runs, retrieval_index_pages, optional ret
   - Files: `src/retrieval/models.py`, `src/retrieval/repository.py`, `src/retrieval/retriever.py`, `tests/test_retriever.py`
   - Verify: venv/Scripts/python.exe -m pytest tests/test_retriever.py -k hybrid
 
-- [ ] **T02: Add deterministic evidence gate and weak-result reasons** `est:3h`
+- [x] **T02: Add deterministic evidence gate and weak-result reasons** `est:3h`
   Expected executor skills/frontmatter: tdd, api-design, verify-before-complete.
   - Files: `src/retrieval/models.py`, `src/retrieval/retriever.py`, `tests/test_retriever.py`
   - Verify: venv/Scripts/python.exe -m pytest tests/test_retriever.py -k evidence
 
-- [ ] **T03: Export retrieval contract and prove safety regressions** `est:2h`
+- [x] **T03: Export retrieval contract and prove safety regressions** `est:2h`
   Expected executor skills/frontmatter: tdd, verify-before-complete.
   - Files: `src/retrieval/__init__.py`, `src/retrieval/models.py`, `src/retrieval/retriever.py`, `tests/test_retriever.py`
   - Verify: venv/Scripts/python.exe -m pytest tests/test_retriever.py tests/test_retrieval_index_repository.py tests/test_retrieval_indexer.py tests/test_retrieval_cli.py

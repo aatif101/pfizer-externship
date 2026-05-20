@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "projectName": "pfizer-externship",
+  "projectPath": "C:\\Users\\smati\\VS Code Projects\\pfizer-externship",
+  "gsdVersion": "3.0.0",
+  "entries": [
+    {
+      "filename": "M001-2026-05-20T20-10-56.html",
+      "generatedAt": "2026-05-20T20:10:56.597Z",
+      "milestoneId": "M001",
+      "milestoneTitle": "Phase 2 Extraction and Compliance",
+      "label": "M001: Phase 2 Extraction and Compliance",
+      "kind": "milestone",
+      "totalCost": 19.367965000000005,
+      "totalTokens": 17499708,
+      "totalDuration": 19294043,
+      "doneSlices": 5,
+      "totalSlices": 5,
+      "doneMilestones": 1,
+      "totalMilestones": 3,
+      "phase": "pre-planning"
+    }
+  ]
+}

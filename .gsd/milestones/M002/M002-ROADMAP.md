@@ -16,10 +16,10 @@
 - [x] **S01: S01** `risk:Highest early risk: the Chat loop cannot be reliable until there is a repeatable way to transform existing SQLite pages into inspectable retrieval state and detect empty, missing, or stale indexes.` `depends:[]`
   > After this: After this, a developer can run a repeatable index command against a fixture or local database and see persisted index metadata plus clear output for built, empty, missing, and stale states.
 
-- [ ] **S02: S02** `risk:Retrieval quality and abstention thresholds are the core no-hallucination risk, especially with noisy page text and a CPU-friendly baseline.` `depends:[]`
+- [x] **S02: S02** `risk:Retrieval quality and abstention thresholds are the core no-hallucination risk, especially with noisy page text and a CPU-friendly baseline.` `depends:[]`
   > After this: After this, fixture questions retrieve expected supplier document pages with filename, 1-indexed page number, score, and verbatim snippet, while unrelated questions return a weak-evidence result.
 
-- [ ] **S03: Grounded Answer Service and Provider Seam** `risk:Model generation must remain optional, testable, and citation-safe; provider variability must not compromise the deterministic evidence contract.` `depends:[S02]`
+- [ ] **S03: S03** `risk:Model generation must remain optional, testable, and citation-safe; provider variability must not compromise the deterministic evidence contract.` `depends:[]`
   > After this: After this, tests can ask corpus-backed and off-topic questions through one service API and receive either a concise cited answer from a fake provider or a safe abstention, with a lazy Gemini provider available when configured.
 
 - [ ] **S04: Streamlit Chat User Loop** `risk:The user-visible milestone can fail even if services work if Streamlit reruns, chat state, setup errors, or citation rendering are unclear.` `depends:[S03]`

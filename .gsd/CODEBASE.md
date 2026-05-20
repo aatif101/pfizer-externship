@@ -1,7 +1,7 @@
 # Codebase Map
 
-Generated: 2026-05-20T21:06:14Z | Files: 49 | Described: 0/49
-<!-- gsd:codebase-meta {"generatedAt":"2026-05-20T21:06:14Z","fingerprint":"0e37985c6b673895ef0ca07028a8f2864cdf3e74","fileCount":49,"truncated":false} -->
+Generated: 2026-05-20T22:38:42Z | Files: 60 | Described: 0/60
+<!-- gsd:codebase-meta {"generatedAt":"2026-05-20T22:38:42Z","fingerprint":"af3829bd1faf058e604ec06a323680986c69609d","fileCount":60,"truncated":false} -->
 
 ### (root)/
 - `.env.example`
@@ -49,6 +49,15 @@ Generated: 2026-05-20T21:06:14Z | Files: 49 | Described: 0/49
 - `src/pipeline/ingest.py`
 - `src/pipeline/rasterizer.py`
 
+### src/retrieval/
+- `src/retrieval/__init__.py`
+- `src/retrieval/__main__.py`
+- `src/retrieval/cli.py`
+- `src/retrieval/indexer.py`
+- `src/retrieval/models.py`
+- `src/retrieval/repository.py`
+- `src/retrieval/retriever.py`
+
 ### tests/
 - `tests/__init__.py`
 - `tests/conftest.py`
@@ -64,6 +73,10 @@ Generated: 2026-05-20T21:06:14Z | Files: 49 | Described: 0/49
 - `tests/test_extraction_schema.py`
 - `tests/test_ingest.py`
 - `tests/test_rasterizer.py`
+- `tests/test_retrieval_cli.py`
+- `tests/test_retrieval_index_repository.py`
+- `tests/test_retrieval_indexer.py`
+- `tests/test_retriever.py`
 - `tests/test_s05_end_to_end_proof.py`
 - `tests/test_tracing.py`
 
