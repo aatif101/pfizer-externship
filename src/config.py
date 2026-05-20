@@ -23,8 +23,8 @@ class Settings(BaseSettings):
     langfuse_host: str = Field(default="https://cloud.langfuse.com", description="Langfuse host URL")
     langfuse_enabled: bool = Field(default=True, description="Enable/disable Langfuse tracing")
 
-    gemini_api_key: str = Field(default="", description="Gemini API key for live extraction provider")
-    gemini_model: str = Field(default="gemini-2.5-flash", description="Gemini model for live SDF extraction")
+    gemini_api_key: str = Field(default="", description="Gemini API key for live extraction and answer providers")
+    gemini_model: str = Field(default="gemini-2.5-flash", description="Gemini model for live SDF extraction and answers")
     extraction_low_confidence_threshold: float = Field(
         default=0.75,
         ge=0.0,

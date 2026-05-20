@@ -7,6 +7,7 @@ from src.rag.models import (
     AnswerResult,
     AnswerStatus,
 )
+from src.rag.gemini import GeminiAnswerProvider, GeminiAnswerProviderDiagnostics
 from src.rag.providers import (
     AnswerConfigurationError,
     AnswerProvider,
@@ -14,8 +15,7 @@ from src.rag.providers import (
     AnswerProviderRequest,
     AnswerProviderResult,
     AnswerValidationError,
-    GeminiAnswerProvider,
-    GeminiAnswerProviderDiagnostics,
+    build_answer_provider,
 )
 from src.rag.service import answer_question
 
@@ -34,4 +34,5 @@ __all__ = [
     "GeminiAnswerProvider",
     "GeminiAnswerProviderDiagnostics",
     "answer_question",
+    "build_answer_provider",
 ]
