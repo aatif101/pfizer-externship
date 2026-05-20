@@ -15,6 +15,7 @@ from __future__ import annotations
 import streamlit as st
 
 from src.config import get_settings
+from src.dashboard.chat import render_chat_tab
 from src.dashboard.compliance import render_compliance_tab
 from src.tracing import verify_langfuse_connection
 
@@ -49,10 +50,7 @@ with tab_compliance:
 
 with tab_chat:
     st.header("Document Q&A")
-    st.info(
-        "Phase 3 will wire the RAG chatbot here. "
-        "Ask natural-language questions across the full document corpus."
-    )
+    render_chat_tab(get_settings().db_path)
 
 with tab_eval:
     st.header("Evaluation")
