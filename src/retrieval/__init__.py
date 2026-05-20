@@ -9,7 +9,9 @@ from src.retrieval.models import (
     RetrievalIndexPageRecord,
     RetrievalIndexRun,
     RetrievalIndexStatus,
+    RetrievalIndexStatusReport,
     RetrievalResult,
+    RetrievalScoreComponents,
 )
 from src.retrieval.retriever import EvidenceGate, retrieve_evidence
 from src.retrieval.repository import (
@@ -31,7 +33,9 @@ __all__ = [
     "RetrievalIndexPageRecord",
     "RetrievalIndexRun",
     "RetrievalIndexStatus",
+    "RetrievalIndexStatusReport",
     "RetrievalResult",
+    "RetrievalScoreComponents",
     "compute_corpus_fingerprint",
     "list_page_index_records",
     "load_latest_index_run",
