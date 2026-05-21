@@ -229,6 +229,33 @@ def list_gold_extraction_labels(db_path: str) -> list[dict[str, Any]]:
     return [dict(zip(columns, row)) for row in rows]
 
 
+def list_predicted_extractions(db_path: str) -> list[dict[str, Any]]:
+    """List predicted extraction rows for offline evaluation.
+
+    Returns dict rows with: doc_id, field_name, normalized_value, review_state.
+
+    Notes:
+    - This intentionally reads from the canonical `extractions` table.
+    - `normalized_value` is expected to already be persisted by the extraction
+      pipeline; metric code may re-normalize as a safety belt.
+    """
+
+    conn = _connect(db_path)
+    try:
+        rows = conn.execute(
+            """
+            SELECT doc_id, field_name, normalized_value, review_state
+            FROM extractions
+            ORDER BY doc_id ASC, field_name ASC
+            """
+        ).fetchall()
+    finally:
+        conn.close()
+
+    columns = ["doc_id", "field_name", "normalized_value", "review_state"]
+    return [dict(zip(columns, row)) for row in rows]
+
+
 def list_gold_retrieval_queries(db_path: str) -> list[dict[str, Any]]:
     conn = _connect(db_path)
     try:
