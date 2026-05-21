@@ -202,3 +202,8 @@
 {"id":"6f27040f-8f07-4f2a-9a09-2a2e0f09879c","ts":"2026-05-21T00:27:26.397Z","severity":"warning","message":"Safety: 4 unexpected file change(s) outside task plan","source":"notify","read":false}
 {"id":"509e3a81-1610-450d-aa00-a0db4b177c8c","ts":"2026-05-21T00:27:28.874Z","severity":"info","message":"Verification gate: FAILED — python3 -m pytest","source":"notify","read":false}
 {"id":"116a9e96-842c-4fb4-8857-0fa923c16e8c","ts":"2026-05-21T00:27:28.878Z","severity":"warning","message":"Verification failed (python3 -m pytest) — auto-fix attempt 1/2","source":"notify","read":false}
+{"id":"9ff338bc-1139-4a1c-a259-57bebcd6912b","ts":"2026-05-21T00:27:31.373Z","severity":"info","message":"Pre-dispatch: pre-dispatch: created gsd snapshot after 36m of uncommitted changes","source":"notify","read":false}
+{"id":"cb69c32a-c53a-4e55-b329-1f70634e04d2","ts":"2026-05-21T00:35:01.732Z","severity":"info","message":"Verification gate: FAILED — python3 -m pytest","source":"notify","read":false}
+{"id":"67d91ccb-c91b-4177-9b91-6b3630d947a7","ts":"2026-05-21T00:35:01.737Z","severity":"warning","message":"Verification failed (python3 -m pytest) — auto-fix attempt 1/2","source":"notify","read":false}
+{"id":"b96b7835-4e3f-4062-94d6-6e5e9a39c89e","ts":"2026-05-21T00:44:28.043Z","severity":"warning","message":"Cannot complete milestone M002: VALIDATION verdict is \"needs-attention\". Address the validation findings and re-run validation, or run `/gsd verdict pass --rationale \"...\"` to override.","source":"notify","read":false}
+{"id":"54eb1516-4d88-470e-bb79-b28f517f274a","ts":"2026-05-21T00:44:28.530Z","severity":"info","message":"Auto-mode paused (Escape). Type to interact, or /gsd auto to resume.","source":"notify","read":false}

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "milestoneId": "M002",
+  "sliceId": "S06",
+  "timestamp": 1779321970767,
+  "status": "fail",
+  "durationMs": 8,
+  "checks": [
+    {
+      "category": "tool",
+      "target": "T01 Verify",
+      "passed": false,
+      "message": "Unsafe or non-runnable Verify command: rg -n \"R006|Status: deferred|Primary owning slice|D013|M002|future\" .gsd/REQUIREMENTS.md (contains shell control syntax such as pipes, redirects, semicolons, backticks, or command substitution)",
+      "blocking": true
+    },
+    {
+      "category": "tool",
+      "target": "T02 Verify",
+      "passed": false,
+      "message": "Unsafe or non-runnable Verify command: rg -n \"R006|D013|deferred|visual retrieval|ColQwen|Qdrant|S05|R005\" .gsd/milestones/M002/slices/S06/S06-SUMMARY.md .gsd/milestones/M002/slices/S06/S06-ASSESSMENT.md (contains shell control syntax such as pipes, redirects, semicolons, backticks, or command substitution)",
+      "blocking": true
+    },
+    {
+      "category": "tool",
+      "target": "T03 Verify",
+      "passed": false,
+      "message": "Unsafe or non-runnable Verify command: rg -n \"R006|deferred|future|D013|R005|S05|pass\" .gsd/milestones/M002/M002-VALIDATION.md (contains shell control syntax such as pipes, redirects, semicolons, backticks, or command substitution)",
+      "blocking": true
+    }
+  ]
+}

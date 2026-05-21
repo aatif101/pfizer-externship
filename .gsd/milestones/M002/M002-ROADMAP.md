@@ -28,7 +28,7 @@
 - [x] **S05: S05** `risk:A demo-ready chatbot needs final proof across CLI, service, UI, tracing, and failure modes, not just isolated unit tests.` `depends:[]`
   > After this: After this, a single verification run proves indexing, retrieval, answer generation, Chat rendering, abstention, and operational failures with fixture data and no live secrets.
 
-- [ ] **S06: S06** `risk:Requirement scope ambiguity blocks milestone validation even though text RAG slices pass.` `depends:[]`
+- [x] **S06: S06** `risk:Requirement scope ambiguity blocks milestone validation even though text RAG slices pass.` `depends:[]`
   > After this: After this, the M002 validation can point to a coherent requirement-scope artifact showing whether R006 is explicitly deferred outside M002 or implemented and verified, and Reviewer A can rerun without reporting a missing requirement.
 
 ## Boundary Map

@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "taskId": "T01",
+  "unitId": "M002/S06/T01",
+  "timestamp": 1779322535957,
+  "passed": false,
+  "discoverySource": "python-project",
+  "checks": [
+    {
+      "command": "python3 -m pytest",
+      "exitCode": 1,
+      "durationMs": 6381,
+      "verdict": "fail"
+    }
+  ],
+  "retryAttempt": 1,
+  "maxRetries": 2
+}

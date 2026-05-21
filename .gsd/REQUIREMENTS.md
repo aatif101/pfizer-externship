@@ -11,8 +11,8 @@ This file is the explicit capability and coverage contract for the project.
 - Why it matters: The demo needs evidence, not just claims, especially for compliance-oriented AI.
 - Source: migration from GSD 1.0 EVAL and BENCH requirements
 - Primary owning slice: M003
-- Validation: Validated when eval commands produce repeatable metric reports over a documented gold set.
-- Notes: Gold set and benchmark reporting belong after baseline user loops are functioning.
+- Validation: Validated when M003 eval commands produce repeatable metric reports over a documented gold set, including extraction F1, retrieval recall, faithfulness/relevancy, citation accuracy, latency, and cost.
+- Notes: M002 advanced R007 only by proving deterministic retrieval/citation regression scaffolding for the text-RAG loop. Full gold-set metric reporting remains active scope for M003 and must not be dropped.
 
 ### R008 — Trace ingestion, extraction, retrieval, generation, and evaluation operations with Langfuse while avoiding secret leakage.
 - Class: operability
@@ -20,30 +20,10 @@ This file is the explicit capability and coverage contract for the project.
 - Description: Trace ingestion, extraction, retrieval, generation, and evaluation operations with Langfuse while avoiding secret leakage.
 - Why it matters: Observability is necessary for debugging and for auditability in a pharmaceutical document workflow.
 - Source: migration from GSD 1.0 OBS-01 and readiness cleanup
-- Primary owning slice: M001
-- Supporting slices: M002,M003
-- Validation: Validated when traces include useful phase/doc/page metadata and tests confirm missing Langfuse credentials do not crash the app.
-- Notes: Langfuse v3 is currently pinned and working in Python 3.11; M002 S05 added no-op-safe allowlisted retrieval/RAG trace metadata hooks for index, retrieval, answer, and Chat diagnostics. Full evaluation tracing remains for M003.
-
-### R009 — Use Python 3.11 project virtual environment for development and verification; do not rely on global Python 3.14.
-- Class: constraint
-- Status: active
-- Description: Use Python 3.11 project virtual environment for development and verification; do not rely on global Python 3.14.
-- Why it matters: The project dependency set is verified in Python 3.11 and fails under the current global Python 3.14 environment.
-- Source: readiness cleanup 2026-05-19
-- Primary owning slice: M001
-- Validation: Validated when editable install and pytest pass through ./venv/Scripts/python.exe.
-- Notes: Global Python 3.14 currently has incompatible Pydantic/pydantic-settings packages. Supported commands should use ./venv/Scripts/python.exe on Windows.
-
-### R010 — Do not commit local provider tokens, API keys, or machine-specific model settings; keep local settings files ignored.
-- Class: compliance/security
-- Status: active
-- Description: Do not commit local provider tokens, API keys, or machine-specific model settings; keep local settings files ignored.
-- Why it matters: The repo previously contained token-like material; preventing recurrence is a non-negotiable security hygiene requirement.
-- Source: readiness cleanup 2026-05-19
-- Primary owning slice: M001
-- Validation: Validated when git status shows settings.local.json untracked/ignored and secret pattern scan finds no known token prefixes in the local file.
-- Notes: settings.local.json was untracked and added to .gitignore during migration cleanup. Any previously exposed provider key must remain revoked/rotated. M002 S05 additionally verifies public CLI/service/Chat/tracing diagnostics avoid secrets, raw provider payloads, full page text, image blobs, Docling JSON, and full content hashes.
+- Primary owning slice: M003
+- Supporting slices: M001,M002
+- Validation: Validated when M003 demonstrates Langfuse traces across ingestion, extraction, retrieval, generation, and evaluation with useful phase/doc/page metadata, while tests confirm missing or failing Langfuse configuration does not crash the app and no secrets are logged.
+- Notes: M001/M002 advanced R008 with safe diagnostics and no-op-safe retrieval/RAG trace metadata hooks. Full cross-pipeline Langfuse coverage, including evaluation tracing, remains active M003 scope and must not be dropped.
 
 ## Validated
 
@@ -98,6 +78,26 @@ This file is the explicit capability and coverage contract for the project.
 - Validation: Validated in M002 S05 by final offline regression: CLI index build, hybrid retrieval, fake-provider answer generation, Streamlit Chat rendering, cited grounded answers, unrelated-query abstention, and provider failure paths passed deterministically with fixture SQLite data and no live secrets.
 - Notes: Initial M002 implementation uses the planned hybrid text retrieval baseline. Visual retrieval remains separate under R006.
 
+### R009 — Use Python 3.11 project virtual environment for development and verification; do not rely on global Python 3.14.
+- Class: constraint
+- Status: validated
+- Description: Use Python 3.11 project virtual environment for development and verification; do not rely on global Python 3.14.
+- Why it matters: The project dependency set is verified in Python 3.11 and fails under the current global Python 3.14 environment.
+- Source: readiness cleanup 2026-05-19
+- Primary owning slice: M001
+- Validation: Validated by repeated M001/M002 verification through the project Python 3.11 virtualenv using the Windows-compatible `venv/Scripts/python.exe` command path; global Python 3.14 is not the supported project runtime.
+- Notes: Global Python 3.14 currently has incompatible Pydantic/pydantic-settings packages. Supported Windows commands should use `venv/Scripts/python.exe` or `.\venv\Scripts\python.exe`, not the POSIX-style `./venv/Scripts/python.exe` prefix.
+
+### R010 — Do not commit local provider tokens, API keys, or machine-specific model settings; keep local settings files ignored.
+- Class: compliance/security
+- Status: validated
+- Description: Do not commit local provider tokens, API keys, or machine-specific model settings; keep local settings files ignored.
+- Why it matters: The repo previously contained token-like material; preventing recurrence is a non-negotiable security hygiene requirement.
+- Source: readiness cleanup 2026-05-19
+- Primary owning slice: M001
+- Validation: Validated by project hygiene plus M002 verification that public CLI/service/Chat/tracing diagnostics avoid secrets, raw provider payloads, full page text, image blobs, Docling JSON, and full content hashes.
+- Notes: settings.local.json was untracked and added to .gitignore during migration cleanup. Any previously exposed provider key must remain revoked/rotated. Future provider, tracing, and evaluation work must preserve the M002 redaction/bounded-diagnostics contract.
+
 ## Deferred
 
 ### R006 — Add visual page retrieval with ColQwen-style embeddings and Qdrant multivector reranking for layout-aware document search.
@@ -122,14 +122,14 @@ This file is the explicit capability and coverage contract for the project.
 | R004 | primary-user-loop | validated | M001 | M003 | Validated in S04 by SQLite-backed dashboard tests and full regression: Compliance tab renders persisted records with metadata, age/risk display, confidence, review state, run/trace metadata, and source page/span details; empty/missing DB states are friendly and app startup is smoke-tested. |
 | R005 | core-capability | validated | M002 | none | Validated in M002 S05 by final offline regression: CLI index build, hybrid retrieval, fake-provider answer generation, Streamlit Chat rendering, cited grounded answers, unrelated-query abstention, and provider failure paths passed deterministically with fixture SQLite data and no live secrets. |
 | R006 | differentiator | deferred | future visual retrieval milestone | none | Validated when visual retrieval improves or complements recall on scanned/table-heavy pages in the gold set. |
-| R007 | quality-attribute | active | M003 | none | Validated when eval commands produce repeatable metric reports over a documented gold set. |
-| R008 | operability | active | M001 | M002,M003 | Validated when traces include useful phase/doc/page metadata and tests confirm missing Langfuse credentials do not crash the app. |
-| R009 | constraint | active | M001 | none | Validated when editable install and pytest pass through ./venv/Scripts/python.exe. |
-| R010 | compliance/security | active | M001 | none | Validated when git status shows settings.local.json untracked/ignored and secret pattern scan finds no known token prefixes in the local file. |
+| R007 | quality-attribute | active | M003 | none | Validated when M003 eval commands produce repeatable metric reports over a documented gold set, including extraction F1, retrieval recall, faithfulness/relevancy, citation accuracy, latency, and cost. |
+| R008 | operability | active | M003 | M001,M002 | Validated when M003 demonstrates Langfuse traces across ingestion, extraction, retrieval, generation, and evaluation with useful phase/doc/page metadata, while tests confirm missing or failing Langfuse configuration does not crash the app and no secrets are logged. |
+| R009 | constraint | validated | M001 | none | Validated by repeated M001/M002 verification through the project Python 3.11 virtualenv using the Windows-compatible `venv/Scripts/python.exe` command path; global Python 3.14 is not the supported project runtime. |
+| R010 | compliance/security | validated | M001 | none | Validated by project hygiene plus M002 verification that public CLI/service/Chat/tracing diagnostics avoid secrets, raw provider payloads, full page text, image blobs, Docling JSON, and full content hashes. |
 
 ## Coverage Summary
 
-- Active requirements: 4
-- Mapped to slices: 4
-- Validated: 5 (R001, R002, R003, R004, R005)
+- Active requirements: 2
+- Mapped to slices: 2
+- Validated: 7 (R001, R002, R003, R004, R005, R009, R010)
 - Unmapped active requirements: 0

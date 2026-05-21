@@ -297,6 +297,31 @@
       "confidence": "EXTRACTED"
     },
     {
+      "id": "slice:M002:S06",
+      "label": "S06: Resolve Requirement Coverage Scope Gap",
+      "type": "slice",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M002/slices/S06/S06-PLAN.md"
+    },
+    {
+      "id": "task:M002:S06:T01",
+      "label": "T01: Align R006 requirement ownership outside M002",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "task:M002:S06:T02",
+      "label": "T02: Write S06 scope proof artifact",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "task:M002:S06:T03",
+      "label": "T03: Generate milestone validation evidence",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
       "id": "milestone:M003",
       "label": "M003: Dashboard Evaluation and Polish",
       "type": "milestone",
@@ -568,7 +593,31 @@
       "to": "task:M002:S05:T03",
       "type": "contains",
       "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M002",
+      "to": "slice:M002:S06",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M002:S06",
+      "to": "task:M002:S06:T01",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M002:S06",
+      "to": "task:M002:S06:T02",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M002:S06",
+      "to": "task:M002:S06:T03",
+      "type": "contains",
+      "confidence": "EXTRACTED"
     }
   ],
-  "builtAt": "2026-05-20T23:57:40.737Z"
+  "builtAt": "2026-05-21T00:41:26.929Z"
 }
