@@ -35,7 +35,7 @@ Upstream consumed: `src.retrieval.retrieve_evidence`, `EvidenceGateResult`, `Ret
   - Files: `src/rag/__init__.py`, `src/rag/models.py`, `src/rag/providers.py`, `src/rag/service.py`, `tests/test_answer_service.py`
   - Verify: venv/Scripts/python.exe -m pytest tests/test_answer_service.py tests/test_retriever.py
 
-- [ ] **T02: Add lazy Gemini answer provider seam** `est:2h`
+- [x] **T02: Add lazy Gemini answer provider seam** `est:2h`
   ---
   skills_used:
     - tdd
@@ -46,7 +46,7 @@ Upstream consumed: `src.retrieval.retrieve_evidence`, `EvidenceGateResult`, `Ret
   - Files: `src/rag/gemini.py`, `src/rag/providers.py`, `src/rag/__init__.py`, `src/config.py`, `tests/test_answer_provider_gemini.py`
   - Verify: venv/Scripts/python.exe -m pytest tests/test_answer_provider_gemini.py tests/test_answer_service.py tests/test_extraction_provider_gemini.py
 
-- [ ] **T03: Lock rag package contract and slice regression proof** `est:1h`
+- [x] **T03: Lock rag package contract and slice regression proof** `est:1h`
   ---
   skills_used:
     - tdd

@@ -4,26 +4,6 @@ This file is the explicit capability and coverage contract for the project.
 
 ## Active
 
-### R005 — Provide grounded natural-language Q&A over the document corpus with page-level citations and abstention on insufficient evidence.
-- Class: core-capability
-- Status: active
-- Description: Provide grounded natural-language Q&A over the document corpus with page-level citations and abstention on insufficient evidence.
-- Why it matters: The chatbot is the second primary user loop and must remain grounded for pharma compliance credibility.
-- Source: migration from GSD 1.0 RETRIEVE and RAG requirements
-- Primary owning slice: M002
-- Validation: Validated when sample questions return cited answers and low-confidence queries abstain rather than hallucinate.
-- Notes: Initial implementation should use hybrid text retrieval before later visual retrieval upgrades.
-
-### R006 — Add visual page retrieval with ColQwen-style embeddings and Qdrant multivector reranking for layout-aware document search.
-- Class: differentiator
-- Status: active
-- Description: Add visual page retrieval with ColQwen-style embeddings and Qdrant multivector reranking for layout-aware document search.
-- Why it matters: Visual retrieval is the differentiated technical feature for scanned, stamped, and table-heavy pharmaceutical documents.
-- Source: migration from GSD 1.0 VISUAL-01 and VISUAL-02
-- Primary owning slice: M002
-- Validation: Validated when visual retrieval improves or complements recall on scanned/table-heavy pages in the gold set.
-- Notes: Deferred until baseline extraction/dashboard and text retrieval are stable; revisit exact model/checkpoint during implementation.
-
 ### R007 — Maintain an evaluation harness with extraction F1, retrieval recall, faithfulness/relevancy, citation accuracy, latency, and cost metrics.
 - Class: quality-attribute
 - Status: active
@@ -43,7 +23,7 @@ This file is the explicit capability and coverage contract for the project.
 - Primary owning slice: M001
 - Supporting slices: M002,M003
 - Validation: Validated when traces include useful phase/doc/page metadata and tests confirm missing Langfuse credentials do not crash the app.
-- Notes: Langfuse v3 is currently pinned and working in Python 3.11; reassess v3 vs v4 before deep LangGraph integration.
+- Notes: Langfuse v3 is currently pinned and working in Python 3.11; M002 S05 added no-op-safe allowlisted retrieval/RAG trace metadata hooks for index, retrieval, answer, and Chat diagnostics. Full evaluation tracing remains for M003.
 
 ### R009 — Use Python 3.11 project virtual environment for development and verification; do not rely on global Python 3.14.
 - Class: constraint
@@ -63,7 +43,7 @@ This file is the explicit capability and coverage contract for the project.
 - Source: readiness cleanup 2026-05-19
 - Primary owning slice: M001
 - Validation: Validated when git status shows settings.local.json untracked/ignored and secret pattern scan finds no known token prefixes in the local file.
-- Notes: settings.local.json was untracked and added to .gitignore during migration cleanup. Any previously exposed provider key must remain revoked/rotated.
+- Notes: settings.local.json was untracked and added to .gitignore during migration cleanup. Any previously exposed provider key must remain revoked/rotated. M002 S05 additionally verifies public CLI/service/Chat/tracing diagnostics avoid secrets, raw provider payloads, full page text, image blobs, Docling JSON, and full content hashes.
 
 ## Validated
 
@@ -108,7 +88,27 @@ This file is the explicit capability and coverage contract for the project.
 - Validation: Validated in S04 by SQLite-backed dashboard tests and full regression: Compliance tab renders persisted records with metadata, age/risk display, confidence, review state, run/trace metadata, and source page/span details; empty/missing DB states are friendly and app startup is smoke-tested.
 - Notes: S04 establishes the offline evaluator-facing dashboard surface; later M003 work can add richer sorting/filtering/evaluation polish.
 
+### R005 — Provide grounded natural-language Q&A over the document corpus with page-level citations and abstention on insufficient evidence.
+- Class: core-capability
+- Status: validated
+- Description: Provide grounded natural-language Q&A over the document corpus with page-level citations and abstention on insufficient evidence.
+- Why it matters: The chatbot is the second primary user loop and must remain grounded for pharma compliance credibility.
+- Source: migration from GSD 1.0 RETRIEVE and RAG requirements
+- Primary owning slice: M002
+- Validation: Validated in M002 S05 by final offline regression: CLI index build, hybrid retrieval, fake-provider answer generation, Streamlit Chat rendering, cited grounded answers, unrelated-query abstention, and provider failure paths passed deterministically with fixture SQLite data and no live secrets.
+- Notes: Initial M002 implementation uses the planned hybrid text retrieval baseline. Visual retrieval remains separate under R006.
+
 ## Deferred
+
+### R006 — Add visual page retrieval with ColQwen-style embeddings and Qdrant multivector reranking for layout-aware document search.
+- Class: differentiator
+- Status: deferred
+- Description: Add visual page retrieval with ColQwen-style embeddings and Qdrant multivector reranking for layout-aware document search.
+- Why it matters: Visual retrieval is the differentiated technical feature for scanned, stamped, and table-heavy pharmaceutical documents.
+- Source: migration from GSD 1.0 VISUAL-01 and VISUAL-02
+- Primary owning slice: future visual retrieval milestone
+- Validation: Validated when visual retrieval improves or complements recall on scanned/table-heavy pages in the gold set.
+- Notes: Deferred outside M002 under D013: M002 intentionally validates the CPU-friendly text-RAG R005 loop only, while keeping retriever DTO and citation boundaries compatible with future visual ColQwen/Qdrant retrieval. R006 remains future work for a later visual retrieval milestone or roadmap reassessment, with validation criteria preserved.
 
 ## Out of Scope
 
@@ -120,8 +120,8 @@ This file is the explicit capability and coverage contract for the project.
 | R002 | core-capability | validated | M001 | none | Validated across M001 S02-S04: typed metadata schema supports document type, vendor, manufacturing/effective/revision/expiry dates with confidence/review/source evidence; extraction persists rows to SQLite; S04 dashboard tests render persisted field metadata with 1-indexed source page evidence from real SQLite records. |
 | R003 | core-capability | validated | M001 | none | Validated across M001 S02-S04: compliance risk thresholds are implemented/tested, extraction stores computed risk fields, and S04 dashboard/query tests prove persisted risk levels/reasons render from SQLite records. |
 | R004 | primary-user-loop | validated | M001 | M003 | Validated in S04 by SQLite-backed dashboard tests and full regression: Compliance tab renders persisted records with metadata, age/risk display, confidence, review state, run/trace metadata, and source page/span details; empty/missing DB states are friendly and app startup is smoke-tested. |
-| R005 | core-capability | active | M002 | none | Validated when sample questions return cited answers and low-confidence queries abstain rather than hallucinate. |
-| R006 | differentiator | active | M002 | none | Validated when visual retrieval improves or complements recall on scanned/table-heavy pages in the gold set. |
+| R005 | core-capability | validated | M002 | none | Validated in M002 S05 by final offline regression: CLI index build, hybrid retrieval, fake-provider answer generation, Streamlit Chat rendering, cited grounded answers, unrelated-query abstention, and provider failure paths passed deterministically with fixture SQLite data and no live secrets. |
+| R006 | differentiator | deferred | future visual retrieval milestone | none | Validated when visual retrieval improves or complements recall on scanned/table-heavy pages in the gold set. |
 | R007 | quality-attribute | active | M003 | none | Validated when eval commands produce repeatable metric reports over a documented gold set. |
 | R008 | operability | active | M001 | M002,M003 | Validated when traces include useful phase/doc/page metadata and tests confirm missing Langfuse credentials do not crash the app. |
 | R009 | constraint | active | M001 | none | Validated when editable install and pytest pass through ./venv/Scripts/python.exe. |
@@ -129,7 +129,7 @@ This file is the explicit capability and coverage contract for the project.
 
 ## Coverage Summary
 
-- Active requirements: 6
-- Mapped to slices: 6
-- Validated: 4 (R001, R002, R003, R004)
+- Active requirements: 4
+- Mapped to slices: 4
+- Validated: 5 (R001, R002, R003, R004, R005)
 - Unmapped active requirements: 0

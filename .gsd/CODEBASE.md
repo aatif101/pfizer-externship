@@ -1,7 +1,7 @@
 # Codebase Map
 
-Generated: 2026-05-20T22:38:42Z | Files: 60 | Described: 0/60
-<!-- gsd:codebase-meta {"generatedAt":"2026-05-20T22:38:42Z","fingerprint":"af3829bd1faf058e604ec06a323680986c69609d","fileCount":60,"truncated":false} -->
+Generated: 2026-05-21T00:04:06Z | Files: 70 | Described: 0/70
+<!-- gsd:codebase-meta {"generatedAt":"2026-05-21T00:04:06Z","fingerprint":"e3940a1239362d95a7d84cf400498f4798f3d625","fileCount":70,"truncated":false} -->
 
 ### (root)/
 - `.env.example`
@@ -24,6 +24,7 @@ Generated: 2026-05-20T22:38:42Z | Files: 60 | Described: 0/60
 
 ### src/dashboard/
 - `src/dashboard/__init__.py`
+- `src/dashboard/chat.py`
 - `src/dashboard/compliance.py`
 
 ### src/db/
@@ -49,6 +50,13 @@ Generated: 2026-05-20T22:38:42Z | Files: 60 | Described: 0/60
 - `src/pipeline/ingest.py`
 - `src/pipeline/rasterizer.py`
 
+### src/rag/
+- `src/rag/__init__.py`
+- `src/rag/gemini.py`
+- `src/rag/models.py`
+- `src/rag/providers.py`
+- `src/rag/service.py`
+
 ### src/retrieval/
 - `src/retrieval/__init__.py`
 - `src/retrieval/__main__.py`
@@ -59,26 +67,7 @@ Generated: 2026-05-20T22:38:42Z | Files: 60 | Described: 0/60
 - `src/retrieval/retriever.py`
 
 ### tests/
-- `tests/__init__.py`
-- `tests/conftest.py`
-- `tests/test_app.py`
-- `tests/test_compliance_dashboard.py`
-- `tests/test_db.py`
-- `tests/test_extraction_cli.py`
-- `tests/test_extraction_models.py`
-- `tests/test_extraction_persistence.py`
-- `tests/test_extraction_pipeline.py`
-- `tests/test_extraction_provider_gemini.py`
-- `tests/test_extraction_risk.py`
-- `tests/test_extraction_schema.py`
-- `tests/test_ingest.py`
-- `tests/test_rasterizer.py`
-- `tests/test_retrieval_cli.py`
-- `tests/test_retrieval_index_repository.py`
-- `tests/test_retrieval_indexer.py`
-- `tests/test_retriever.py`
-- `tests/test_s05_end_to_end_proof.py`
-- `tests/test_tracing.py`
+- *(24 files: 24 .py)*
 
 ### tests/fixtures/
 - `tests/fixtures/sample.pdf`

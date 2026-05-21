@@ -19,14 +19,17 @@
 - [x] **S02: S02** `risk:Retrieval quality and abstention thresholds are the core no-hallucination risk, especially with noisy page text and a CPU-friendly baseline.` `depends:[]`
   > After this: After this, fixture questions retrieve expected supplier document pages with filename, 1-indexed page number, score, and verbatim snippet, while unrelated questions return a weak-evidence result.
 
-- [ ] **S03: S03** `risk:Model generation must remain optional, testable, and citation-safe; provider variability must not compromise the deterministic evidence contract.` `depends:[]`
+- [x] **S03: S03** `risk:Model generation must remain optional, testable, and citation-safe; provider variability must not compromise the deterministic evidence contract.` `depends:[]`
   > After this: After this, tests can ask corpus-backed and off-topic questions through one service API and receive either a concise cited answer from a fake provider or a safe abstention, with a lazy Gemini provider available when configured.
 
-- [ ] **S04: Streamlit Chat User Loop** `risk:The user-visible milestone can fail even if services work if Streamlit reruns, chat state, setup errors, or citation rendering are unclear.` `depends:[S03]`
+- [x] **S04: S04** `risk:The user-visible milestone can fail even if services work if Streamlit reruns, chat state, setup errors, or citation rendering are unclear.` `depends:[]`
   > After this: After this, a compliance officer can open the Chat tab, ask a supplier-document question, see a concise answer with citations, ask an unrelated question, and see a clear abstention.
 
-- [ ] **S05: Operational Proof and Evaluation Hooks** `risk:A demo-ready chatbot needs final proof across CLI, service, UI, tracing, and failure modes, not just isolated unit tests.` `depends:[S04]`
+- [x] **S05: S05** `risk:A demo-ready chatbot needs final proof across CLI, service, UI, tracing, and failure modes, not just isolated unit tests.` `depends:[]`
   > After this: After this, a single verification run proves indexing, retrieval, answer generation, Chat rendering, abstention, and operational failures with fixture data and no live secrets.
+
+- [ ] **S06: S06** `risk:Requirement scope ambiguity blocks milestone validation even though text RAG slices pass.` `depends:[]`
+  > After this: After this, the M002 validation can point to a coherent requirement-scope artifact showing whether R006 is explicitly deferred outside M002 or implemented and verified, and Reviewer A can rerun without reporting a missing requirement.
 
 ## Boundary Map
 
