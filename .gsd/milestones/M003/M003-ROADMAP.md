@@ -1,5 +1,59 @@
 # M003: Dashboard Evaluation and Polish
 
-**Vision:** 
+**Vision:** Make the Streamlit dashboard demo-ready by implementing a real evaluation harness (extraction plus retrieval and RAG) backed by SQLite run history, plus visible UI polish and safe empty states so a compliance officer can trust and compare system quality over time.
+
+## Success Criteria
+
+- Eval tab shows real metrics for extraction and retrieval or RAG from SQLite-backed run history.
+- At least two runs can be compared in the dashboard (same type or across types).
+- No crashes on missing prerequisites (no gold set, no eval runs, no retrieval index, no provider config).
 
 ## Slices
+
+- [ ] **S01: S01** `risk:High: the gold-set schema and run storage contract are currently missing or underspecified; getting this wrong blocks metric computation and UI rendering.` `depends:[]`
+  > After this: Create or upgrade SQLite schema to include gold labels plus eval run tables, and add query helpers that can insert and list eval runs and metrics without Streamlit rerun duplication.
+
+- [ ] **S02: Extraction evaluation metrics (field-level F1)** `[sketch]` `risk:Medium: metric definitions and normalization rules can be contentious; must be deterministic and testable to be credible.` `depends:[S01]`
+  > After this: Given gold extraction labels and predicted extraction rows in SQLite, compute per-field precision, recall, and F1 and persist an extraction eval run with summary metrics.
+
+- [ ] **S03: Retrieval and RAG evaluation metrics (recall, RAGAS, citation accuracy, latency and cost)** `[sketch]` `risk:High: touches multiple systems (retrieval index, RAG generation outputs, optional Langfuse); must degrade gracefully when data is missing.` `depends:[S01]`
+  > After this: Compute retrieval recall at 5 and 10 and basic citation accuracy against a gold query set; when optional trace metadata exists, attach latency and cost summaries; persist a retrieval or RAG eval run to SQLite.
+
+- [ ] **S04: Streamlit Eval tab: run history, comparisons, empty states** `[sketch]` `risk:Medium: UI must avoid heavy computation on rerun and must not crash when prerequisites are missing.` `depends:[S01,S02,S03]`
+  > After this: Open Streamlit and see a populated Eval tab listing eval runs and metrics, with the ability to select and compare two runs and clear guidance for missing gold and evals.
+
+- [ ] **S05: Dashboard polish and presentation-ready styling** `[sketch]` `risk:Low-medium: mostly UX work but can accidentally regress existing tabs if done carelessly.` `depends:[S04]`
+  > After this: Dashboard layout, typography, and table presentation feel demo-ready; Eval tab is readable and consistent with Compliance and Chat sections.
+
+## Boundary Map
+
+```mermaid
+graph TD
+  subgraph Streamlit_UI
+    APP[src/app.py]
+    EVALTAB[src/dashboard/eval.py]
+  end
+
+  subgraph SQLite
+    DB[(sqlite .db)]
+    SCHEMA[src/db/schema.py]
+    QUERIES[src/db/queries.py]
+  end
+
+  subgraph Eval_Core
+    METRICS[src/eval/*]
+  end
+
+  APP --> EVALTAB
+  EVALTAB --> QUERIES
+  QUERIES --> DB
+  SCHEMA --> DB
+  METRICS --> QUERIES
+
+  subgraph Optional
+    LANGFUSE[Langfuse]
+    RAGAS[RAGAS judge LLM]
+  end
+  METRICS -.-> LANGFUSE
+  METRICS -.-> RAGAS
+```

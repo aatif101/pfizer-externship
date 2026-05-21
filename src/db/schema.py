@@ -74,6 +74,8 @@ CREATE TABLE IF NOT EXISTS compliance_records (
     source_verbatim_span    TEXT
 );
 
+-- LEGACY: Phase 1 evaluation surface (per-metric rows without run grouping).
+-- Keep for backward compatibility; new evaluation code should use eval_runs + eval_metrics.
 CREATE TABLE IF NOT EXISTS evaluations (
     eval_id        INTEGER PRIMARY KEY AUTOINCREMENT,
     run_id         TEXT NOT NULL,
@@ -82,6 +84,53 @@ CREATE TABLE IF NOT EXISTS evaluations (
     metric_value   REAL,
     doc_id         TEXT,
     created_at     TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+CREATE TABLE IF NOT EXISTS eval_runs (
+    run_id         TEXT PRIMARY KEY,
+    eval_type      TEXT NOT NULL,
+    status         TEXT NOT NULL,
+    created_at     TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    completed_at   TIMESTAMP,
+    pipeline_label TEXT,
+    params_json    TEXT,
+    error_reason   TEXT
+);
+
+CREATE TABLE IF NOT EXISTS eval_metrics (
+    metric_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id        TEXT NOT NULL REFERENCES eval_runs(run_id) ON DELETE CASCADE,
+    metric_name   TEXT NOT NULL,
+    metric_value  REAL,
+    scope_type    TEXT,
+    scope_id      TEXT,
+    created_at    TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+CREATE TABLE IF NOT EXISTS gold_extraction_labels (
+    doc_id           TEXT NOT NULL REFERENCES documents(doc_id) ON DELETE CASCADE,
+    field_name       TEXT NOT NULL,
+    expected_value   TEXT NOT NULL,
+    normalized_value TEXT,
+    source_page      INTEGER,
+    created_at       TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    PRIMARY KEY (doc_id, field_name)
+);
+
+CREATE TABLE IF NOT EXISTS gold_retrieval_queries (
+    query_id    TEXT PRIMARY KEY,
+    query_text  TEXT NOT NULL,
+    notes       TEXT,
+    created_at  TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+CREATE TABLE IF NOT EXISTS gold_retrieval_targets (
+    query_id    TEXT NOT NULL REFERENCES gold_retrieval_queries(query_id) ON DELETE CASCADE,
+    doc_id      TEXT NOT NULL REFERENCES documents(doc_id) ON DELETE CASCADE,
+    page_num    INTEGER NOT NULL,
+    created_at  TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    PRIMARY KEY (query_id, doc_id, page_num),
+    FOREIGN KEY (doc_id, page_num) REFERENCES pages(doc_id, page_num) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS retrieval_index_runs (
@@ -123,6 +172,12 @@ CREATE INDEX IF NOT EXISTS idx_compliance_expiry_date       ON compliance_record
 CREATE INDEX IF NOT EXISTS idx_compliance_trace_id          ON compliance_records(trace_id);
 CREATE INDEX IF NOT EXISTS idx_compliance_run_id            ON compliance_records(run_id);
 CREATE INDEX IF NOT EXISTS idx_evaluations_run_id           ON evaluations(run_id);
+CREATE INDEX IF NOT EXISTS idx_eval_runs_status              ON eval_runs(status);
+CREATE INDEX IF NOT EXISTS idx_eval_runs_created_at          ON eval_runs(created_at);
+CREATE INDEX IF NOT EXISTS idx_eval_metrics_run_id           ON eval_metrics(run_id);
+CREATE INDEX IF NOT EXISTS idx_eval_metrics_metric_name      ON eval_metrics(metric_name);
+CREATE INDEX IF NOT EXISTS idx_gold_extraction_doc_id        ON gold_extraction_labels(doc_id);
+CREATE INDEX IF NOT EXISTS idx_gold_retrieval_query_text     ON gold_retrieval_queries(query_text);
 CREATE INDEX IF NOT EXISTS idx_retrieval_runs_built_at      ON retrieval_index_runs(built_at);
 CREATE INDEX IF NOT EXISTS idx_retrieval_runs_status        ON retrieval_index_runs(status);
 CREATE INDEX IF NOT EXISTS idx_retrieval_pages_run_id       ON retrieval_index_pages(run_id);
