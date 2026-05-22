@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
 
 from src.db.schema import _connect
 
@@ -289,4 +289,48 @@ def list_gold_retrieval_targets(db_path: str, query_id: str) -> list[dict[str, A
         conn.close()
 
     columns = ["query_id", "doc_id", "page_num", "created_at"]
+    return [dict(zip(columns, row)) for row in rows]
+
+
+def get_latest_retrieval_index_run_id(db_path: str) -> str | None:
+    """Return the latest retrieval_index_runs.run_id, if any.
+
+    The retrieval subsystem provides richer DTOs, but evaluation needs a tiny,
+    provider-free helper to locate the currently active index run.
+    """
+
+    conn = _connect(db_path)
+    try:
+        row = conn.execute(
+            """
+            SELECT run_id
+            FROM retrieval_index_runs
+            ORDER BY built_at DESC, run_id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+    finally:
+        conn.close()
+
+    return str(row[0]) if row is not None else None
+
+
+def list_retrieval_index_pages(db_path: str, run_id: str) -> list[dict[str, Any]]:
+    """List retrieval_index_pages rows for one run in deterministic order."""
+
+    conn = _connect(db_path)
+    try:
+        rows = conn.execute(
+            """
+            SELECT doc_id, page_num, display_page_num, filename, run_id
+            FROM retrieval_index_pages
+            WHERE run_id = ?
+            ORDER BY doc_id ASC, page_num ASC
+            """,
+            (run_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    columns = ["doc_id", "page_num", "display_page_num", "filename", "run_id"]
     return [dict(zip(columns, row)) for row in rows]

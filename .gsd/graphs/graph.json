@@ -1,16 +1,16 @@
 {
   "nodes": [
     {
-      "id": "milestone:M002",
-      "label": "M002: Retrieval and RAG Chatbot",
+      "id": "milestone:M003",
+      "label": "M003: Dashboard Evaluation and Polish",
       "type": "milestone",
-      "description": "Active milestone: M002",
+      "description": "Active milestone: M003",
       "confidence": "EXTRACTED",
       "sourceFile": "STATE.md"
     },
     {
-      "id": "concept:phase:validating-milestone",
-      "label": "Phase: validating-milestone",
+      "id": "concept:phase:refining",
+      "label": "Phase: refining",
       "type": "concept",
       "confidence": "EXTRACTED",
       "sourceFile": "STATE.md"
@@ -164,6 +164,13 @@
       "label": "T03: Run closeout verification and package evidence",
       "type": "task",
       "confidence": "EXTRACTED"
+    },
+    {
+      "id": "milestone:M002",
+      "label": "M002: Retrieval and RAG Chatbot",
+      "type": "milestone",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M002/M002-ROADMAP.md"
     },
     {
       "id": "slice:M002:S01",
@@ -322,11 +329,48 @@
       "confidence": "EXTRACTED"
     },
     {
-      "id": "milestone:M003",
-      "label": "M003: Dashboard Evaluation and Polish",
-      "type": "milestone",
+      "id": "slice:M003:S01",
+      "label": "S01: Evaluation DB contract and adapters",
+      "type": "slice",
       "confidence": "EXTRACTED",
-      "sourceFile": "milestones/M003/M003-ROADMAP.md"
+      "sourceFile": "milestones/M003/slices/S01/S01-PLAN.md"
+    },
+    {
+      "id": "task:M003:S01:T01",
+      "label": "T01: Define eval DB schema and migrations (runs, metrics, gold sets)",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "task:M003:S01:T02",
+      "label": "T02: Add eval repository/query helpers for insert/list without rerun duplication",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "task:M003:S01:T03",
+      "label": "T03: Add contract tests for eval schema + repository behaviors (empty states, idempotency)",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "slice:M003:S02",
+      "label": "S02: Extraction evaluation metrics (field-level F1)",
+      "type": "slice",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M003/slices/S02/S02-PLAN.md"
+    },
+    {
+      "id": "task:M003:S02:T01",
+      "label": "T01: Implement extraction F1 metric computation with normalization and SQLite data access",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "task:M003:S02:T02",
+      "label": "T02: Add offline tests proving extraction eval metrics, normalization, and persistence via eval repository",
+      "type": "task",
+      "confidence": "EXTRACTED"
     }
   ],
   "edges": [
@@ -617,7 +661,49 @@
       "to": "task:M002:S06:T03",
       "type": "contains",
       "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M003",
+      "to": "slice:M003:S01",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M003:S01",
+      "to": "task:M003:S01:T01",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M003:S01",
+      "to": "task:M003:S01:T02",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M003:S01",
+      "to": "task:M003:S01:T03",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M003",
+      "to": "slice:M003:S02",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M003:S02",
+      "to": "task:M003:S02:T01",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M003:S02",
+      "to": "task:M003:S02:T02",
+      "type": "contains",
+      "confidence": "EXTRACTED"
     }
   ],
-  "builtAt": "2026-05-21T00:41:26.929Z"
+  "builtAt": "2026-05-21T18:57:39.687Z"
 }

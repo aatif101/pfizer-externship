@@ -10,13 +10,13 @@
 
 ## Slices
 
-- [ ] **S01: S01** `risk:High: the gold-set schema and run storage contract are currently missing or underspecified; getting this wrong blocks metric computation and UI rendering.` `depends:[]`
+- [x] **S01: S01** `risk:High: the gold-set schema and run storage contract are currently missing or underspecified; getting this wrong blocks metric computation and UI rendering.` `depends:[]`
   > After this: Create or upgrade SQLite schema to include gold labels plus eval run tables, and add query helpers that can insert and list eval runs and metrics without Streamlit rerun duplication.
 
-- [ ] **S02: Extraction evaluation metrics (field-level F1)** `[sketch]` `risk:Medium: metric definitions and normalization rules can be contentious; must be deterministic and testable to be credible.` `depends:[S01]`
+- [x] **S02: S02** `risk:Medium: metric definitions and normalization rules can be contentious; must be deterministic and testable to be credible.` `depends:[]`
   > After this: Given gold extraction labels and predicted extraction rows in SQLite, compute per-field precision, recall, and F1 and persist an extraction eval run with summary metrics.
 
-- [ ] **S03: Retrieval and RAG evaluation metrics (recall, RAGAS, citation accuracy, latency and cost)** `[sketch]` `risk:High: touches multiple systems (retrieval index, RAG generation outputs, optional Langfuse); must degrade gracefully when data is missing.` `depends:[S01]`
+- [ ] **S03: S03** `risk:High: touches multiple systems (retrieval index, RAG generation outputs, optional Langfuse); must degrade gracefully when data is missing.` `depends:[]`
   > After this: Compute retrieval recall at 5 and 10 and basic citation accuracy against a gold query set; when optional trace metadata exists, attach latency and cost summaries; persist a retrieval or RAG eval run to SQLite.
 
 - [ ] **S04: Streamlit Eval tab: run history, comparisons, empty states** `[sketch]` `risk:Medium: UI must avoid heavy computation on rerun and must not crash when prerequisites are missing.` `depends:[S01,S02,S03]`

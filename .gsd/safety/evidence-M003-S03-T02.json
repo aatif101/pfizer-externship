@@ -1,0 +1,82 @@
+[
+  {
+    "kind": "edit",
+    "toolCallId": "call_D2rQgbVjZ1pNG01hKhCv8J3d|fc_03d8814d767efabd016a0f56653a88819aa4b3e1669dabb31f",
+    "path": "C:/Users/smati/VS Code Projects/pfizer-externship/src/eval/repository.py",
+    "timestamp": 1779390056814
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "call_h0RdEqHRARoHvDS7YgUkZ0ES|fc_03d8814d767efabd016a0f5667cdc0819a86ede298e4ae8c76",
+    "path": "C:/Users/smati/VS Code Projects/pfizer-externship/src/eval/repository.py",
+    "timestamp": 1779390070635
+  },
+  {
+    "kind": "write",
+    "toolCallId": "call_YuaYMvaJq4gljoNTIkYemW5Z|fc_03d8814d767efabd016a0f5675ad0c819a98d65eaf00ce9978",
+    "path": "C:/Users/smati/VS Code Projects/pfizer-externship/src/eval/retrieval_eval_runner.py",
+    "timestamp": 1779390095770
+  },
+  {
+    "kind": "write",
+    "toolCallId": "call_qWUMrQDNLhaEnTpnUtHVkjbV|fc_03d8814d767efabd016a0f568ec8ec819abd6630488d3d4593",
+    "path": "C:/Users/smati/VS Code Projects/pfizer-externship/tests/test_retrieval_eval_runner.py",
+    "timestamp": 1779390115772
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "call_O6OEWgJ3aKGkLCIYLemVzqnV|fc_03d8814d767efabd016a0f56a4dfe4819a81908bbe168a8c36",
+    "path": "C:/Users/smati/VS Code Projects/pfizer-externship/tests/test_retrieval_eval_runner.py",
+    "timestamp": 1779390121994
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "call_jnFVhGpWihxqR83Bh1a8HyVK|fc_03d8814d767efabd016a0f56aefe14819a9f57635be0314373",
+    "path": "C:/Users/smati/VS Code Projects/pfizer-externship/tests/test_retrieval_eval_runner.py",
+    "timestamp": 1779390130720
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "call_8Tbl8bj3MveoVKLOrGS7UGKy|fc_03d8814d767efabd016a0f56b1acb0819a860ef8d6e78b3190",
+    "command": "",
+    "exitCode": 0,
+    "outputSnippet": "gsd_exec[ec6e8e3b-7650-4e64-aec0-3bcc9fa09011] runtime=bash exit=1 duration=2767ms\n  stdout: 0B → C:\\Users\\smati\\VS Code Projects\\pfizer-externship\\.gsd\\exec\\ec6e8e3b-7650-4e64-aec0-3bcc9fa09011.stdout\n  stderr: 104B → C:\\Users\\smati\\VS Code Projects\\pfizer-externship\\.gsd\\exec\\ec6e8e3b-7650-4e64-aec0-3bcc9fa09011.stderr\n--- digest ---\n[no stdout — tail of stderr]\n<3>WSL (9 - Relay) ERROR: CreateProcessCommon:800: execvpe(/bin/bash) failed: No such file or directory",
+    "timestamp": 1779390132667
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "call_YgfBPdUX0pg90opHxY4eDXyP|fc_03d8814d767efabd016a0f56b68ee0819a821b0ff31b75c3da",
+    "command": "",
+    "exitCode": 0,
+    "outputSnippet": "gsd_exec[e35d8fef-9349-4947-bf4c-2d5722129856] runtime=bash exit=1 duration=196ms\n  stdout: 0B → C:\\Users\\smati\\VS Code Projects\\pfizer-externship\\.gsd\\exec\\e35d8fef-9349-4947-bf4c-2d5722129856.stdout\n  stderr: 105B → C:\\Users\\smati\\VS Code Projects\\pfizer-externship\\.gsd\\exec\\e35d8fef-9349-4947-bf4c-2d5722129856.stderr\n--- digest ---\n[no stdout — tail of stderr]\n<3>WSL (12 - Relay) ERROR: CreateProcessCommon:800: execvpe(/bin/bash) failed: No such file or directory",
+    "timestamp": 1779390137732
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "call_TaqGw4dMIjdqZ69FCarnSX8W|fc_03d8814d767efabd016a0f56ba9258819a8122128fe9276284",
+    "command": "venv/Scripts/python.exe -m pytest tests/test_retrieval_eval_runner.py -q",
+    "exitCode": 2,
+    "outputSnippet": "\r\n=================================== ERRORS ====================================\r\n____________ ERROR collecting tests/test_retrieval_eval_runner.py _____________\r\nImportError while importing test module 'C:\\Users\\smati\\VS Code Projects\\pfizer-externship\\tests\\test_retrieval_eval_runner.py'.\r\nHint: make sure your test modules/packages have valid Python names.\r\nTraceback:\r\n..\\..\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\importlib\\__init__.py:126: in import_module\r\n    return _bootstrap._gcd_imp",
+    "timestamp": 1779390141479
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "call_DPTbyQyaagZzrzsfvxQ7duWd|fc_03d8814d767efabd016a0f56c06e08819a890edeb564445e64",
+    "path": "C:/Users/smati/VS Code Projects/pfizer-externship/src/eval/retrieval_eval_runner.py",
+    "timestamp": 1779390148192
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "call_KVb260nFd9Q8YL96CUr4BDDO|fc_03d8814d767efabd016a0f56c33a94819aa7a1c894f5ed83cb",
+    "path": "C:/Users/smati/VS Code Projects/pfizer-externship/src/eval/retrieval_eval_runner.py",
+    "timestamp": 1779390165176
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "call_AdRyjReuu0N5r17AjSKT1HTr|fc_03d8814d767efabd016a0f56d44ca0819ab3b26cdd22b79aac",
+    "command": "venv/Scripts/python.exe -m pytest tests/test_retrieval_eval_runner.py -q",
+    "exitCode": 0,
+    "outputSnippet": "..                                                                       [100%]\r\n2 passed in 4.14s\r\n",
+    "timestamp": 1779390167097
+  }
+]
