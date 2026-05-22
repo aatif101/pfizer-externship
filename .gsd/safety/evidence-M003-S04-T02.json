@@ -1,0 +1,68 @@
+[
+  {
+    "kind": "edit",
+    "toolCallId": "call_iB5Huc0BhxybinQQlfepQ9y1|fc_0ebca6958c28dd2a016a109863bca0819894027c60c1652851",
+    "path": "src/dashboard/eval.py",
+    "timestamp": 1779472510203
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "call_LvFY0c5GHT9R74TMgZ3bf3sA|fc_0ebca6958c28dd2a016a10987c30c081989b3aacdd7d6de776",
+    "path": "src/dashboard/eval.py",
+    "timestamp": 1779472525474
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "call_opq9UDrJUEBLixk63SpGUtp0|fc_0ebca6958c28dd2a016a10988ca0ec8198bec3424bf070bc77",
+    "path": "tests/test_dashboard_eval_tab.py",
+    "timestamp": 1779472541422
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "call_833pbNwcTnBnXd9VBhjaCdjK|fc_0ebca6958c28dd2a016a10989b6e848198ae8da83f9b8b5eee",
+    "path": "tests/test_dashboard_eval_tab.py",
+    "timestamp": 1779472558224
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "call_OQbTKGWRmlXXSjWq742GmZAi|fc_0ebca6958c28dd2a016a1098ac45808198bae22968b041dbf4",
+    "path": "tests/test_dashboard_eval_tab.py",
+    "timestamp": 1779472574427
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "call_Rj0CS6QArBQ7Y8usCu1j7jvB|fc_0ebca6958c28dd2a016a1098c094c8819886553c97531e0e13",
+    "command": "",
+    "exitCode": 0,
+    "outputSnippet": "gsd_exec[89f723b8-6077-40ec-8b6d-41b3619918c8] runtime=bash exit=1 duration=3653ms\n  stdout: 0B → C:\\Users\\smati\\VS Code Projects\\pfizer-externship\\.gsd\\exec\\89f723b8-6077-40ec-8b6d-41b3619918c8.stdout\n  stderr: 104B → C:\\Users\\smati\\VS Code Projects\\pfizer-externship\\.gsd\\exec\\89f723b8-6077-40ec-8b6d-41b3619918c8.stderr\n--- digest ---\n[no stdout — tail of stderr]\n<3>WSL (9 - Relay) ERROR: CreateProcessCommon:800: execvpe(/bin/bash) failed: No such file or directory",
+    "timestamp": 1779472580460
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "call_me7a2k4km9TkRxA7PVnmAfm3|fc_0ebca6958c28dd2a016a1098c6386c81989055f1d437d65e2d",
+    "command": "venv/Scripts/python.exe -m pytest tests/test_dashboard_eval_tab.py -q",
+    "exitCode": 1,
+    "outputSnippet": ".....F\r\n================================== FAILURES ===================================\r\n_____________ test_render_eval_tab_compare_two_runs_shows_deltas ______________\r\ntests\\test_dashboard_eval_tab.py:125: in test_render_eval_tab_compare_two_runs_shows_deltas\r\n    assert f1_row[\"delta\"] == 0.1\r\nE   assert 0.09999999999999998 == 0.1\r\n=========================== short test summary info ===========================\r\nFAILED tests/test_dashboard_eval_tab.py::test_render_eval_tab_compare_two_runs_sho",
+    "timestamp": 1779472585936
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "call_KD4Wh1PdOZAHeDvRZLn4nlGL|fc_0ebca6958c28dd2a016a1098cf3db08198b937b19c17a30a71",
+    "path": "tests/test_dashboard_eval_tab.py",
+    "timestamp": 1779472595382
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "call_2xrxllcH0ql8Bc6YkYxBT1Q0|fc_0ebca6958c28dd2a016a1098d3e2e081988fa6b9dbb7e98dd1",
+    "path": "tests/test_dashboard_eval_tab.py",
+    "timestamp": 1779472599799
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "call_3H0li3GJ4puc0H4F3vJZGOdT|fc_0ebca6958c28dd2a016a1098d5f0ec81989d3992a90f5283e1",
+    "command": "venv/Scripts/python.exe -m pytest tests/test_dashboard_eval_tab.py -q",
+    "exitCode": 0,
+    "outputSnippet": ".......                                                                  [100%]\r\n7 passed in 4.38s\r\n",
+    "timestamp": 1779472601605
+  }
+]

@@ -15,7 +15,7 @@ from __future__ import annotations
 import streamlit as st
 
 from src.config import get_settings
-from src.dashboard import render_chat_tab, render_compliance_tab
+from src.dashboard import render_chat_tab, render_compliance_tab, render_eval_tab
 from src.tracing import verify_langfuse_connection
 
 # Page config must be the first Streamlit call
@@ -53,7 +53,4 @@ with tab_chat:
 
 with tab_eval:
     st.header("Evaluation")
-    st.info(
-        "Phase 4 will surface extraction F1, retrieval recall@5, RAGAS faithfulness, "
-        "latency p50/p95, and cost-per-query metrics here."
-    )
+    render_eval_tab(get_settings().db_path)

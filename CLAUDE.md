@@ -207,6 +207,16 @@ No project skills found. Add skills to any of: `.claude/skills/`, `.agents/skill
 <!-- GSD:skills-end -->
 
 <!-- GSD:workflow-start source:GSD defaults -->
+## Windows verification rule (hard)
+
+This repo runs on Windows and may not have `/bin/bash` available.
+
+**Hard rule:** Never run verification via `gsd_exec` with `runtime=bash` and never invoke `/bin/bash`.
+
+**Use instead:**
+- Preferred for GSD verification evidence: `gsd_exec` `runtime=node` spawning `venv\\Scripts\\python.exe -m pytest ...`
+- Acceptable: `venv/Scripts/python.exe -m pytest ...` (no leading `./`)
+
 ## GSD Workflow Enforcement
 
 Before using Edit, Write, or other file-changing tools, start work through a GSD command so planning artifacts and execution context stay in sync.

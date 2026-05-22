@@ -371,6 +371,50 @@
       "label": "T02: Add offline tests proving extraction eval metrics, normalization, and persistence via eval repository",
       "type": "task",
       "confidence": "EXTRACTED"
+    },
+    {
+      "id": "slice:M003:S03",
+      "label": "S03: Retrieval and RAG evaluation metrics (recall, RAGAS, citation accuracy, latency and cost)",
+      "type": "slice",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M003/slices/S03/S03-PLAN.md"
+    },
+    {
+      "id": "task:M003:S03:T01",
+      "label": "T01: Add provider-free retrieval eval metrics (recall@k and page-level citation accuracy) with gold query/target support",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "task:M003:S03:T02",
+      "label": "T02: Extend eval repository with retrieval gold + index helpers and implement an eval runner to persist S03 metrics into eval_runs/eval_metrics",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "task:M003:S03:T03",
+      "label": "T03: Optional hooks for latency/cost and RAGAS metric placeholders that degrade gracefully (no secrets, no crashes)",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "slice:M003:S04",
+      "label": "S04: Streamlit Eval tab: run history, comparisons, empty states",
+      "type": "slice",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M003/slices/S04/S04-PLAN.md"
+    },
+    {
+      "id": "task:M003:S04:T01",
+      "label": "T01: Add dashboard eval adapter + tab renderer (run history, metric view, empty states)",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "task:M003:S04:T02",
+      "label": "T02: Implement run comparison UI and comparison-focused tests",
+      "type": "task",
+      "confidence": "EXTRACTED"
     }
   ],
   "edges": [
@@ -703,7 +747,49 @@
       "to": "task:M003:S02:T02",
       "type": "contains",
       "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M003",
+      "to": "slice:M003:S03",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M003:S03",
+      "to": "task:M003:S03:T01",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M003:S03",
+      "to": "task:M003:S03:T02",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M003:S03",
+      "to": "task:M003:S03:T03",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M003",
+      "to": "slice:M003:S04",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M003:S04",
+      "to": "task:M003:S04:T01",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M003:S04",
+      "to": "task:M003:S04:T02",
+      "type": "contains",
+      "confidence": "EXTRACTED"
     }
   ],
-  "builtAt": "2026-05-21T18:57:39.687Z"
+  "builtAt": "2026-05-22T18:12:26.974Z"
 }

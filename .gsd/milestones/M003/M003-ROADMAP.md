@@ -16,13 +16,13 @@
 - [x] **S02: S02** `risk:Medium: metric definitions and normalization rules can be contentious; must be deterministic and testable to be credible.` `depends:[]`
   > After this: Given gold extraction labels and predicted extraction rows in SQLite, compute per-field precision, recall, and F1 and persist an extraction eval run with summary metrics.
 
-- [ ] **S03: S03** `risk:High: touches multiple systems (retrieval index, RAG generation outputs, optional Langfuse); must degrade gracefully when data is missing.` `depends:[]`
+- [x] **S03: S03** `risk:High: touches multiple systems (retrieval index, RAG generation outputs, optional Langfuse); must degrade gracefully when data is missing.` `depends:[]`
   > After this: Compute retrieval recall at 5 and 10 and basic citation accuracy against a gold query set; when optional trace metadata exists, attach latency and cost summaries; persist a retrieval or RAG eval run to SQLite.
 
-- [ ] **S04: Streamlit Eval tab: run history, comparisons, empty states** `[sketch]` `risk:Medium: UI must avoid heavy computation on rerun and must not crash when prerequisites are missing.` `depends:[S01,S02,S03]`
+- [x] **S04: S04** `risk:Medium: UI must avoid heavy computation on rerun and must not crash when prerequisites are missing.` `depends:[]`
   > After this: Open Streamlit and see a populated Eval tab listing eval runs and metrics, with the ability to select and compare two runs and clear guidance for missing gold and evals.
 
-- [ ] **S05: Dashboard polish and presentation-ready styling** `[sketch]` `risk:Low-medium: mostly UX work but can accidentally regress existing tabs if done carelessly.` `depends:[S04]`
+- [ ] **S05: S05** `risk:Low-medium: mostly UX work but can accidentally regress existing tabs if done carelessly.` `depends:[]`
   > After this: Dashboard layout, typography, and table presentation feel demo-ready; Eval tab is readable and consistent with Compliance and Chat sections.
 
 ## Boundary Map
