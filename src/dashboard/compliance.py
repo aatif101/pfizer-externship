@@ -11,6 +11,7 @@ from typing import Any
 
 import streamlit as st
 
+from src.dashboard.ui import render_empty_state, render_section_divider, render_tab_header
 from src.db.queries import get_page_image
 from src.extraction.repository import list_compliance_records
 
@@ -89,20 +90,32 @@ def render_compliance_tab(db_path: str | None = None) -> None:
     resolved_db_path = _resolve_db_path(db_path)
     rows = format_compliance_rows(load_compliance_rows(resolved_db_path))
 
+    render_tab_header(
+        "Compliance",
+        "Review extracted compliance status and risk signals with source evidence.",
+    )
+
     if not rows:
-        st.info(
-            "No compliance records are available yet. Ingest documents and run extraction "
-            "to populate this SQLite-backed dashboard."
+        render_empty_state(
+            "No compliance records are available yet.",
+            caption=(
+                "Ingest documents and run extraction to populate this SQLite-backed dashboard. "
+                f"Looking for persisted records in `{resolved_db_path}`."
+            ),
         )
-        st.caption(f"Looking for persisted records in `{resolved_db_path}`.")
         return
 
     _render_summary_metrics(rows)
+
+    render_section_divider()
+    st.subheader("Compliance records")
     st.dataframe(
         _table_rows(rows),
         hide_index=True,
         use_container_width=True,
     )
+
+    render_section_divider()
     _render_source_detail(resolved_db_path, rows)
 
 

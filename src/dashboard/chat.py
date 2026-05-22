@@ -12,6 +12,7 @@ from typing import Any
 
 import streamlit as st
 
+from src.dashboard.ui import render_tab_header
 from src.rag import (
     AnswerCitation,
     AnswerConfigurationError,
@@ -66,7 +67,12 @@ def render_chat_tab(
     resolved_db_path = _resolve_db_path(db_path)
     active_answer_fn = answer_fn or default_answer_question
 
-    st.caption("Ask a question about indexed supplier documents. Answers are grounded in cited source pages.")
+    render_tab_header(
+        "Chat",
+        "Ask grounded questions over the indexed supplier corpus. Answers cite source pages.",
+    )
+    st.caption("Tips: mention a vendor, document type, or field name to improve retrieval.")
+
     for message in st.session_state[_CHAT_MESSAGES_KEY]:
         _render_message(message)
 

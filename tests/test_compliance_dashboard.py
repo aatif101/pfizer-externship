@@ -195,11 +195,11 @@ def test_render_compliance_tab_empty_state_does_not_crash(monkeypatch) -> None:
 
     render_compliance_tab("empty-dashboard.db")
 
-    assert fake_st.info_messages == [
-        "No compliance records are available yet. Ingest documents and run extraction "
-        "to populate this SQLite-backed dashboard."
+    assert fake_st.info_messages == ["No compliance records are available yet."]
+    assert fake_st.caption_messages == [
+        "Ingest documents and run extraction to populate this SQLite-backed dashboard. "
+        "Looking for persisted records in `empty-dashboard.db`."
     ]
-    assert fake_st.caption_messages == ["Looking for persisted records in `empty-dashboard.db`."]
     assert fake_st.dataframes == []
 
 
