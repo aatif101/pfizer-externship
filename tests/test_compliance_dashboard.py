@@ -191,6 +191,7 @@ def test_format_compliance_rows_handles_null_source_evidence_without_exceptions(
 def test_render_compliance_tab_empty_state_does_not_crash(monkeypatch) -> None:
     fake_st = FakeStreamlit()
     monkeypatch.setattr("src.dashboard.compliance.st", fake_st)
+    monkeypatch.setattr("src.dashboard.compliance.render_empty_state", fake_st.render_empty_state)
     monkeypatch.setattr("src.dashboard.compliance.load_compliance_rows", lambda db_path: [])
 
     render_compliance_tab("empty-dashboard.db")
@@ -278,12 +279,17 @@ class FakeStreamlit:
     def caption(self, message: str) -> None:
         self.caption_messages.append(message)
 
+    def render_empty_state(self, message: str, *, caption: str | None = None) -> None:
+        self.info_messages.append(message)
+        if caption:
+            self.caption_messages.append(caption)
+
     def columns(self, count: int) -> list[FakeMetricColumn]:
         return [FakeMetricColumn(self) for _ in range(count)]
 
-    def dataframe(self, rows, *, hide_index: bool, use_container_width: bool) -> None:
+    def dataframe(self, rows, *, hide_index: bool, width: str) -> None:
         assert hide_index is True
-        assert use_container_width is True
+        assert width == "stretch"
         self.dataframes.append(rows)
 
     def subheader(self, message: str) -> None:

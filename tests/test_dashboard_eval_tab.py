@@ -192,9 +192,9 @@ class FakeStreamlit:
     def subheader(self, message: str) -> None:
         self.subheaders.append(message)
 
-    def dataframe(self, rows, *, hide_index: bool, use_container_width: bool) -> None:
+    def dataframe(self, rows, *, hide_index: bool, width: str) -> None:
         assert hide_index is True
-        assert use_container_width is True
+        assert width == "stretch"
         self.dataframes.append(rows)
 
     def selectbox(self, label: str, *, options: list[str]) -> str:

@@ -112,7 +112,7 @@ def render_compliance_tab(db_path: str | None = None) -> None:
     st.dataframe(
         _table_rows(rows),
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
     )
 
     render_section_divider()

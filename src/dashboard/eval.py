@@ -96,7 +96,7 @@ def render_eval_tab(db_path: str | None = None) -> None:
     st.dataframe(
         _run_table_rows(runs),
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
     )
 
     run_by_id = {run.run_id: run for run in runs}
@@ -157,7 +157,7 @@ def render_eval_tab(db_path: str | None = None) -> None:
                 include_scoped=include_scoped,
             ),
             hide_index=True,
-            use_container_width=True,
+            width="stretch",
         )
 
     if primary_run and primary_run.error_reason:
@@ -203,7 +203,7 @@ def _render_metrics_section(primary: list[EvalMetricRow], compare: list[EvalMetr
     st.dataframe(
         _format_global_metrics(primary_global, compare_global),
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
     )
 
     if primary_scoped:
@@ -211,7 +211,7 @@ def _render_metrics_section(primary: list[EvalMetricRow], compare: list[EvalMetr
             st.dataframe(
                 _format_scoped_metrics(primary_scoped, compare_scoped),
                 hide_index=True,
-                use_container_width=True,
+                width="stretch",
             )
 
 
@@ -299,7 +299,10 @@ def _build_comparison_rows(
     primary_lookup = {metric_key(metric): metric.metric_value for metric in primary}
     compare_lookup = {metric_key(metric): metric.metric_value for metric in compare}
 
-    all_keys = sorted(set(primary_lookup) | set(compare_lookup))
+    all_keys = sorted(
+        set(primary_lookup) | set(compare_lookup),
+        key=lambda k: (k[0], k[1] or "", k[2] or ""),
+    )
 
     rows: list[dict[str, Any]] = []
     for key in all_keys:
