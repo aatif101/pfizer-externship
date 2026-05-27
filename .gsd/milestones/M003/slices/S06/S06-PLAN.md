@@ -36,7 +36,7 @@ Consumes existing M003 eval_run/eval_metric contracts, gold retrieval fixtures, 
   - Files: `src/db/schema.py`, `src/eval/repository.py`, `tests/test_eval_db_schema.py`, `tests/test_eval_repository.py`
   - Verify: venv/Scripts/python.exe -m pytest -q tests/test_eval_db_schema.py tests/test_eval_repository.py
 
-- [ ] **T02: Implement pure optional metric aggregation** `est:1h`
+- [x] **T02: Implement pure optional metric aggregation** `est:1h`
   ---
   estimated_steps: 6
   estimated_files: 2
@@ -47,7 +47,7 @@ Consumes existing M003 eval_run/eval_metric contracts, gold retrieval fixtures, 
   - Files: `src/eval/operational_metrics.py`, `tests/test_retrieval_eval_optional_metrics.py`
   - Verify: venv/Scripts/python.exe -m pytest -q tests/test_retrieval_eval_optional_metrics.py
 
-- [ ] **T03: Wire optional RAG metrics into retrieval eval runs** `est:2h`
+- [x] **T03: Wire optional RAG metrics into retrieval eval runs** `est:2h`
   ---
   estimated_steps: 8
   estimated_files: 3
@@ -58,7 +58,7 @@ Consumes existing M003 eval_run/eval_metric contracts, gold retrieval fixtures, 
   - Files: `src/eval/retrieval_eval_runner.py`, `tests/test_retrieval_eval_optional_metrics.py`, `tests/test_retrieval_eval_runner.py`
   - Verify: venv/Scripts/python.exe -m pytest -q tests/test_retrieval_eval_optional_metrics.py tests/test_retrieval_eval_runner.py
 
-- [ ] **T04: Keep Eval tab readable and credential-free for new metrics** `est:1h`
+- [x] **T04: Keep Eval tab readable and credential-free for new metrics** `est:1h`
   ---
   estimated_steps: 5
   estimated_files: 2
@@ -69,7 +69,7 @@ Consumes existing M003 eval_run/eval_metric contracts, gold retrieval fixtures, 
   - Files: `src/dashboard/eval.py`, `tests/test_dashboard_eval_tab.py`
   - Verify: venv/Scripts/python.exe -m pytest -q tests/test_dashboard_eval_tab.py
 
-- [ ] **T05: Run integrated R007 regression proof** `est:30m`
+- [x] **T05: Run integrated R007 regression proof** `est:30m`
   ---
   estimated_steps: 4
   estimated_files: 0

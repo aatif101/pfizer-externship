@@ -1,7 +1,7 @@
 # Codebase Map
 
-Generated: 2026-05-27T20:27:07Z | Files: 88 | Described: 0/88
-<!-- gsd:codebase-meta {"generatedAt":"2026-05-27T20:27:07Z","fingerprint":"49fd8373a380b708d55068b66ca577a61cd5645c","fileCount":88,"truncated":false} -->
+Generated: 2026-05-27T20:41:32Z | Files: 89 | Described: 0/89
+<!-- gsd:codebase-meta {"generatedAt":"2026-05-27T20:41:32Z","fingerprint":"41c1116c6ed3575056d4e401e18da63bbcd1b92a","fileCount":89,"truncated":false} -->
 
 ### (root)/
 - `.env.example`
@@ -40,6 +40,7 @@ Generated: 2026-05-27T20:27:07Z | Files: 88 | Described: 0/88
 ### src/eval/
 - `src/eval/__init__.py`
 - `src/eval/extraction_metrics.py`
+- `src/eval/operational_metrics.py`
 - `src/eval/repository.py`
 - `src/eval/retrieval_eval_runner.py`
 - `src/eval/retrieval_metrics.py`
