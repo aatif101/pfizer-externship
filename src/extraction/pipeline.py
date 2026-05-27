@@ -13,14 +13,35 @@ from datetime import date, datetime, timezone
 from typing import Any
 from uuid import uuid4
 
+try:
+    from langfuse.decorators import langfuse_context
+except Exception:  # pragma: no cover - exercised only when optional Langfuse is absent/broken
+    langfuse_context = None  # type: ignore[assignment]
+
 from src.db.queries import DocumentPage, LoadedDocumentPages, load_document_pages
 from src.extraction.models import ExtractedField, ReviewState, SDFExtractionRecord, SDFFieldName, SourceEvidence
 from src.extraction.providers import ProviderExtractionResult, ProviderFieldPayload, SDFExtractionProvider
 from src.extraction.repository import upsert_extraction_record
 from src.extraction.risk import compute_record_risk
+from src.tracing import observe, safe_update_current_trace
 
 
 LOW_CONFIDENCE_REVIEW_THRESHOLD = 0.75
+_EXTRACTION_TRACE_ALLOWED_KEYS = frozenset(
+    {
+        "boundary",
+        "status",
+        "run_id",
+        "doc_id",
+        "trace_id",
+        "provider_name",
+        "page_count",
+        "review_state",
+        "needs_review",
+        "reason_code",
+        "error_class",
+    }
+)
 
 
 class ExtractionPipelineError(RuntimeError):
@@ -73,6 +94,7 @@ class ExtractionPipelineResult:
     diagnostics: ExtractionDiagnostics
 
 
+@observe(name="sdf_extract_document")
 def extract_document(
     db_path: str,
     doc_id: str,
@@ -90,48 +112,94 @@ def extract_document(
     """
 
     effective_run_id = run_id or f"sdf-{uuid4().hex}"
-    loaded = load_document_pages(db_path, doc_id, include_image_bytes=False)
-    if loaded is None:
-        raise DocumentNotFoundError("Document metadata was not found for extraction.", run_id=effective_run_id, doc_id=doc_id)
-    _validate_pages_for_extraction(loaded, run_id=effective_run_id)
+    try:
+        loaded = load_document_pages(db_path, doc_id, include_image_bytes=False)
+        if loaded is None:
+            raise DocumentNotFoundError("Document metadata was not found for extraction.", run_id=effective_run_id, doc_id=doc_id)
+        _validate_pages_for_extraction(loaded, run_id=effective_run_id)
 
-    provider_result = provider.extract_fields(
-        document=loaded.document,
-        pages=loaded.pages,
-        run_id=effective_run_id,
-    )
-    fields = _normalize_fields(
-        provider_result,
-        pages=loaded.pages,
-        low_confidence_threshold=low_confidence_threshold,
+        provider_result = provider.extract_fields(
+            document=loaded.document,
+            pages=loaded.pages,
+            run_id=effective_run_id,
+        )
+        fields = _normalize_fields(
+            provider_result,
+            pages=loaded.pages,
+            low_confidence_threshold=low_confidence_threshold,
+        )
+
+        record = SDFExtractionRecord(
+            doc_id=loaded.document.doc_id,
+            filename=loaded.document.filename,
+            fields=fields,
+            trace_id=provider_result.trace_id,
+            run_id=effective_run_id,
+            extracted_at=datetime.now(timezone.utc),
+        )
+        risk = compute_record_risk(record, today=today or date.today())
+        record.risk_level = risk.risk_level
+        record.risk_reason = risk.risk_reason
+        record.compliance_status = risk.compliance_status
+        record.age_days = risk.age_days
+
+        upsert_extraction_record(db_path, record)
+
+        diagnostics = ExtractionDiagnostics(
+            run_id=effective_run_id,
+            doc_id=loaded.document.doc_id,
+            trace_id=provider_result.trace_id,
+            provider_name=provider_result.provider_name,
+            page_count=len(loaded.pages),
+            review_state=record.dashboard_review_state,
+            needs_review=record.dashboard_needs_review,
+        )
+        _update_extraction_trace_metadata(
+            {
+                "boundary": "extraction",
+                "status": "completed",
+                "run_id": diagnostics.run_id,
+                "doc_id": diagnostics.doc_id,
+                "trace_id": diagnostics.trace_id,
+                "provider_name": diagnostics.provider_name,
+                "page_count": diagnostics.page_count,
+                "review_state": diagnostics.review_state,
+                "needs_review": diagnostics.needs_review,
+            }
+        )
+        return ExtractionPipelineResult(record=record, diagnostics=diagnostics)
+    except Exception as exc:
+        _update_extraction_trace_metadata(_error_trace_metadata(exc, run_id=effective_run_id, doc_id=doc_id))
+        raise
+
+
+def _update_extraction_trace_metadata(metadata: dict[str, Any]) -> None:
+    """Attach whitelisted extraction diagnostics without affecting pipeline behavior.
+
+    The allowlist intentionally excludes exception messages, provider payloads,
+    field values, normalized values, verbatim spans, prompts, raw responses, page
+    text, file paths, image bytes, Docling JSON, and secrets.
+    """
+
+    safe_update_current_trace(
+        tags=["extraction"],
+        metadata=metadata,
+        allowed_metadata_keys=_EXTRACTION_TRACE_ALLOWED_KEYS,
+        context=langfuse_context,
     )
 
-    record = SDFExtractionRecord(
-        doc_id=loaded.document.doc_id,
-        filename=loaded.document.filename,
-        fields=fields,
-        trace_id=provider_result.trace_id,
-        run_id=effective_run_id,
-        extracted_at=datetime.now(timezone.utc),
-    )
-    risk = compute_record_risk(record, today=today or date.today())
-    record.risk_level = risk.risk_level
-    record.risk_reason = risk.risk_reason
-    record.compliance_status = risk.compliance_status
-    record.age_days = risk.age_days
 
-    upsert_extraction_record(db_path, record)
-
-    diagnostics = ExtractionDiagnostics(
-        run_id=effective_run_id,
-        doc_id=loaded.document.doc_id,
-        trace_id=provider_result.trace_id,
-        provider_name=provider_result.provider_name,
-        page_count=len(loaded.pages),
-        review_state=record.dashboard_review_state,
-        needs_review=record.dashboard_needs_review,
-    )
-    return ExtractionPipelineResult(record=record, diagnostics=diagnostics)
+def _error_trace_metadata(exc: BaseException, *, run_id: str, doc_id: str) -> dict[str, Any]:
+    metadata: dict[str, Any] = {
+        "boundary": "extraction",
+        "status": "error",
+        "run_id": getattr(exc, "run_id", None) or run_id,
+        "doc_id": getattr(exc, "doc_id", None) or doc_id,
+        "error_class": exc.__class__.__name__,
+    }
+    if isinstance(exc, ExtractionPipelineError):
+        metadata["reason_code"] = exc.reason_code
+    return metadata
 
 
 def _validate_pages_for_extraction(loaded: LoadedDocumentPages, *, run_id: str) -> None:

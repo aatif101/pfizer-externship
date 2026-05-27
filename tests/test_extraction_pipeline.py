@@ -5,12 +5,14 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import date
 
+from typing import Any
+
 import pytest
 
 from src.db.queries import DocumentMetadata, DocumentPage, insert_document, insert_page, load_document_pages
 from src.db.schema import init_db
 from src.extraction.models import ReviewState, SDFFieldName
-from src.extraction.pipeline import NoPagesError, NoPageTextError, extract_document
+from src.extraction.pipeline import DocumentNotFoundError, NoPagesError, NoPageTextError, extract_document
 from src.extraction.providers import ProviderExtractionResult, ProviderFieldPayload, ProviderSourceEvidence
 from src.extraction.repository import get_extraction_record, list_compliance_records
 
@@ -44,6 +46,45 @@ class FakeProvider:
         assert [page.page_num for page in pages] == [0]
         self.seen_run_id = run_id
         return ProviderExtractionResult(fields=self.fields, trace_id=self.trace_id, provider_name=self.provider_name)
+
+
+@dataclass
+class FakeTraceContext:
+    updates: list[dict[str, Any]]
+    raise_on_update: bool = False
+
+    def update_current_trace(self, **kwargs: Any) -> None:
+        if self.raise_on_update:
+            raise RuntimeError("trace backend unavailable with SECRET_TRACE_TOKEN_SHOULD_NOT_APPEAR")
+        self.updates.append(kwargs)
+
+
+class ExplodingProvider:
+    provider_name = "exploding-provider"
+    seen_run_id: str | None = None
+
+    def extract_fields(
+        self,
+        *,
+        document: DocumentMetadata,
+        pages: tuple[DocumentPage, ...],
+        run_id: str,
+    ) -> ProviderExtractionResult:
+        self.seen_run_id = run_id
+        raise RuntimeError("SECRET_PROVIDER_PAYLOAD_SHOULD_NOT_APPEAR raw response text")
+
+
+class MalformedProvider:
+    provider_name = "malformed-provider"
+
+    def extract_fields(
+        self,
+        *,
+        document: DocumentMetadata,
+        pages: tuple[DocumentPage, ...],
+        run_id: str,
+    ) -> object:
+        return object()
 
 
 def provider_field(
@@ -135,6 +176,31 @@ def extraction_count(db_path: str) -> int:
         conn.close()
 
 
+def trace_metadata(fake_context: FakeTraceContext) -> list[dict[str, Any]]:
+    return [update.get("metadata", {}) for update in fake_context.updates]
+
+
+def assert_extraction_trace_metadata_is_safe(metadata: dict[str, Any]) -> None:
+    forbidden_fragments = {
+        "SECRET_PROVIDER_PAYLOAD_SHOULD_NOT_APPEAR",
+        "SECRET_TRACE_TOKEN_SHOULD_NOT_APPEAR",
+        "raw response text",
+        "Document metadata was not found",
+        "Provider did not return",
+        "Acme Pharma Ltd.",
+        "2027-01-31",
+        "Supplier Declaration Form",
+        "verbatim_span",
+        "raw_value",
+        "normalized_value",
+        "file_path",
+        "supplier-sdf.pdf",
+    }
+    metadata_repr = repr(metadata)
+    for fragment in forbidden_fragments:
+        assert fragment not in metadata_repr
+
+
 def test_load_document_pages_preserves_ordered_zero_indexed_pages(tmp_db_path: str) -> None:
     prepare_doc(tmp_db_path)
 
@@ -188,6 +254,167 @@ def test_extract_document_fake_provider_persists_fields_compliance_risk_and_run_
     assert compliance["trace_id"] == "trace-fake-001"
     assert compliance["source_page"] == 0
     assert compliance["source_verbatim_span"] == "2027-01-31"
+
+
+def test_extract_document_success_updates_safe_trace_metadata(monkeypatch: Any, tmp_db_path: str) -> None:
+    from src.extraction import pipeline
+
+    prepare_doc(tmp_db_path)
+    fake_context = FakeTraceContext(updates=[])
+    monkeypatch.setattr(pipeline, "langfuse_context", fake_context)
+
+    result = extract_document(
+        tmp_db_path,
+        "doc-001",
+        FakeProvider(fields=all_fields()),
+        today=date(2026, 1, 6),
+        run_id="run-trace-success",
+    )
+
+    assert result.diagnostics.review_state == "pending"
+    assert len(fake_context.updates) == 1
+    assert fake_context.updates[0]["tags"] == ["extraction"]
+    metadata = trace_metadata(fake_context)[0]
+    assert metadata == {
+        "boundary": "extraction",
+        "status": "completed",
+        "run_id": "run-trace-success",
+        "doc_id": "doc-001",
+        "trace_id": "trace-fake-001",
+        "provider_name": "fake-provider",
+        "page_count": 1,
+        "review_state": "pending",
+        "needs_review": False,
+    }
+    assert_extraction_trace_metadata_is_safe(metadata)
+
+
+def test_extract_document_missing_document_updates_sanitized_error_trace(monkeypatch: Any, tmp_db_path: str) -> None:
+    from src.extraction import pipeline
+
+    init_db(tmp_db_path)
+    fake_context = FakeTraceContext(updates=[])
+    monkeypatch.setattr(pipeline, "langfuse_context", fake_context)
+
+    with pytest.raises(DocumentNotFoundError):
+        extract_document(tmp_db_path, "missing-doc", FakeProvider(fields=all_fields()), run_id="run-missing-doc")
+
+    metadata = trace_metadata(fake_context)[0]
+    assert metadata == {
+        "boundary": "extraction",
+        "status": "error",
+        "run_id": "run-missing-doc",
+        "doc_id": "missing-doc",
+        "error_class": "DocumentNotFoundError",
+        "reason_code": "document_not_found",
+    }
+    assert_extraction_trace_metadata_is_safe(metadata)
+
+
+def test_extract_document_page_failures_update_sanitized_error_trace(monkeypatch: Any, tmp_db_path: str) -> None:
+    from src.extraction import pipeline
+
+    fake_context = FakeTraceContext(updates=[])
+    monkeypatch.setattr(pipeline, "langfuse_context", fake_context)
+    provider = FakeProvider(fields=all_fields())
+
+    prepare_doc(tmp_db_path, include_page=False)
+    with pytest.raises(NoPagesError):
+        extract_document(tmp_db_path, "doc-001", provider, run_id="run-no-pages-trace")
+
+    assert trace_metadata(fake_context)[0] == {
+        "boundary": "extraction",
+        "status": "error",
+        "run_id": "run-no-pages-trace",
+        "doc_id": "doc-001",
+        "error_class": "NoPagesError",
+        "reason_code": "no_pages",
+    }
+    assert provider.seen_run_id is None
+
+    fake_context.updates.clear()
+    prepare_doc(tmp_db_path, page_text="   ")
+    with pytest.raises(NoPageTextError):
+        extract_document(tmp_db_path, "doc-001", provider, run_id="run-no-text-trace")
+
+    assert trace_metadata(fake_context)[0] == {
+        "boundary": "extraction",
+        "status": "error",
+        "run_id": "run-no-text-trace",
+        "doc_id": "doc-001",
+        "error_class": "NoPageTextError",
+        "reason_code": "no_page_text",
+    }
+    for metadata in trace_metadata(fake_context):
+        assert_extraction_trace_metadata_is_safe(metadata)
+
+
+def test_extract_document_provider_exception_trace_metadata_omits_secret_message(monkeypatch: Any, tmp_db_path: str) -> None:
+    from src.extraction import pipeline
+
+    prepare_doc(tmp_db_path)
+    fake_context = FakeTraceContext(updates=[])
+    monkeypatch.setattr(pipeline, "langfuse_context", fake_context)
+    provider = ExplodingProvider()
+
+    with pytest.raises(RuntimeError, match="SECRET_PROVIDER_PAYLOAD_SHOULD_NOT_APPEAR"):
+        extract_document(tmp_db_path, "doc-001", provider, run_id="run-provider-error")
+
+    assert provider.seen_run_id == "run-provider-error"
+    metadata = trace_metadata(fake_context)[0]
+    assert metadata == {
+        "boundary": "extraction",
+        "status": "error",
+        "run_id": "run-provider-error",
+        "doc_id": "doc-001",
+        "error_class": "RuntimeError",
+    }
+    assert_extraction_trace_metadata_is_safe(metadata)
+
+
+def test_extract_document_validation_failure_trace_metadata_is_sanitized(monkeypatch: Any, tmp_db_path: str) -> None:
+    from src.extraction import pipeline
+
+    prepare_doc(tmp_db_path)
+    fake_context = FakeTraceContext(updates=[])
+    monkeypatch.setattr(pipeline, "langfuse_context", fake_context)
+
+    with pytest.raises(AttributeError):
+        extract_document(tmp_db_path, "doc-001", MalformedProvider(), run_id="run-malformed-provider")  # type: ignore[arg-type]
+
+    metadata = trace_metadata(fake_context)[0]
+    assert metadata == {
+        "boundary": "extraction",
+        "status": "error",
+        "run_id": "run-malformed-provider",
+        "doc_id": "doc-001",
+        "error_class": "AttributeError",
+    }
+    assert_extraction_trace_metadata_is_safe(metadata)
+
+
+def test_extract_document_trace_context_failure_does_not_change_success_or_error_behavior(monkeypatch: Any, tmp_db_path: str) -> None:
+    from src.extraction import pipeline
+
+    prepare_doc(tmp_db_path)
+    failing_context = FakeTraceContext(updates=[], raise_on_update=True)
+    monkeypatch.setattr(pipeline, "langfuse_context", failing_context)
+
+    result = extract_document(
+        tmp_db_path,
+        "doc-001",
+        FakeProvider(fields=all_fields()),
+        today=date(2026, 1, 6),
+        run_id="run-trace-failure-success",
+    )
+
+    assert result.diagnostics.run_id == "run-trace-failure-success"
+    assert result.record.doc_id == "doc-001"
+    assert failing_context.updates == []
+
+    with pytest.raises(RuntimeError, match="SECRET_PROVIDER_PAYLOAD_SHOULD_NOT_APPEAR"):
+        extract_document(tmp_db_path, "doc-001", ExplodingProvider(), run_id="run-trace-failure-error")
+    assert failing_context.updates == []
 
 
 def test_missing_provider_field_becomes_abstention_and_needs_review(tmp_db_path: str) -> None:
