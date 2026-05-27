@@ -1,7 +1,7 @@
 # Codebase Map
 
-Generated: 2026-05-27T21:01:41Z | Files: 89 | Described: 0/89
-<!-- gsd:codebase-meta {"generatedAt":"2026-05-27T21:01:41Z","fingerprint":"41c1116c6ed3575056d4e401e18da63bbcd1b92a","fileCount":89,"truncated":false} -->
+Generated: 2026-05-27T21:52:00Z | Files: 91 | Described: 0/91
+<!-- gsd:codebase-meta {"generatedAt":"2026-05-27T21:52:00Z","fingerprint":"8ca4219f2f808acdebaaa1756a0893b04d7776b8","fileCount":91,"truncated":false} -->
 
 ### (root)/
 - `.env.example`
@@ -18,6 +18,7 @@ Generated: 2026-05-27T21:01:41Z | Files: 89 | Described: 0/89
 
 ### scripts/
 - `scripts/seed_and_verify.py`
+- `scripts/seed_s08_uat_eval_db.py`
 
 ### src/
 - `src/__init__.py`
@@ -80,7 +81,7 @@ Generated: 2026-05-27T21:01:41Z | Files: 89 | Described: 0/89
 - `src/retrieval/retriever.py`
 
 ### tests/
-- *(34 files: 34 .py)*
+- *(35 files: 35 .py)*
 
 ### tests/fixtures/
 - `tests/fixtures/sample.pdf`

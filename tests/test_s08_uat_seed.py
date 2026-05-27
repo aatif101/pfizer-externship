@@ -31,9 +31,14 @@ FORBIDDEN_RAW_CONTENT_TERMS = {
 }
 
 
-def run_seed_helper(db_path: Path) -> subprocess.CompletedProcess[str]:
+def run_seed_helper(db_path: Path, *, use_flag: bool = False) -> subprocess.CompletedProcess[str]:
+    command = [sys.executable, "scripts/seed_s08_uat_eval_db.py"]
+    if use_flag:
+        command.extend(["--db-path", str(db_path)])
+    else:
+        command.append(str(db_path))
     return subprocess.run(
-        [sys.executable, "scripts/seed_s08_uat_eval_db.py", str(db_path)],
+        command,
         check=False,
         capture_output=True,
         text=True,
@@ -85,6 +90,17 @@ def test_s08_seed_helper_creates_idempotent_synthetic_eval_history(tmp_path: Pat
             tuple(sorted(EXPECTED_RUN_IDS)),
         ).fetchone()[0]
         assert metric_count == len(EXPECTED_RUN_IDS) * len(EXPECTED_METRICS)
+
+
+def test_s08_seed_helper_accepts_gsd_verification_db_path_flag(tmp_path: Path) -> None:
+    db_path = tmp_path / "s08-uat-eval-flag.db"
+
+    result = run_seed_helper(db_path, use_flag=True)
+
+    assert result.returncode == 0, result.stderr
+    assert db_path.exists()
+    seeded_run_ids = {run.run_id for run in list_eval_runs(str(db_path), limit=10)} & EXPECTED_RUN_IDS
+    assert seeded_run_ids == EXPECTED_RUN_IDS
 
 
 def test_s08_seed_helper_avoids_raw_content_columns_and_seeded_terms(tmp_path: Path) -> None:

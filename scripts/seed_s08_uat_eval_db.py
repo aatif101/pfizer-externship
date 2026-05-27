@@ -104,8 +104,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Seed a SQLite database with synthetic S08 Eval-tab UAT metric history."
     )
-    parser.add_argument("db_path", help="SQLite database path to create or update.")
-    return parser.parse_args(argv)
+    parser.add_argument("db_path", nargs="?", help="SQLite database path to create or update.")
+    parser.add_argument(
+        "--db-path",
+        dest="db_path_option",
+        help="SQLite database path to create or update. Kept for compatibility with GSD verification commands.",
+    )
+    args = parser.parse_args(argv)
+    if args.db_path and args.db_path_option:
+        parser.error("provide either positional db_path or --db-path, not both")
+    args.db_path = args.db_path_option or args.db_path
+    if not args.db_path:
+        parser.error("the following arguments are required: db_path or --db-path")
+    del args.db_path_option
+    return args
 
 
 def main(argv: list[str] | None = None) -> int:

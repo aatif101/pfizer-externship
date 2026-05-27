@@ -28,10 +28,10 @@
 - [x] **S06: Complete R007 metric coverage** `risk:High: touches metric semantics, optional RAGAS or trace data, and requirement R007 completeness.` `depends:[S05]`
   > After this: After this: Evaluation run history includes repeatable faithfulness or relevancy, citation, latency, and cost metrics where prerequisites are configured, with deterministic fallback behavior and tests when optional services are absent.
 
-- [ ] **S07: Implement R008 Langfuse tracing** `risk:High: cross-pipeline observability can leak sensitive data if sanitization boundaries are not enforced.` `depends:[S05]`
+- [x] **S07: Implement R008 Langfuse tracing** `risk:High: cross-pipeline observability can leak sensitive data if sanitization boundaries are not enforced.` `depends:[S05]`
   > After this: After this: Langfuse tracing spans cover ingestion, extraction, retrieval, generation, and evaluation without leaking secrets, and tests or fixture traces prove evaluation can surface latency and cost summaries.
 
-- [ ] **S08: Record Eval tab UAT evidence** `risk:Medium: depends on remediation data being present and requires runtime evidence rather than unit tests only.` `depends:[S06,S07]`
+- [x] **S08: Record Eval tab UAT evidence** `risk:Medium: depends on remediation data being present and requires runtime evidence rather than unit tests only.` `depends:[S06,S07]`
   > After this: After this: A recorded dashboard walkthrough proves the Eval tab shows at least one run and metrics, compares two runs, and displays actionable messaging for a fresh DB without crashing.
 
 ## Boundary Map

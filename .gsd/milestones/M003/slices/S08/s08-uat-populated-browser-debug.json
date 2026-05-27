@@ -1,0 +1,89 @@
+{
+  "url": "http://localhost:8608/",
+  "screenshotPath": ".gsd\\milestones\\M003\\slices\\S08\\s08-uat-populated-eval-tab.png",
+  "durationMs": 12296,
+  "assertions": [
+    {
+      "name": "navigation reached port 8608",
+      "result": "pass",
+      "detail": "http://localhost:8608/"
+    },
+    {
+      "name": "visible Evaluation heading",
+      "result": "pass",
+      "detail": true
+    },
+    {
+      "name": "rendered token Run history",
+      "result": "pass",
+      "detail": true
+    },
+    {
+      "name": "rendered token Metrics",
+      "result": "pass",
+      "detail": true
+    },
+    {
+      "name": "rendered token rag.faithfulness.avg",
+      "result": "pass",
+      "detail": true
+    },
+    {
+      "name": "rendered token retrieval.recall@5",
+      "result": "pass",
+      "detail": true
+    },
+    {
+      "name": "rendered token s08-uat-eval-run-a",
+      "result": "pass",
+      "detail": true
+    },
+    {
+      "name": "rendered token s08-uat-eval-run-b",
+      "result": "pass",
+      "detail": true
+    },
+    {
+      "name": "no traceback before compare",
+      "result": "pass",
+      "detail": true
+    },
+    {
+      "name": "primary and comparison comboboxes rendered",
+      "result": "pass",
+      "detail": 2
+    },
+    {
+      "name": "comparison run selected in visible body",
+      "result": "pass",
+      "detail": true
+    },
+    {
+      "name": "rendered token Compare runs",
+      "result": "pass",
+      "detail": true
+    },
+    {
+      "name": "comparison delta visible",
+      "result": "pass",
+      "detail": true
+    },
+    {
+      "name": "nonzero delta visible",
+      "result": "pass",
+      "detail": true
+    },
+    {
+      "name": "no traceback after compare",
+      "result": "pass",
+      "detail": true
+    }
+  ],
+  "tokenEvidence": {
+    "delta": true,
+    "minus7": true,
+    "minus8": true,
+    "plus145ms": true
+  },
+  "textExcerpt": "Pfizer SDF Intelligence\n\nLangfuse: Not connected\n\nSet LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY in .env to enable tracing.\n\nDeploy\n\nCompliance\n\nChat\n\nEval\n\nEvaluation\nEvaluation\n\nThis tab is read-only: it surfaces persisted eval run history and metrics without triggering any evaluation computation.\n\nRun history\n\nPrimary run\n\ns08-uat-eval-run-b\n\nOnly show compatible runs\n\nAllow comparing any eval_type\n\nCompare to (optional)\n\ns08-uat-eval-run-a\nMetrics\n\nGlobal metrics\n\nCompare runs\n\nShow only changed metrics\n\nInclude per-scope metrics"
+}

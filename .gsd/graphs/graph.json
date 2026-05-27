@@ -9,8 +9,8 @@
       "sourceFile": "STATE.md"
     },
     {
-      "id": "concept:phase:planning",
-      "label": "Phase: planning",
+      "id": "concept:phase:validating-milestone",
+      "label": "Phase: validating-milestone",
       "type": "concept",
       "confidence": "EXTRACTED",
       "sourceFile": "STATE.md"
@@ -486,8 +486,64 @@
     },
     {
       "id": "slice:M003:S07",
-      "label": "M003/S07",
+      "label": "S07: Implement R008 Langfuse tracing",
       "type": "slice",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M003/slices/S07/S07-PLAN.md"
+    },
+    {
+      "id": "task:M003:S07:T01",
+      "label": "T01: Add shared safe trace helper",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "task:M003:S07:T02",
+      "label": "T02: Harden ingestion and storage trace updates",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "task:M003:S07:T03",
+      "label": "T03: Trace extraction pipeline diagnostics safely",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "task:M003:S07:T04",
+      "label": "T04: Trace retrieval evaluation runs safely",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "task:M003:S07:T05",
+      "label": "T05: Run focused cross-pipeline tracing verification",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "slice:M003:S08",
+      "label": "S08: Record Eval tab UAT evidence",
+      "type": "slice",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M003/slices/S08/S08-PLAN.md"
+    },
+    {
+      "id": "task:M003:S08:T01",
+      "label": "T01: Add deterministic UAT seed helper",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "task:M003:S08:T02",
+      "label": "T02: Capture populated Eval tab walkthrough",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "task:M003:S08:T03",
+      "label": "T03: Capture fresh database empty state and final evidence",
+      "type": "task",
       "confidence": "EXTRACTED"
     }
   ],
@@ -935,7 +991,61 @@
       "to": "slice:M003:S07",
       "type": "contains",
       "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M003:S07",
+      "to": "task:M003:S07:T01",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M003:S07",
+      "to": "task:M003:S07:T02",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M003:S07",
+      "to": "task:M003:S07:T03",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M003:S07",
+      "to": "task:M003:S07:T04",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M003:S07",
+      "to": "task:M003:S07:T05",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M003",
+      "to": "slice:M003:S08",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M003:S08",
+      "to": "task:M003:S08:T01",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M003:S08",
+      "to": "task:M003:S08:T02",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M003:S08",
+      "to": "task:M003:S08:T03",
+      "type": "contains",
+      "confidence": "EXTRACTED"
     }
   ],
-  "builtAt": "2026-05-27T20:49:23.609Z"
+  "builtAt": "2026-05-27T21:59:43.933Z"
 }

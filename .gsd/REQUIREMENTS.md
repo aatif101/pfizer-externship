@@ -4,27 +4,6 @@ This file is the explicit capability and coverage contract for the project.
 
 ## Active
 
-### R007 — Maintain an evaluation harness with extraction F1, retrieval recall, faithfulness/relevancy, citation accuracy, latency, and cost metrics.
-- Class: quality-attribute
-- Status: active
-- Description: Maintain an evaluation harness with extraction F1, retrieval recall, faithfulness/relevancy, citation accuracy, latency, and cost metrics.
-- Why it matters: The demo needs evidence, not just claims, especially for compliance-oriented AI.
-- Source: migration from GSD 1.0 EVAL and BENCH requirements
-- Primary owning slice: M003
-- Validation: Validated when M003 eval commands produce repeatable metric reports over a documented gold set, including extraction F1, retrieval recall, faithfulness/relevancy, citation accuracy, latency, and cost.
-- Notes: M002 advanced R007 only by proving deterministic retrieval/citation regression scaffolding for the text-RAG loop. Full gold-set metric reporting remains active scope for M003 and must not be dropped.
-
-### R008 — Trace ingestion, extraction, retrieval, generation, and evaluation operations with Langfuse while avoiding secret leakage.
-- Class: operability
-- Status: active
-- Description: Trace ingestion, extraction, retrieval, generation, and evaluation operations with Langfuse while avoiding secret leakage.
-- Why it matters: Observability is necessary for debugging and for auditability in a pharmaceutical document workflow.
-- Source: migration from GSD 1.0 OBS-01 and readiness cleanup
-- Primary owning slice: M003
-- Supporting slices: M001,M002
-- Validation: Validated when M003 demonstrates Langfuse traces across ingestion, extraction, retrieval, generation, and evaluation with useful phase/doc/page metadata, while tests confirm missing or failing Langfuse configuration does not crash the app and no secrets are logged.
-- Notes: M001/M002 advanced R008 with safe diagnostics and no-op-safe retrieval/RAG trace metadata hooks. Full cross-pipeline Langfuse coverage, including evaluation tracing, remains active M003 scope and must not be dropped.
-
 ## Validated
 
 ### R001 — Ingest pharmaceutical PDF folders into a persistent document store using Docling with page text and 150 DPI page thumbnails.
@@ -78,6 +57,27 @@ This file is the explicit capability and coverage contract for the project.
 - Validation: Validated in M002 S05 by final offline regression: CLI index build, hybrid retrieval, fake-provider answer generation, Streamlit Chat rendering, cited grounded answers, unrelated-query abstention, and provider failure paths passed deterministically with fixture SQLite data and no live secrets.
 - Notes: Initial M002 implementation uses the planned hybrid text retrieval baseline. Visual retrieval remains separate under R006.
 
+### R007 — Maintain an evaluation harness with extraction F1, retrieval recall, faithfulness/relevancy, citation accuracy, latency, and cost metrics.
+- Class: quality-attribute
+- Status: validated
+- Description: Maintain an evaluation harness with extraction F1, retrieval recall, faithfulness/relevancy, citation accuracy, latency, and cost metrics.
+- Why it matters: The demo needs evidence, not just claims, especially for compliance-oriented AI.
+- Source: migration from GSD 1.0 EVAL and BENCH requirements
+- Primary owning slice: M003
+- Validation: Validated across M003 evaluation slices and S08 closeout evidence: persisted SQLite eval run history supports extraction/retrieval/RAG metric families including extraction F1, retrieval recall, citation accuracy, faithfulness/relevancy, latency, cost, and token metrics. S08 runtime UAT artifacts prove the Streamlit Eval tab renders two synthetic complete runs, metric history, comparison deltas, fresh-database no-runs guidance, and no traceback. Fresh closeout verification: `venv/Scripts/python.exe -m pytest -q tests/test_dashboard_eval_tab.py tests/test_eval_repository.py tests/test_retrieval_eval_optional_metrics.py tests/test_app.py tests/test_s08_uat_seed.py` exited 0 with 30 passed; artifact validation confirmed 2 populated runs, 12 required metric names, and 0 rows in fresh eval tables.
+- Notes: M003 S08 provides final runtime UAT evidence for dashboard-visible persisted evaluation history using sanitized synthetic data. Optional live services remain gracefully absent; no provider payloads, raw prompts/answers/snippets, document text/images, Docling JSON, full hashes, or secrets are included in evidence.
+
+### R008 — Trace ingestion, extraction, retrieval, generation, and evaluation operations with Langfuse while avoiding secret leakage.
+- Class: operability
+- Status: validated
+- Description: Trace ingestion, extraction, retrieval, generation, and evaluation operations with Langfuse while avoiding secret leakage.
+- Why it matters: Observability is necessary for debugging and for auditability in a pharmaceutical document workflow.
+- Source: migration from GSD 1.0 OBS-01 and readiness cleanup
+- Primary owning slice: M003
+- Supporting slices: M001,M002
+- Validation: Validated in M003 S07 by focused offline pytest verification covering Langfuse trace metadata across ingestion/storage, extraction, retrieval/generation existing trace safety, and retrieval evaluation/optional metrics. Evidence: `venv/Scripts/python.exe -m pytest -q tests/test_tracing.py tests/test_retrieval_eval_runner.py tests/test_retrieval_eval_optional_metrics.py tests/test_extraction_pipeline.py tests/test_ingest.py` exited 0 with 51 passed and 18 warnings, proving missing/failing Langfuse does not crash and forbidden raw content/secrets are excluded.
+- Notes: M003 S07 completed full cross-pipeline Langfuse tracing through `src.tracing.safe_update_current_trace` allowlisted metadata. Dashboard tracing was intentionally out of scope; S08 remains for Eval tab UAT evidence rather than R008 implementation.
+
 ### R009 — Use Python 3.11 project virtual environment for development and verification; do not rely on global Python 3.14.
 - Class: constraint
 - Status: validated
@@ -122,14 +122,14 @@ This file is the explicit capability and coverage contract for the project.
 | R004 | primary-user-loop | validated | M001 | M003 | Validated in S04 by SQLite-backed dashboard tests and full regression: Compliance tab renders persisted records with metadata, age/risk display, confidence, review state, run/trace metadata, and source page/span details; empty/missing DB states are friendly and app startup is smoke-tested. |
 | R005 | core-capability | validated | M002 | none | Validated in M002 S05 by final offline regression: CLI index build, hybrid retrieval, fake-provider answer generation, Streamlit Chat rendering, cited grounded answers, unrelated-query abstention, and provider failure paths passed deterministically with fixture SQLite data and no live secrets. |
 | R006 | differentiator | deferred | future visual retrieval milestone | none | Validated when visual retrieval improves or complements recall on scanned/table-heavy pages in the gold set. |
-| R007 | quality-attribute | active | M003 | none | Validated when M003 eval commands produce repeatable metric reports over a documented gold set, including extraction F1, retrieval recall, faithfulness/relevancy, citation accuracy, latency, and cost. |
-| R008 | operability | active | M003 | M001,M002 | Validated when M003 demonstrates Langfuse traces across ingestion, extraction, retrieval, generation, and evaluation with useful phase/doc/page metadata, while tests confirm missing or failing Langfuse configuration does not crash the app and no secrets are logged. |
+| R007 | quality-attribute | validated | M003 | none | Validated across M003 evaluation slices and S08 closeout evidence: persisted SQLite eval run history supports extraction/retrieval/RAG metric families including extraction F1, retrieval recall, citation accuracy, faithfulness/relevancy, latency, cost, and token metrics. S08 runtime UAT artifacts prove the Streamlit Eval tab renders two synthetic complete runs, metric history, comparison deltas, fresh-database no-runs guidance, and no traceback. Fresh closeout verification: `venv/Scripts/python.exe -m pytest -q tests/test_dashboard_eval_tab.py tests/test_eval_repository.py tests/test_retrieval_eval_optional_metrics.py tests/test_app.py tests/test_s08_uat_seed.py` exited 0 with 30 passed; artifact validation confirmed 2 populated runs, 12 required metric names, and 0 rows in fresh eval tables. |
+| R008 | operability | validated | M003 | M001,M002 | Validated in M003 S07 by focused offline pytest verification covering Langfuse trace metadata across ingestion/storage, extraction, retrieval/generation existing trace safety, and retrieval evaluation/optional metrics. Evidence: `venv/Scripts/python.exe -m pytest -q tests/test_tracing.py tests/test_retrieval_eval_runner.py tests/test_retrieval_eval_optional_metrics.py tests/test_extraction_pipeline.py tests/test_ingest.py` exited 0 with 51 passed and 18 warnings, proving missing/failing Langfuse does not crash and forbidden raw content/secrets are excluded. |
 | R009 | constraint | validated | M001 | none | Validated by repeated M001/M002 verification through the project Python 3.11 virtualenv using the Windows-compatible `venv/Scripts/python.exe` command path; global Python 3.14 is not the supported project runtime. |
 | R010 | compliance/security | validated | M001 | none | Validated by project hygiene plus M002 verification that public CLI/service/Chat/tracing diagnostics avoid secrets, raw provider payloads, full page text, image blobs, Docling JSON, and full content hashes. |
 
 ## Coverage Summary
 
-- Active requirements: 2
-- Mapped to slices: 2
-- Validated: 7 (R001, R002, R003, R004, R005, R009, R010)
+- Active requirements: 0
+- Mapped to slices: 0
+- Validated: 9 (R001, R002, R003, R004, R005, R007, R008, R009, R010)
 - Unmapped active requirements: 0
