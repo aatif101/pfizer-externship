@@ -16,16 +16,16 @@ from collections.abc import Iterable, Mapping
 from decimal import Decimal
 from typing import Any
 
-LATENCY_AVG_MS = "retrieval.latency_ms.avg"
-LATENCY_P50_MS = "retrieval.latency_ms.p50"
-LATENCY_P95_MS = "retrieval.latency_ms.p95"
-COST_TOTAL_USD = "retrieval.cost_usd.total"
-COST_AVG_USD = "retrieval.cost_usd.avg"
-INPUT_TOKENS_TOTAL = "retrieval.tokens.input.total"
-OUTPUT_TOKENS_TOTAL = "retrieval.tokens.output.total"
-TOTAL_TOKENS_TOTAL = "retrieval.tokens.total.total"
-FAITHFULNESS_AVG = "ragas.faithfulness.avg"
-ANSWER_RELEVANCY_AVG = "ragas.answer_relevancy.avg"
+LATENCY_AVG_MS = "rag.latency_ms.avg"
+LATENCY_P50_MS = "rag.latency_ms.p50"
+LATENCY_P95_MS = "rag.latency_ms.p95"
+COST_TOTAL_USD = "rag.cost_usd.total"
+COST_AVG_USD = "rag.cost_usd.avg"
+INPUT_TOKENS_TOTAL = "rag.tokens.input"
+OUTPUT_TOKENS_TOTAL = "rag.tokens.output"
+TOTAL_TOKENS_TOTAL = "rag.tokens.total"
+FAITHFULNESS_AVG = "rag.faithfulness.avg"
+ANSWER_RELEVANCY_AVG = "rag.answer_relevancy.avg"
 
 _NUMERIC_FIELDS = {
     "latency_ms",

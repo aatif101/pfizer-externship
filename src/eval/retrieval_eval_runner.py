@@ -15,6 +15,7 @@ Citation accuracy uses the top-k retrieved hits as "citations" for now.
 from __future__ import annotations
 
 import re
+import sqlite3
 import uuid
 from dataclasses import dataclass
 
@@ -135,11 +136,14 @@ def run_retrieval_eval(
                     scope_id=query_id,
                 )
 
-        if include_latency_cost:
-            _maybe_persist_latency_cost_metrics(db_path, run_id)
-
-        if include_ragas:
-            _maybe_persist_ragas_placeholder_metrics(db_path, run_id)
+        if include_latency_cost or include_ragas:
+            _maybe_persist_optional_rag_metrics(
+                db_path,
+                run_id,
+                source_run_id=retrieval_run_id,
+                include_latency_cost=include_latency_cost,
+                include_ragas=include_ragas,
+            )
 
         mark_eval_run_complete(db_path, run_id)
         return run_id
@@ -148,16 +152,55 @@ def run_retrieval_eval(
         raise
 
 
-def _maybe_persist_latency_cost_metrics(db_path: str, run_id: str) -> None:
-    """Persist optional latency/cost/token aggregates from bounded observations.
+def _maybe_persist_optional_rag_metrics(
+    db_path: str,
+    run_id: str,
+    *,
+    source_run_id: str,
+    include_latency_cost: bool,
+    include_ragas: bool,
+) -> None:
+    """Persist optional RAG aggregates from bounded observations when present.
 
-    This degrades gracefully when no observations exist for the run. Aggregation
-    is pure Python and avoids optional SQLite percentile functions. Only numeric
-    aggregates are written to ``eval_metrics``; observation rows never contain raw
-    prompts, answers, snippets, provider payloads, images, or document JSON.
+    Observation rows are keyed to the retrieval/index or RAG source run that
+    produced them, not to this newly-created eval run. Missing observation
+    storage is optional and skipped; malformed numeric data remains a real
+    runner error so eval_runs records a sanitized failure reason.
     """
 
-    observations = list_rag_eval_observations(db_path, source_run_id=run_id)
+    observations = _load_optional_rag_eval_observations(db_path, source_run_id=source_run_id)
+    metrics: dict[str, float] = {}
+    if include_latency_cost:
+        metrics.update(aggregate_latency_metrics(observations))
+        metrics.update(aggregate_cost_metrics(observations))
+        metrics.update(aggregate_token_metrics(observations))
+    if include_ragas:
+        metrics.update(aggregate_quality_metrics(observations))
+
+    for metric_name, metric_value in metrics.items():
+        upsert_eval_metric(db_path, run_id, metric_name, metric_value)
+
+
+def _load_optional_rag_eval_observations(db_path: str, *, source_run_id: str):
+    try:
+        return list_rag_eval_observations(db_path, source_run_id=source_run_id)
+    except sqlite3.OperationalError as exc:
+        if "rag_eval_observations" in str(exc) and "no such table" in str(exc).lower():
+            return []
+        raise
+
+
+def _maybe_persist_latency_cost_metrics(db_path: str, run_id: str, *, source_run_id: str | None = None) -> None:
+    """Persist optional latency/cost/token aggregates from bounded observations.
+
+    This compatibility wrapper degrades gracefully when no observations exist.
+    Aggregation is pure Python and avoids optional SQLite percentile functions.
+    Only numeric aggregates are written to ``eval_metrics``; observation rows
+    never contain raw prompts, answers, snippets, provider payloads, images, or
+    document JSON.
+    """
+
+    observations = _load_optional_rag_eval_observations(db_path, source_run_id=source_run_id or run_id)
     metrics = {
         **aggregate_latency_metrics(observations),
         **aggregate_cost_metrics(observations),
@@ -167,7 +210,7 @@ def _maybe_persist_latency_cost_metrics(db_path: str, run_id: str) -> None:
         upsert_eval_metric(db_path, run_id, metric_name, metric_value)
 
 
-def _maybe_persist_ragas_placeholder_metrics(db_path: str, run_id: str) -> None:
+def _maybe_persist_ragas_placeholder_metrics(db_path: str, run_id: str, *, source_run_id: str | None = None) -> None:
     """Persist precomputed RAG quality aggregates from bounded observations.
 
     Despite the historical function name, this does not import RAGAS or call any
@@ -175,7 +218,7 @@ def _maybe_persist_ragas_placeholder_metrics(db_path: str, run_id: str) -> None:
     relevancy values when they are present in ``rag_eval_observations``.
     """
 
-    observations = list_rag_eval_observations(db_path, source_run_id=run_id)
+    observations = _load_optional_rag_eval_observations(db_path, source_run_id=source_run_id or run_id)
     for metric_name, metric_value in aggregate_quality_metrics(observations).items():
         upsert_eval_metric(db_path, run_id, metric_name, metric_value)
 

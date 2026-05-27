@@ -19,7 +19,7 @@ from src.eval.operational_metrics import (
     TOTAL_TOKENS_TOTAL,
     aggregate_observation_metrics,
 )
-from src.eval.repository import RAGEvalObservationRow, list_eval_metrics
+from src.eval.repository import RAGEvalObservationRow, insert_rag_eval_observation, list_eval_metrics, list_eval_runs
 from src.eval.retrieval_eval_runner import run_retrieval_eval
 from src.retrieval.indexer import build_retrieval_index
 
@@ -174,3 +174,155 @@ def test_retrieval_eval_runner_optional_flags_do_not_crash_on_minimal_db(tmp_pat
     assert "retrieval.citation_accuracy@5" in metric_names
 
     # Optional metrics are not required to exist; this just ensures no crash + core persisted.
+
+
+def test_retrieval_eval_runner_persists_optional_rag_metrics_from_observations(tmp_path):
+    db_path = str(tmp_path / "eval.sqlite")
+    init_db(db_path)
+
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA foreign_keys = ON")
+    try:
+        _insert_document(conn, "d1", "doc1.pdf", ["alpha beta", "gamma delta"])
+        _insert_gold_query(conn, "q1", "alpha")
+        _insert_gold_target(conn, "q1", "d1", 0)
+        conn.commit()
+    finally:
+        conn.close()
+
+    index_result = build_retrieval_index(db_path)
+    source_run_id = index_result.run.run_id
+    insert_rag_eval_observation(
+        db_path,
+        RAGEvalObservationRow(
+            source_run_id=source_run_id,
+            query_id="q1",
+            status="answered",
+            latency_ms=100.0,
+            input_tokens=10,
+            output_tokens=5,
+            total_tokens=15,
+            cost_usd=0.25,
+            faithfulness=0.8,
+            answer_relevancy=0.6,
+            cited_doc_id="d1",
+            cited_page_num=0,
+        ),
+    )
+    insert_rag_eval_observation(
+        db_path,
+        RAGEvalObservationRow(
+            source_run_id=source_run_id,
+            query_id="q1",
+            status="answered",
+            latency_ms=300.0,
+            input_tokens=20,
+            output_tokens=15,
+            total_tokens=35,
+            cost_usd=0.75,
+            faithfulness=1.0,
+            answer_relevancy=0.8,
+            cited_doc_id="d1",
+            cited_page_num=0,
+        ),
+    )
+    insert_rag_eval_observation(
+        db_path,
+        RAGEvalObservationRow(
+            source_run_id="unrelated-run",
+            query_id="q1",
+            status="answered",
+            latency_ms=999.0,
+            cost_usd=999.0,
+            faithfulness=0.0,
+            answer_relevancy=0.0,
+        ),
+    )
+
+    run_id = run_retrieval_eval(db_path, k_values=(5,), include_latency_cost=True, include_ragas=True)
+
+    metric_index = {(m.metric_name, m.scope_type, m.scope_id): m.metric_value for m in list_eval_metrics(db_path, run_id)}
+
+    assert metric_index[("retrieval.recall@5", None, None)] == 1.0
+    assert metric_index[(LATENCY_AVG_MS, None, None)] == 200.0
+    assert metric_index[(LATENCY_P50_MS, None, None)] == 200.0
+    assert metric_index[(LATENCY_P95_MS, None, None)] == pytest.approx(290.0)
+    assert metric_index[(COST_TOTAL_USD, None, None)] == 1.0
+    assert metric_index[(COST_AVG_USD, None, None)] == 0.5
+    assert metric_index[(INPUT_TOKENS_TOTAL, None, None)] == 30.0
+    assert metric_index[(OUTPUT_TOKENS_TOTAL, None, None)] == 20.0
+    assert metric_index[(TOTAL_TOKENS_TOTAL, None, None)] == 50.0
+    assert metric_index[(FAITHFULNESS_AVG, None, None)] == pytest.approx(0.9)
+    assert metric_index[(ANSWER_RELEVANCY_AVG, None, None)] == pytest.approx(0.7)
+
+
+def test_retrieval_eval_runner_missing_observation_table_is_optional_noop(tmp_path):
+    db_path = str(tmp_path / "eval.sqlite")
+    init_db(db_path)
+
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA foreign_keys = ON")
+    try:
+        _insert_document(conn, "d1", "doc1.pdf", ["alpha beta"])
+        _insert_gold_query(conn, "q1", "alpha")
+        _insert_gold_target(conn, "q1", "d1", 0)
+        conn.commit()
+    finally:
+        conn.close()
+
+    build_retrieval_index(db_path)
+
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute("DROP TABLE rag_eval_observations")
+        conn.commit()
+    finally:
+        conn.close()
+
+    run_id = run_retrieval_eval(db_path, k_values=(5,), include_latency_cost=True, include_ragas=True)
+
+    metric_names = {m.metric_name for m in list_eval_metrics(db_path, run_id)}
+    assert "retrieval.recall@5" in metric_names
+    assert LATENCY_AVG_MS not in metric_names
+    assert FAITHFULNESS_AVG not in metric_names
+
+
+def test_retrieval_eval_runner_malformed_observation_marks_sanitized_error(tmp_path):
+    db_path = str(tmp_path / "eval.sqlite")
+    init_db(db_path)
+
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA foreign_keys = ON")
+    try:
+        _insert_document(conn, "d1", "doc1.pdf", ["alpha beta"])
+        _insert_gold_query(conn, "q1", "alpha")
+        _insert_gold_target(conn, "q1", "d1", 0)
+        conn.commit()
+    finally:
+        conn.close()
+
+    index_result = build_retrieval_index(db_path)
+
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO rag_eval_observations (source_run_id, query_id, status, latency_ms)
+            VALUES (?, ?, ?, ?)
+            """,
+            (index_result.run.run_id, "q1", "answered", "slow <raw prompt should not leak>"),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    with pytest.raises(ValueError, match="latency_ms"):
+        run_retrieval_eval(db_path, k_values=(5,), include_latency_cost=True)
+
+    runs = list_eval_runs(db_path)
+    row = next(r for r in runs if r.eval_type == "retrieval_eval")
+    assert row.status == "error"
+    assert row.error_reason is not None
+    assert "ValueError: latency_ms must be numeric or None" in row.error_reason
+    assert "<" not in row.error_reason
+    assert "raw prompt" not in row.error_reason
