@@ -20,15 +20,7 @@ import typer
 from loguru import logger
 from tqdm import tqdm
 
-try:
-    from langfuse.decorators import observe, langfuse_context
-    _LANGFUSE_AVAILABLE = True
-except ImportError:
-    _LANGFUSE_AVAILABLE = False
-    def observe(name=None, **kwargs):  # type: ignore[misc]
-        def decorator(fn):
-            return fn
-        return decorator
+from src.tracing import observe, safe_update_current_trace
 
 from src.config import get_settings
 from src.db.schema import init_db
@@ -37,6 +29,19 @@ from src.pipeline.rasterizer import rasterize_pages
 from src.pipeline.db_writer import write_document_to_db
 
 app = typer.Typer(help="Pfizer SDF ingestion pipeline")
+
+_INGEST_TRACE_METADATA_KEYS = frozenset(
+    {"boundary", "status", "doc_id", "filename", "page_count", "image_count", "error_class"}
+)
+
+
+def _trace_ingestion(metadata: dict[str, object]) -> None:
+    """Best-effort ingestion trace update with a strict metadata allowlist."""
+    safe_update_current_trace(
+        tags=["phase1", "ingestion"],
+        metadata=metadata,
+        allowed_metadata_keys=_INGEST_TRACE_METADATA_KEYS,
+    )
 
 
 def _extract_page_texts(conv_result) -> dict[int, str]:
@@ -77,59 +82,92 @@ def ingest_document(pdf_path: str, db_path: str) -> dict:
     T-1-02: Rejects files exceeding MAX_PDF_MB.
     """
     settings = get_settings()
-
-    # T-1-01: Path traversal protection — resolve to absolute path
     resolved = Path(pdf_path).resolve()
-    if not resolved.exists():
-        raise FileNotFoundError(f"PDF not found: {resolved}")
-    if not resolved.suffix.lower() == ".pdf":
-        raise ValueError(f"Not a PDF file: {resolved}")
+    filename = resolved.name
+    doc_id: str | None = None
+    page_count: int | None = None
+    image_count: int | None = None
 
-    # T-1-02: OOM/DoS protection — check size before Docling
-    file_size_mb = resolved.stat().st_size / (1024 ** 2)
-    if file_size_mb > settings.max_pdf_mb:
-        raise ValueError(
-            f"PDF {resolved.name} ({file_size_mb:.1f} MB) exceeds "
-            f"MAX_PDF_MB={settings.max_pdf_mb}. Skipping to prevent OOM."
+    try:
+        # T-1-01: Path traversal protection — resolve to absolute path
+        if not resolved.exists():
+            raise FileNotFoundError(f"PDF not found: {resolved}")
+        if not resolved.suffix.lower() == ".pdf":
+            raise ValueError(f"Not a PDF file: {resolved}")
+
+        # T-1-02: OOM/DoS protection — check size before Docling
+        file_size_mb = resolved.stat().st_size / (1024 ** 2)
+        if file_size_mb > settings.max_pdf_mb:
+            raise ValueError(
+                f"PDF {resolved.name} ({file_size_mb:.1f} MB) exceeds "
+                f"MAX_PDF_MB={settings.max_pdf_mb}. Skipping to prevent OOM."
+            )
+
+        doc_id = hashlib.sha256(str(resolved).encode()).hexdigest()[:16]
+        _trace_ingestion(
+            {
+                "boundary": "ingestion",
+                "status": "started",
+                "doc_id": doc_id,
+                "filename": filename,
+            }
         )
 
-    doc_id = hashlib.sha256(str(resolved).encode()).hexdigest()[:16]
+        # Step 1: Docling text extraction (new converter per call — C3 mitigation)
+        logger.info(f"Converting {resolved.name} with Docling VlmPipeline...")
+        conv_result = convert_pdf(str(resolved))
+        doc = conv_result.document
+        page_count = len(doc.pages) if doc.pages else 0
 
-    if _LANGFUSE_AVAILABLE:
-        langfuse_context.update_current_trace(
-            tags=["phase1", "ingestion"],
-            metadata={"doc_id": doc_id, "filename": resolved.name},
+        # Step 2: pypdfium2 rasterization (independent of Docling — C2 mitigation)
+        logger.info(f"Rasterizing {page_count} pages at 150 DPI...")
+        png_blobs = rasterize_pages(str(resolved))
+        image_count = len(png_blobs)
+
+        # Step 3: Extract page texts
+        page_texts = _extract_page_texts(conv_result)
+
+        # Step 4: SQLite writes (T-1-03: all SQL parameterized in db/queries.py)
+        # T-1-04: docling_json stored in DB but NOT logged at INFO level
+        docling_json = doc.export_to_json() if hasattr(doc, "export_to_json") else None
+
+        write_document_to_db(
+            db_path=db_path,
+            doc_id=doc_id,
+            filename=resolved.name,
+            file_path=str(resolved),
+            page_count=page_count,
+            docling_json=docling_json,
+            page_texts=page_texts,
+            png_blobs=png_blobs,
         )
 
-    # Step 1: Docling text extraction (new converter per call — C3 mitigation)
-    logger.info(f"Converting {resolved.name} with Docling VlmPipeline...")
-    conv_result = convert_pdf(str(resolved))
-    doc = conv_result.document
-    page_count = len(doc.pages) if doc.pages else 0
-
-    # Step 2: pypdfium2 rasterization (independent of Docling — C2 mitigation)
-    logger.info(f"Rasterizing {page_count} pages at 150 DPI...")
-    png_blobs = rasterize_pages(str(resolved))
-
-    # Step 3: Extract page texts
-    page_texts = _extract_page_texts(conv_result)
-
-    # Step 4: SQLite writes (T-1-03: all SQL parameterized in db/queries.py)
-    # T-1-04: docling_json stored in DB but NOT logged at INFO level
-    docling_json = doc.export_to_json() if hasattr(doc, "export_to_json") else None
-
-    write_document_to_db(
-        db_path=db_path,
-        doc_id=doc_id,
-        filename=resolved.name,
-        file_path=str(resolved),
-        page_count=page_count,
-        docling_json=docling_json,
-        page_texts=page_texts,
-        png_blobs=png_blobs,
-    )
-
-    return {"doc_id": doc_id, "page_count": page_count, "image_count": len(png_blobs)}
+        _trace_ingestion(
+            {
+                "boundary": "ingestion",
+                "status": "completed",
+                "doc_id": doc_id,
+                "filename": filename,
+                "page_count": page_count,
+                "image_count": image_count,
+            }
+        )
+        return {"doc_id": doc_id, "page_count": page_count, "image_count": image_count}
+    except Exception as exc:
+        metadata: dict[str, object] = {
+            "boundary": "ingestion",
+            "status": "failed",
+            "filename": filename,
+            "error_class": type(exc).__name__,
+        }
+        if doc_id is not None:
+            metadata["doc_id"] = doc_id
+        if page_count is not None:
+            metadata["page_count"] = page_count
+        if image_count is not None:
+            metadata["image_count"] = image_count
+        _trace_ingestion(metadata)
+        raise
 
 
 @app.command()

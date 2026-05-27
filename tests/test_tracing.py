@@ -144,6 +144,49 @@ def test_safe_update_current_trace_update_exception_is_noop() -> None:
     assert failing_context.updates == []
 
 
+def test_safe_update_current_trace_enforces_ingestion_storage_operational_allowlist() -> None:
+    fake_context = _FakeLangfuseContext()
+    sent = safe_update_current_trace(
+        tags=["phase1", "storage", "secret-token-SHOULD-DROP"],
+        metadata={
+            "boundary": "storage",
+            "status": "completed",
+            "doc_id": "doc-safe-001",
+            "filename": "supplier-sdf.pdf",
+            "page_count": 2,
+            "image_count": 1,
+            "error_class": "ValueError",
+            "file_path": "C:/Users/smati/secret/source/supplier-sdf.pdf",
+            "page_text": "Raw Pfizer page text SHOULD_NOT_APPEAR",
+            "image_blob": b"PNG bytes SHOULD_NOT_APPEAR",
+            "docling_json": '{"raw": "Docling JSON SHOULD_NOT_APPEAR"}',
+            "content_hash": "abcdef1234567890SHOULD_NOT_APPEAR",
+        },
+        allowed_metadata_keys=frozenset(
+            {"boundary", "status", "doc_id", "filename", "page_count", "image_count", "error_class"}
+        ),
+        context=fake_context,
+    )
+
+    assert sent is True
+    update = fake_context.updates[0]
+    assert update["tags"] == ["phase1", "storage"]
+    metadata = update["metadata"]
+    assert metadata == {
+        "boundary": "storage",
+        "status": "completed",
+        "doc_id": "doc-safe-001",
+        "filename": "supplier-sdf.pdf",
+        "page_count": 2,
+        "image_count": 1,
+        "error_class": "ValueError",
+    }
+    metadata_repr = repr(metadata)
+    assert "SHOULD_NOT_APPEAR" not in metadata_repr
+    assert "file_path" not in metadata_repr
+    assert "docling_json" not in metadata_repr
+
+
 @dataclass
 class _TraceTestProvider:
     provider_name: str = "trace-test-provider"

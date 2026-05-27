@@ -4,24 +4,25 @@ Wraps queries.py functions with Langfuse @observe spans (D-04).
 """
 from __future__ import annotations
 
-import sqlite3
-from pathlib import Path
 from typing import Optional
 
 from loguru import logger
 
-try:
-    from langfuse.decorators import observe, langfuse_context
-    _LANGFUSE_AVAILABLE = True
-except ImportError:
-    _LANGFUSE_AVAILABLE = False
-    # Provide no-op fallback if langfuse is not installed
-    def observe(name=None, **kwargs):  # type: ignore[misc]
-        def decorator(fn):
-            return fn
-        return decorator
+from src.tracing import observe, safe_update_current_trace
+from src.db.queries import insert_document, insert_page, mark_document_ingested
 
-from src.db.queries import insert_document, insert_page, mark_document_ingested, mark_document_error
+_STORAGE_TRACE_METADATA_KEYS = frozenset(
+    {"boundary", "status", "doc_id", "filename", "page_count", "image_count", "error_class"}
+)
+
+
+def _trace_storage(metadata: dict[str, object]) -> None:
+    """Best-effort storage trace update with a strict metadata allowlist."""
+    safe_update_current_trace(
+        tags=["phase1", "storage"],
+        metadata=metadata,
+        allowed_metadata_keys=_STORAGE_TRACE_METADATA_KEYS,
+    )
 
 
 @observe(name="write_to_db")
@@ -36,30 +37,61 @@ def write_document_to_db(
     png_blobs: list[bytes],
 ) -> None:
     """Write document header and all page rows to SQLite (D-02: BLOBs in DB)."""
-    if _LANGFUSE_AVAILABLE:
-        langfuse_context.update_current_trace(
-            metadata={"doc_id": doc_id, "page_count": page_count},
-        )
-
-    insert_document(
-        db_path=db_path,
-        doc_id=doc_id,
-        filename=filename,
-        file_path=file_path,
-        page_count=page_count,
-        docling_json=docling_json,
+    image_count = len(png_blobs)
+    _trace_storage(
+        {
+            "boundary": "storage",
+            "status": "started",
+            "doc_id": doc_id,
+            "filename": filename,
+            "page_count": page_count,
+            "image_count": image_count,
+        }
     )
 
-    for page_num in range(page_count):
-        blob = png_blobs[page_num] if page_num < len(png_blobs) else None
-        text = page_texts.get(page_num, page_texts.get(page_num + 1, ""))
-        insert_page(
+    try:
+        insert_document(
             db_path=db_path,
             doc_id=doc_id,
-            page_num=page_num,
-            page_text=text,
-            image_blob=blob,
+            filename=filename,
+            file_path=file_path,
+            page_count=page_count,
+            docling_json=docling_json,
         )
 
-    mark_document_ingested(db_path=db_path, doc_id=doc_id)
-    logger.info(f"DB write complete: {filename} ({page_count} pages, {len(png_blobs)} images)")
+        for page_num in range(page_count):
+            blob = png_blobs[page_num] if page_num < len(png_blobs) else None
+            text = page_texts.get(page_num, page_texts.get(page_num + 1, ""))
+            insert_page(
+                db_path=db_path,
+                doc_id=doc_id,
+                page_num=page_num,
+                page_text=text,
+                image_blob=blob,
+            )
+
+        mark_document_ingested(db_path=db_path, doc_id=doc_id)
+        _trace_storage(
+            {
+                "boundary": "storage",
+                "status": "completed",
+                "doc_id": doc_id,
+                "filename": filename,
+                "page_count": page_count,
+                "image_count": image_count,
+            }
+        )
+        logger.info(f"DB write complete: {filename} ({page_count} pages, {image_count} images)")
+    except Exception as exc:
+        _trace_storage(
+            {
+                "boundary": "storage",
+                "status": "failed",
+                "doc_id": doc_id,
+                "filename": filename,
+                "page_count": page_count,
+                "image_count": image_count,
+                "error_class": type(exc).__name__,
+            }
+        )
+        raise
