@@ -94,6 +94,79 @@ def test_load_eval_metrics_returns_empty_for_missing_table(tmp_db_path: str) -> 
     assert load_eval_metrics(tmp_db_path, run_id="missing") == []
 
 
+def test_render_eval_tab_formats_optional_rag_metrics_without_credentials(monkeypatch, tmp_db_path: str) -> None:
+    prepare_eval_db(tmp_db_path)
+
+    create_eval_run(
+        tmp_db_path,
+        run_id="run-rag-001",
+        eval_type="retrieval_eval",
+        pipeline_label="retrieval_eval",
+        params={"include_latency_cost": True, "include_ragas": True},
+    )
+    create_eval_run(
+        tmp_db_path,
+        run_id="run-rag-002",
+        eval_type="retrieval_eval",
+        pipeline_label="retrieval_eval",
+        params={"include_latency_cost": True, "include_ragas": True},
+    )
+
+    upsert_eval_metric(tmp_db_path, "run-rag-001", "rag.faithfulness.avg", 0.875)
+    upsert_eval_metric(tmp_db_path, "run-rag-001", "rag.answer_relevancy.avg", 0.91)
+    upsert_eval_metric(tmp_db_path, "run-rag-001", "rag.latency_ms.avg", 1234.56)
+    upsert_eval_metric(tmp_db_path, "run-rag-001", "rag.cost_usd.total", 0.0123456)
+    upsert_eval_metric(tmp_db_path, "run-rag-001", "rag.tokens.total", 2500)
+    upsert_eval_metric(tmp_db_path, "run-rag-001", "rag.cost_usd.avg", None)
+
+    upsert_eval_metric(tmp_db_path, "run-rag-002", "rag.faithfulness.avg", 0.9)
+    upsert_eval_metric(tmp_db_path, "run-rag-002", "rag.answer_relevancy.avg", 0.89)
+    upsert_eval_metric(tmp_db_path, "run-rag-002", "rag.latency_ms.avg", 1000.0)
+    upsert_eval_metric(tmp_db_path, "run-rag-002", "rag.cost_usd.total", 0.01)
+    upsert_eval_metric(tmp_db_path, "run-rag-002", "rag.tokens.total", 3000)
+
+    fake_st = FakeStreamlit(
+        select_values=["run-rag-001", "run-rag-002"],
+        checkbox_values=[True, False, False, False],
+    )
+    monkeypatch.setattr("src.dashboard.eval.st", fake_st)
+
+    render_eval_tab(tmp_db_path)
+
+    global_metrics = fake_st.dataframes[1]
+    rows_by_metric = {row["metric"]: row for row in global_metrics}
+    assert rows_by_metric["rag.faithfulness.avg"]["value"] == "87.5%"
+    assert rows_by_metric["rag.answer_relevancy.avg"]["value"] == "91.0%"
+    assert rows_by_metric["rag.latency_ms.avg"]["value"] == "1234.6 ms"
+    assert rows_by_metric["rag.cost_usd.total"]["value"] == "$0.012346"
+    assert rows_by_metric["rag.tokens.total"]["value"] == "2,500"
+    assert rows_by_metric["rag.cost_usd.avg"]["value"] == ""
+
+    comparison_rows = fake_st.dataframes[-1]
+    comparison_by_metric = {row["metric"]: row for row in comparison_rows}
+    assert comparison_by_metric["rag.faithfulness.avg"]["delta"] == "+2.5%"
+    assert comparison_by_metric["rag.latency_ms.avg"]["delta"] == "-234.6 ms"
+    assert comparison_by_metric["rag.cost_usd.total"]["delta"] == "$-0.002346"
+    assert comparison_by_metric["rag.tokens.total"]["delta"] == "+500"
+    assert comparison_by_metric["rag.cost_usd.avg"]["delta"] == ""
+
+
+def test_eval_dashboard_module_stays_read_only_and_provider_free() -> None:
+    source = Path("src/dashboard/eval.py").read_text(encoding="utf-8")
+
+    forbidden_imports = [
+        "src.eval.retrieval_eval_runner",
+        "retrieval_eval_runner",
+        "ragas",
+        "langfuse",
+        "anthropic",
+        "google.genai",
+        "google_genai",
+    ]
+    for forbidden in forbidden_imports:
+        assert forbidden not in source
+
+
 def test_render_eval_tab_compare_two_runs_shows_deltas(monkeypatch, tmp_db_path: str) -> None:
     prepare_eval_db(tmp_db_path)
 

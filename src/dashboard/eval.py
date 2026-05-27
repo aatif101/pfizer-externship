@@ -53,6 +53,10 @@ _RATIO_METRIC_TOKENS: tuple[str, ...] = (
     "precision_at",
 )
 
+_LATENCY_METRIC_TOKENS: tuple[str, ...] = ("latency_ms", "duration_ms", "elapsed_ms")
+_COST_METRIC_TOKENS: tuple[str, ...] = ("cost_usd", "usd")
+_TOKEN_METRIC_TOKENS: tuple[str, ...] = ("tokens", "token_count")
+
 
 def load_eval_runs(db_path: str, *, limit: int = 50) -> list[EvalRunRow]:
     """List eval runs, returning [] when the DB or tables are missing."""
@@ -342,6 +346,12 @@ def _format_metric_value(metric_name: str, value: float | None) -> str:
 
     if _is_ratio_metric(metric_name):
         return format_percent(value, digits=1, unknown="")
+    if _is_latency_metric(metric_name):
+        return f"{format_float(value, digits=1, unknown='')} ms"
+    if _is_cost_metric(metric_name):
+        return f"${format_float(value, digits=6, unknown='')}"
+    if _is_token_metric(metric_name):
+        return f"{float(value):,.0f}"
 
     return format_float(value, digits=3, unknown="")
 
@@ -352,6 +362,12 @@ def _format_delta(metric_name: str, delta: float | None) -> str:
 
     if _is_ratio_metric(metric_name):
         return f"{delta:+.1%}"
+    if _is_latency_metric(metric_name):
+        return f"{delta:+.1f} ms"
+    if _is_cost_metric(metric_name):
+        return f"${delta:+.6f}"
+    if _is_token_metric(metric_name):
+        return f"{delta:+,.0f}"
 
     return f"{delta:+.3f}"
 
@@ -359,6 +375,21 @@ def _format_delta(metric_name: str, delta: float | None) -> str:
 def _is_ratio_metric(metric_name: str) -> bool:
     lowered = metric_name.lower()
     return any(token in lowered for token in _RATIO_METRIC_TOKENS)
+
+
+def _is_latency_metric(metric_name: str) -> bool:
+    lowered = metric_name.lower()
+    return any(token in lowered for token in _LATENCY_METRIC_TOKENS)
+
+
+def _is_cost_metric(metric_name: str) -> bool:
+    lowered = metric_name.lower()
+    return any(token in lowered for token in _COST_METRIC_TOKENS)
+
+
+def _is_token_metric(metric_name: str) -> bool:
+    lowered = metric_name.lower()
+    return any(token in lowered for token in _TOKEN_METRIC_TOKENS)
 
 
 def _is_missing_database_or_table(exc: sqlite3.OperationalError) -> bool:
