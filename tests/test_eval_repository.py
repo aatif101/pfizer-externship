@@ -2,14 +2,19 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from src.db.schema import init_db
 from src.eval.repository import (
+    RAGEvalObservationRow,
     create_eval_run,
+    insert_rag_eval_observation,
     list_eval_metrics,
     list_eval_runs,
     list_gold_extraction_labels,
     list_gold_retrieval_queries,
     list_gold_retrieval_targets,
+    list_rag_eval_observations,
     mark_eval_run_complete,
     mark_eval_run_error,
     upsert_eval_metric,
@@ -91,3 +96,108 @@ def test_gold_list_helpers_return_empty_lists_on_empty_db(tmp_path):
     assert list_gold_extraction_labels(db_path) == []
     assert list_gold_retrieval_queries(db_path) == []
     assert list_gold_retrieval_targets(db_path, "missing") == []
+
+
+def test_rag_eval_observation_insert_and_list_multiple_rows(tmp_path):
+    db_path = str(tmp_path / "eval.db")
+    init_db(db_path)
+
+    first_id = insert_rag_eval_observation(
+        db_path,
+        RAGEvalObservationRow(
+            source_run_id="rag-run-1",
+            query_id="q1",
+            status="complete",
+            latency_ms="123.5",
+            input_tokens="10",
+            output_tokens=20,
+            total_tokens=30,
+            cost_usd="0.0042",
+            faithfulness="0.9",
+            answer_relevancy=0.8,
+            cited_doc_id="doc-a",
+            cited_page_num="2",
+        ),
+    )
+    second_id = insert_rag_eval_observation(
+        db_path,
+        RAGEvalObservationRow(
+            source_run_id="rag-run-2",
+            query_id="q2",
+            status="weak_evidence",
+            latency_ms=50,
+            input_tokens=5,
+            output_tokens=6,
+            total_tokens=11,
+            cost_usd=0.001,
+            faithfulness=None,
+            answer_relevancy=None,
+            cited_doc_id=None,
+            cited_page_num=None,
+        ),
+    )
+
+    assert first_id != second_id
+    observations = list_rag_eval_observations(db_path)
+    assert [row.observation_id for row in observations] == [first_id, second_id]
+    assert observations[0].source_run_id == "rag-run-1"
+    assert observations[0].query_id == "q1"
+    assert observations[0].latency_ms == 123.5
+    assert observations[0].input_tokens == 10
+    assert observations[0].output_tokens == 20
+    assert observations[0].total_tokens == 30
+    assert observations[0].cost_usd == 0.0042
+    assert observations[0].faithfulness == 0.9
+    assert observations[0].answer_relevancy == 0.8
+    assert observations[0].cited_doc_id == "doc-a"
+    assert observations[0].cited_page_num == 2
+    assert observations[0].created_at is not None
+
+    by_source = list_rag_eval_observations(db_path, source_run_id="rag-run-2")
+    assert [row.query_id for row in by_source] == ["q2"]
+
+    by_query = list_rag_eval_observations(db_path, query_id="q1")
+    assert [row.source_run_id for row in by_query] == ["rag-run-1"]
+
+
+def test_rag_eval_observation_empty_and_nullable_numeric_fields(tmp_path):
+    db_path = str(tmp_path / "eval.db")
+    init_db(db_path)
+
+    assert list_rag_eval_observations(db_path, source_run_id="missing") == []
+
+    row_id = insert_rag_eval_observation(
+        db_path,
+        RAGEvalObservationRow(source_run_id="rag-run-null", query_id="q-null", status="error"),
+    )
+
+    observations = list_rag_eval_observations(db_path)
+    assert len(observations) == 1
+    assert observations[0].observation_id == row_id
+    assert observations[0].latency_ms is None
+    assert observations[0].input_tokens is None
+    assert observations[0].output_tokens is None
+    assert observations[0].total_tokens is None
+    assert observations[0].cost_usd is None
+    assert observations[0].faithfulness is None
+    assert observations[0].answer_relevancy is None
+    assert observations[0].cited_page_num is None
+
+
+def test_rag_eval_observation_rejects_malformed_numeric_values(tmp_path):
+    db_path = str(tmp_path / "eval.db")
+    init_db(db_path)
+
+    with pytest.raises(ValueError, match="latency_ms"):
+        insert_rag_eval_observation(
+            db_path,
+            RAGEvalObservationRow(status="complete", latency_ms="slow"),
+        )
+
+    with pytest.raises(ValueError, match="input_tokens"):
+        insert_rag_eval_observation(
+            db_path,
+            RAGEvalObservationRow(status="complete", input_tokens=True),
+        )
+
+    assert list_rag_eval_observations(db_path) == []

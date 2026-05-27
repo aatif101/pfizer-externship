@@ -107,6 +107,23 @@ CREATE TABLE IF NOT EXISTS eval_metrics (
     created_at    TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 
+CREATE TABLE IF NOT EXISTS rag_eval_observations (
+    observation_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_run_id    TEXT,
+    query_id         TEXT,
+    status           TEXT NOT NULL,
+    latency_ms       REAL,
+    input_tokens     INTEGER,
+    output_tokens    INTEGER,
+    total_tokens     INTEGER,
+    cost_usd         REAL,
+    faithfulness     REAL,
+    answer_relevancy REAL,
+    cited_doc_id     TEXT,
+    cited_page_num   INTEGER,
+    created_at       TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
 CREATE TABLE IF NOT EXISTS gold_extraction_labels (
     doc_id           TEXT NOT NULL REFERENCES documents(doc_id) ON DELETE CASCADE,
     field_name       TEXT NOT NULL,
@@ -176,6 +193,8 @@ CREATE INDEX IF NOT EXISTS idx_eval_runs_status              ON eval_runs(status
 CREATE INDEX IF NOT EXISTS idx_eval_runs_created_at          ON eval_runs(created_at);
 CREATE INDEX IF NOT EXISTS idx_eval_metrics_run_id           ON eval_metrics(run_id);
 CREATE INDEX IF NOT EXISTS idx_eval_metrics_metric_name      ON eval_metrics(metric_name);
+CREATE INDEX IF NOT EXISTS idx_rag_eval_obs_source_run_id    ON rag_eval_observations(source_run_id);
+CREATE INDEX IF NOT EXISTS idx_rag_eval_obs_query_id         ON rag_eval_observations(query_id);
 CREATE INDEX IF NOT EXISTS idx_gold_extraction_doc_id        ON gold_extraction_labels(doc_id);
 CREATE INDEX IF NOT EXISTS idx_gold_retrieval_query_text     ON gold_retrieval_queries(query_text);
 CREATE INDEX IF NOT EXISTS idx_retrieval_runs_built_at      ON retrieval_index_runs(built_at);

@@ -41,6 +41,32 @@ class EvalMetricRow:
     created_at: str | None
 
 
+@dataclass(frozen=True)
+class RAGEvalObservationRow:
+    """Bounded RAG/eval observation metadata persisted without raw text.
+
+    This row intentionally carries only identifiers, status, numeric operational
+    metrics, numeric quality scores, and citation coordinates. It must not grow
+    prompt, answer, context, snippet, page text, provider payload, image, or blob
+    fields; schema tests enforce that no raw-text columns are present.
+    """
+
+    observation_id: int | None = None
+    source_run_id: str | None = None
+    query_id: str | None = None
+    status: str = "observed"
+    latency_ms: float | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
+    cost_usd: float | None = None
+    faithfulness: float | None = None
+    answer_relevancy: float | None = None
+    cited_doc_id: str | None = None
+    cited_page_num: int | None = None
+    created_at: str | None = None
+
+
 def create_eval_run(
     db_path: str,
     run_id: str,
@@ -207,6 +233,134 @@ def list_eval_metrics(db_path: str, run_id: str) -> list[EvalMetricRow]:
             scope_type=row[3],
             scope_id=row[4],
             created_at=row[5],
+        )
+        for row in rows
+    ]
+
+
+def _coerce_nullable_float(value: Any, field_name: str) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field_name} must be numeric or None") from exc
+
+
+def _coerce_nullable_int(value: Any, field_name: str) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise ValueError(f"{field_name} must be an integer or None")
+    try:
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field_name} must be an integer or None") from exc
+
+
+def insert_rag_eval_observation(db_path: str, observation: RAGEvalObservationRow) -> int:
+    """Persist one bounded RAG/eval observation and return its row id.
+
+    Numeric-like values are normalized before binding. Invalid numeric inputs
+    raise ``ValueError`` before any row is written, preserving a predictable
+    contract for future provider/trace integrations.
+    """
+
+    latency_ms = _coerce_nullable_float(observation.latency_ms, "latency_ms")
+    input_tokens = _coerce_nullable_int(observation.input_tokens, "input_tokens")
+    output_tokens = _coerce_nullable_int(observation.output_tokens, "output_tokens")
+    total_tokens = _coerce_nullable_int(observation.total_tokens, "total_tokens")
+    cost_usd = _coerce_nullable_float(observation.cost_usd, "cost_usd")
+    faithfulness = _coerce_nullable_float(observation.faithfulness, "faithfulness")
+    answer_relevancy = _coerce_nullable_float(observation.answer_relevancy, "answer_relevancy")
+    cited_page_num = _coerce_nullable_int(observation.cited_page_num, "cited_page_num")
+
+    conn = _connect(db_path)
+    try:
+        cursor = conn.execute(
+            """
+            INSERT INTO rag_eval_observations (
+                source_run_id, query_id, status, latency_ms, input_tokens,
+                output_tokens, total_tokens, cost_usd, faithfulness,
+                answer_relevancy, cited_doc_id, cited_page_num
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                observation.source_run_id,
+                observation.query_id,
+                observation.status,
+                latency_ms,
+                input_tokens,
+                output_tokens,
+                total_tokens,
+                cost_usd,
+                faithfulness,
+                answer_relevancy,
+                observation.cited_doc_id,
+                cited_page_num,
+            ),
+        )
+        conn.commit()
+        return int(cursor.lastrowid)
+    finally:
+        conn.close()
+
+
+def list_rag_eval_observations(
+    db_path: str,
+    *,
+    source_run_id: str | None = None,
+    query_id: str | None = None,
+    limit: int = 100,
+) -> list[RAGEvalObservationRow]:
+    """List bounded RAG/eval observations in deterministic insertion order."""
+
+    clauses: list[str] = []
+    params: list[Any] = []
+    if source_run_id is not None:
+        clauses.append("source_run_id = ?")
+        params.append(source_run_id)
+    if query_id is not None:
+        clauses.append("query_id = ?")
+        params.append(query_id)
+
+    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    params.append(_coerce_nullable_int(limit, "limit") or 100)
+
+    conn = _connect(db_path)
+    try:
+        rows = conn.execute(
+            f"""
+            SELECT observation_id, source_run_id, query_id, status, latency_ms,
+                   input_tokens, output_tokens, total_tokens, cost_usd,
+                   faithfulness, answer_relevancy, cited_doc_id, cited_page_num,
+                   created_at
+            FROM rag_eval_observations
+            {where_sql}
+            ORDER BY observation_id ASC
+            LIMIT ?
+            """,
+            params,
+        ).fetchall()
+    finally:
+        conn.close()
+
+    return [
+        RAGEvalObservationRow(
+            observation_id=row[0],
+            source_run_id=row[1],
+            query_id=row[2],
+            status=row[3],
+            latency_ms=row[4],
+            input_tokens=row[5],
+            output_tokens=row[6],
+            total_tokens=row[7],
+            cost_usd=row[8],
+            faithfulness=row[9],
+            answer_relevancy=row[10],
+            cited_doc_id=row[11],
+            cited_page_num=row[12],
+            created_at=row[13],
         )
         for row in rows
     ]

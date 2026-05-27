@@ -1,7 +1,7 @@
 # Codebase Map
 
-Generated: 2026-05-27T19:26:36Z | Files: 87 | Described: 0/87
-<!-- gsd:codebase-meta {"generatedAt":"2026-05-27T19:26:36Z","fingerprint":"7c37d6ab70b8505ba87008d57c7281b69f5c4978","fileCount":87,"truncated":false} -->
+Generated: 2026-05-27T20:27:07Z | Files: 88 | Described: 0/88
+<!-- gsd:codebase-meta {"generatedAt":"2026-05-27T20:27:07Z","fingerprint":"49fd8373a380b708d55068b66ca577a61cd5645c","fileCount":88,"truncated":false} -->
 
 ### (root)/
 - `.env.example`
@@ -15,6 +15,9 @@ Generated: 2026-05-27T19:26:36Z | Files: 87 | Described: 0/87
 
 ### .streamlit/
 - `.streamlit/config.toml`
+
+### scripts/
+- `scripts/seed_and_verify.py`
 
 ### src/
 - `src/__init__.py`
