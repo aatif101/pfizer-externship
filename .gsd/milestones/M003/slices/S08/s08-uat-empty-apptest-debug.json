@@ -1,0 +1,42 @@
+{
+  "mode": "streamlit_apptest_fallback_browser_tools_unavailable",
+  "db_path": ".gsd\\milestones\\M003\\slices\\S08\\s08-fresh-empty.db",
+  "db_state": {
+    "eval_runs": 0,
+    "eval_metrics": 0
+  },
+  "checks": {
+    "db_has_zero_eval_runs": true,
+    "db_has_zero_eval_metrics": true,
+    "evaluation_visible": true,
+    "no_runs_guidance_visible": true,
+    "actionable_cli_guidance_visible": true,
+    "db_path_caption_visible": true,
+    "no_exception_elements": true,
+    "no_traceback_text": true
+  },
+  "headers": [
+    "Compliance Dashboard",
+    "Compliance",
+    "Document Q&A",
+    "Chat",
+    "Evaluation",
+    "Evaluation"
+  ],
+  "subheaders": [],
+  "info_messages": [
+    "No compliance records are available yet.",
+    "No evaluation runs yet. Run the evaluation CLI/tests to populate `eval_runs` and `eval_metrics` in the SQLite database."
+  ],
+  "caption_messages": [
+    "Review extracted compliance status and risk signals with source evidence.",
+    "Ingest documents and run extraction to populate this SQLite-backed dashboard. Looking for persisted records in `.gsd\\milestones\\M003\\slices\\S08\\s08-fresh-empty.db`.",
+    "Ask grounded questions over the indexed supplier corpus. Answers cite source pages.",
+    "Tips: mention a vendor, document type, or field name to improve retrieval.",
+    "This tab is read-only: it surfaces persisted eval run history and metrics without triggering any evaluation computation.",
+    "Looking for persisted runs in `.gsd\\milestones\\M003\\slices\\S08\\s08-fresh-empty.db`.",
+    "Set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY in .env to enable tracing."
+  ],
+  "exception_count": 0,
+  "exceptions": []
+}
