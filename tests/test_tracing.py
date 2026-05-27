@@ -187,6 +187,59 @@ def test_safe_update_current_trace_enforces_ingestion_storage_operational_allowl
     assert "docling_json" not in metadata_repr
 
 
+def test_safe_update_current_trace_enforces_evaluation_allowlist() -> None:
+    from src.eval.retrieval_eval_runner import _EVALUATION_TRACE_ALLOWED_KEYS
+
+    fake_context = _FakeLangfuseContext()
+    sent = safe_update_current_trace(
+        tags=["evaluation", "retrieval_eval", "api_key=SHOULD_DROP"],
+        metadata={
+            "boundary": "evaluation",
+            "status": "complete",
+            "eval_type": "retrieval_eval",
+            "run_id": "eval-safe-001",
+            "retrieval_run_id": "retrieval-built-001",
+            "query_count": 12,
+            "k_values": [5, 10],
+            "metric_count": 48,
+            "include_latency_cost": True,
+            "include_ragas": False,
+            "error_class": "ValueError",
+            "query_text": "Acme supplier compliance approval SHOULD_NOT_APPEAR",
+            "expected_target_content": "raw target content SHOULD_NOT_APPEAR",
+            "retrieved_snippet": "raw retrieved snippet SHOULD_NOT_APPEAR",
+            "page_text": "raw page text SHOULD_NOT_APPEAR",
+            "provider_payload": {"prompt": "SHOULD_NOT_APPEAR"},
+            "content_hash": "abcdef1234567890SHOULD_NOT_APPEAR",
+            "raw_exception_message": "sk-test-SHOULD_NOT_APPEAR",
+        },
+        allowed_metadata_keys=_EVALUATION_TRACE_ALLOWED_KEYS,
+        context=fake_context,
+    )
+
+    assert sent is True
+    update = fake_context.updates[0]
+    assert update["tags"] == ["evaluation", "retrieval_eval"]
+    metadata = update["metadata"]
+    assert metadata == {
+        "boundary": "evaluation",
+        "status": "complete",
+        "eval_type": "retrieval_eval",
+        "run_id": "eval-safe-001",
+        "retrieval_run_id": "retrieval-built-001",
+        "query_count": 12,
+        "k_values": [5, 10],
+        "metric_count": 48,
+        "include_latency_cost": True,
+        "include_ragas": False,
+        "error_class": "ValueError",
+    }
+    metadata_repr = repr(metadata)
+    assert "SHOULD_NOT_APPEAR" not in metadata_repr
+    assert "query_text" not in metadata_repr
+    assert "content_hash" not in metadata_repr
+
+
 @dataclass
 class _TraceTestProvider:
     provider_name: str = "trace-test-provider"

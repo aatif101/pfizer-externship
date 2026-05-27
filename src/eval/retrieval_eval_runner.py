@@ -37,6 +37,23 @@ from src.eval.repository import (
 )
 from src.eval.retrieval_metrics import compute_page_level_citation_accuracy, compute_retrieval_recall_at_k
 from src.retrieval.retriever import retrieve_evidence
+from src.tracing import observe, safe_update_current_trace
+
+_EVALUATION_TRACE_ALLOWED_KEYS = frozenset(
+    {
+        "boundary",
+        "status",
+        "eval_type",
+        "run_id",
+        "retrieval_run_id",
+        "query_count",
+        "k_values",
+        "metric_count",
+        "include_latency_cost",
+        "include_ragas",
+        "error_class",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -48,6 +65,7 @@ class RetrievalEvalConfig:
 _ERROR_SANITIZE_RE = re.compile(r"[^A-Za-z0-9 _.:\-/#]+")
 
 
+@observe(name="retrieval_eval_run")
 def run_retrieval_eval(
     db_path: str,
     *,
@@ -67,6 +85,18 @@ def run_retrieval_eval(
     run_id = uuid.uuid4().hex
     k_tuple = tuple(int(k) for k in k_values)
     retrieval_run_id = get_latest_retrieval_index_run_id(db_path)
+    query_count = 0
+    metric_count = 0
+    _update_evaluation_trace_metadata(
+        status="started",
+        run_id=run_id,
+        retrieval_run_id=retrieval_run_id,
+        query_count=query_count,
+        k_values=k_tuple,
+        metric_count=metric_count,
+        include_latency_cost=include_latency_cost,
+        include_ragas=include_ragas,
+    )
 
     create_eval_run(
         db_path,
@@ -79,11 +109,32 @@ def run_retrieval_eval(
     try:
         if retrieval_run_id is None:
             mark_eval_run_complete(db_path, run_id)
+            _update_evaluation_trace_metadata(
+                status="empty",
+                run_id=run_id,
+                retrieval_run_id=retrieval_run_id,
+                query_count=query_count,
+                k_values=k_tuple,
+                metric_count=metric_count,
+                include_latency_cost=include_latency_cost,
+                include_ragas=include_ragas,
+            )
             return run_id
 
         gold_queries = list_gold_retrieval_queries(db_path)
+        query_count = len(gold_queries)
         if not gold_queries:
             mark_eval_run_complete(db_path, run_id)
+            _update_evaluation_trace_metadata(
+                status="empty",
+                run_id=run_id,
+                retrieval_run_id=retrieval_run_id,
+                query_count=query_count,
+                k_values=k_tuple,
+                metric_count=metric_count,
+                include_latency_cost=include_latency_cost,
+                include_ragas=include_ragas,
+            )
             return run_id
 
         per_query: list[tuple[str, list[tuple[str, int]], list[tuple[str, int]]]] = []
@@ -111,12 +162,14 @@ def run_retrieval_eval(
             citation_result = compute_page_level_citation_accuracy(gold_by_query, cited_by_query)
 
             upsert_eval_metric(db_path, run_id, f"retrieval.recall@{k}", recall_result.macro_recall)
+            metric_count += 1
             upsert_eval_metric(
                 db_path,
                 run_id,
                 f"retrieval.citation_accuracy@{k}",
                 float(citation_result["macro_accuracy"]),
             )
+            metric_count += 1
 
             for query_id in gold_by_query.keys():
                 upsert_eval_metric(
@@ -127,6 +180,7 @@ def run_retrieval_eval(
                     scope_type="query",
                     scope_id=query_id,
                 )
+                metric_count += 1
                 upsert_eval_metric(
                     db_path,
                     run_id,
@@ -135,9 +189,10 @@ def run_retrieval_eval(
                     scope_type="query",
                     scope_id=query_id,
                 )
+                metric_count += 1
 
         if include_latency_cost or include_ragas:
-            _maybe_persist_optional_rag_metrics(
+            metric_count += _maybe_persist_optional_rag_metrics(
                 db_path,
                 run_id,
                 source_run_id=retrieval_run_id,
@@ -146,9 +201,30 @@ def run_retrieval_eval(
             )
 
         mark_eval_run_complete(db_path, run_id)
+        _update_evaluation_trace_metadata(
+            status="complete",
+            run_id=run_id,
+            retrieval_run_id=retrieval_run_id,
+            query_count=query_count,
+            k_values=k_tuple,
+            metric_count=metric_count,
+            include_latency_cost=include_latency_cost,
+            include_ragas=include_ragas,
+        )
         return run_id
     except Exception as exc:
         mark_eval_run_error(db_path, run_id, _sanitize_error(exc))
+        _update_evaluation_trace_metadata(
+            status="error",
+            run_id=run_id,
+            retrieval_run_id=retrieval_run_id,
+            query_count=query_count,
+            k_values=k_tuple,
+            metric_count=metric_count,
+            include_latency_cost=include_latency_cost,
+            include_ragas=include_ragas,
+            error_class=exc.__class__.__name__,
+        )
         raise
 
 
@@ -159,7 +235,7 @@ def _maybe_persist_optional_rag_metrics(
     source_run_id: str,
     include_latency_cost: bool,
     include_ragas: bool,
-) -> None:
+) -> int:
     """Persist optional RAG aggregates from bounded observations when present.
 
     Observation rows are keyed to the retrieval/index or RAG source run that
@@ -177,8 +253,11 @@ def _maybe_persist_optional_rag_metrics(
     if include_ragas:
         metrics.update(aggregate_quality_metrics(observations))
 
+    metric_count = 0
     for metric_name, metric_value in metrics.items():
         upsert_eval_metric(db_path, run_id, metric_name, metric_value)
+        metric_count += 1
+    return metric_count
 
 
 def _load_optional_rag_eval_observations(db_path: str, *, source_run_id: str):
@@ -221,6 +300,45 @@ def _maybe_persist_ragas_placeholder_metrics(db_path: str, run_id: str, *, sourc
     observations = _load_optional_rag_eval_observations(db_path, source_run_id=source_run_id or run_id)
     for metric_name, metric_value in aggregate_quality_metrics(observations).items():
         upsert_eval_metric(db_path, run_id, metric_name, metric_value)
+
+
+def _update_evaluation_trace_metadata(
+    *,
+    status: str,
+    run_id: str,
+    retrieval_run_id: str | None,
+    query_count: int,
+    k_values: tuple[int, ...],
+    metric_count: int,
+    include_latency_cost: bool,
+    include_ragas: bool,
+    error_class: str | None = None,
+) -> None:
+    """Attach bounded retrieval-evaluation metadata to the current trace if available.
+
+    The evaluation trace intentionally emits run/status/count fields only. It never
+    includes query text, target content, retrieved snippets, page text, generated
+    answers, provider payloads, prompts, raw exception messages, secrets, or hashes.
+    """
+
+    metadata = {
+        "boundary": "evaluation",
+        "status": status,
+        "eval_type": "retrieval_eval",
+        "run_id": run_id,
+        "retrieval_run_id": retrieval_run_id,
+        "query_count": query_count,
+        "k_values": list(k_values),
+        "metric_count": metric_count,
+        "include_latency_cost": include_latency_cost,
+        "include_ragas": include_ragas,
+        "error_class": error_class,
+    }
+    safe_update_current_trace(
+        tags=["evaluation", "retrieval_eval"],
+        metadata=metadata,
+        allowed_metadata_keys=_EVALUATION_TRACE_ALLOWED_KEYS,
+    )
 
 
 def _sanitize_error(exc: Exception) -> str:

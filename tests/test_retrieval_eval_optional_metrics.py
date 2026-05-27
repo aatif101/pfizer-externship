@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import builtins
 import sqlite3
+from typing import Any
 
 import pytest
 
 from src.db.schema import init_db
+from src.eval import retrieval_eval_runner as runner
 from src.eval.operational_metrics import (
     ANSWER_RELEVANCY_AVG,
     COST_AVG_USD,
@@ -22,6 +24,20 @@ from src.eval.operational_metrics import (
 from src.eval.repository import RAGEvalObservationRow, insert_rag_eval_observation, list_eval_metrics, list_eval_runs
 from src.eval.retrieval_eval_runner import run_retrieval_eval
 from src.retrieval.indexer import build_retrieval_index
+from src.tracing import filter_trace_metadata
+
+
+def _capture_safe_trace_updates(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
+    updates: list[dict[str, Any]] = []
+
+    def fake_safe_update_current_trace(**kwargs: Any) -> bool:
+        updates.append(
+            filter_trace_metadata(kwargs.get("metadata"), kwargs.get("allowed_metadata_keys") or frozenset())
+        )
+        return True
+
+    monkeypatch.setattr(runner, "safe_update_current_trace", fake_safe_update_current_trace)
+    return updates
 
 
 def _insert_document(conn: sqlite3.Connection, doc_id: str, filename: str, page_texts: list[str]) -> None:
@@ -176,7 +192,8 @@ def test_retrieval_eval_runner_optional_flags_do_not_crash_on_minimal_db(tmp_pat
     # Optional metrics are not required to exist; this just ensures no crash + core persisted.
 
 
-def test_retrieval_eval_runner_persists_optional_rag_metrics_from_observations(tmp_path):
+def test_retrieval_eval_runner_persists_optional_rag_metrics_from_observations(tmp_path, monkeypatch):
+    trace_updates = _capture_safe_trace_updates(monkeypatch)
     db_path = str(tmp_path / "eval.sqlite")
     init_db(db_path)
 
@@ -255,6 +272,20 @@ def test_retrieval_eval_runner_persists_optional_rag_metrics_from_observations(t
     assert metric_index[(FAITHFULNESS_AVG, None, None)] == pytest.approx(0.9)
     assert metric_index[(ANSWER_RELEVANCY_AVG, None, None)] == pytest.approx(0.7)
 
+    final_trace_metadata = trace_updates[-1]
+    assert final_trace_metadata["status"] == "complete"
+    assert final_trace_metadata["boundary"] == "evaluation"
+    assert final_trace_metadata["eval_type"] == "retrieval_eval"
+    assert final_trace_metadata["run_id"] == run_id
+    assert final_trace_metadata["retrieval_run_id"] == source_run_id
+    assert final_trace_metadata["query_count"] == 1
+    assert final_trace_metadata["k_values"] == [5]
+    assert final_trace_metadata["metric_count"] == 14
+    assert final_trace_metadata["include_latency_cost"] is True
+    assert final_trace_metadata["include_ragas"] is True
+    assert set(final_trace_metadata).issubset(runner._EVALUATION_TRACE_ALLOWED_KEYS)
+    assert "answered" not in repr(trace_updates).lower()
+
 
 def test_retrieval_eval_runner_missing_observation_table_is_optional_noop(tmp_path):
     db_path = str(tmp_path / "eval.sqlite")
@@ -287,7 +318,8 @@ def test_retrieval_eval_runner_missing_observation_table_is_optional_noop(tmp_pa
     assert FAITHFULNESS_AVG not in metric_names
 
 
-def test_retrieval_eval_runner_malformed_observation_marks_sanitized_error(tmp_path):
+def test_retrieval_eval_runner_malformed_observation_marks_sanitized_error(tmp_path, monkeypatch):
+    trace_updates = _capture_safe_trace_updates(monkeypatch)
     db_path = str(tmp_path / "eval.sqlite")
     init_db(db_path)
 
@@ -326,3 +358,17 @@ def test_retrieval_eval_runner_malformed_observation_marks_sanitized_error(tmp_p
     assert "ValueError: latency_ms must be numeric or None" in row.error_reason
     assert "<" not in row.error_reason
     assert "raw prompt" not in row.error_reason
+
+    error_trace_metadata = trace_updates[-1]
+    assert error_trace_metadata["status"] == "error"
+    assert error_trace_metadata["boundary"] == "evaluation"
+    assert error_trace_metadata["eval_type"] == "retrieval_eval"
+    assert error_trace_metadata["run_id"] == row.run_id
+    assert error_trace_metadata["retrieval_run_id"] == index_result.run.run_id
+    assert error_trace_metadata["query_count"] == 1
+    assert error_trace_metadata["metric_count"] == 4
+    assert error_trace_metadata["error_class"] == "ValueError"
+    error_metadata_repr = repr(error_trace_metadata).lower()
+    assert "slow" not in error_metadata_repr
+    assert "raw prompt" not in error_metadata_repr
+    assert "secret" not in error_metadata_repr
