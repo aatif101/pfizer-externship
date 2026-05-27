@@ -1,0 +1,257 @@
+{
+  "checks": {
+    "no_exception": true,
+    "no_traceback": true,
+    "evaluation_visible": true,
+    "run_history_visible": true,
+    "metrics_visible": true,
+    "rag_faithfulness_visible": true,
+    "retrieval_recall5_visible": true,
+    "comparison_delta_visible": true,
+    "two_runs_visible": true
+  },
+  "tabs": [
+    "Compliance",
+    "Chat",
+    "Eval"
+  ],
+  "selectboxes": [
+    [
+      "Primary run",
+      "s08-uat-eval-run-b",
+      [
+        "s08-uat-eval-run-b",
+        "s08-uat-eval-run-a"
+      ]
+    ],
+    [
+      "Compare to (optional)",
+      "s08-uat-eval-run-a",
+      [
+        "(none)",
+        "s08-uat-eval-run-a"
+      ]
+    ]
+  ],
+  "checkboxes": [
+    [
+      "Only show compatible runs",
+      true
+    ],
+    [
+      "Allow comparing any eval_type",
+      false
+    ],
+    [
+      "Show only changed metrics",
+      true
+    ],
+    [
+      "Include per-scope metrics",
+      false
+    ]
+  ],
+  "frames": [
+    {
+      "index": 0,
+      "records": [
+        {
+          "run_id": "s08-uat-eval-run-b",
+          "eval_type": "rag_retrieval_uat",
+          "status": "complete",
+          "created_at": "2026-05-27T21:32:39Z",
+          "completed_at": "2026-05-27T21:32:39Z",
+          "pipeline_label": "synthetic-uat-candidate",
+          "error_reason": null
+        },
+        {
+          "run_id": "s08-uat-eval-run-a",
+          "eval_type": "rag_retrieval_uat",
+          "status": "complete",
+          "created_at": "2026-05-27T21:32:39Z",
+          "completed_at": "2026-05-27T21:32:39Z",
+          "pipeline_label": "synthetic-uat-baseline",
+          "error_reason": null
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "records": [
+        {
+          "metric": "rag.answer_relevancy.avg",
+          "value": "85.0%",
+          "compare_value": "79.0%",
+          "delta": "-6.0%"
+        },
+        {
+          "metric": "rag.cost_usd.avg",
+          "value": "$0.003960",
+          "compare_value": "$0.004320",
+          "delta": "$+0.000360"
+        },
+        {
+          "metric": "rag.cost_usd.total",
+          "value": "$0.039600",
+          "compare_value": "$0.043200",
+          "delta": "$+0.003600"
+        },
+        {
+          "metric": "rag.faithfulness.avg",
+          "value": "88.0%",
+          "compare_value": "81.0%",
+          "delta": "-7.0%"
+        },
+        {
+          "metric": "rag.latency_ms.avg",
+          "value": "1275.0 ms",
+          "compare_value": "1420.0 ms",
+          "delta": "+145.0 ms"
+        },
+        {
+          "metric": "rag.latency_ms.p50",
+          "value": "1015.0 ms",
+          "compare_value": "1180.0 ms",
+          "delta": "+165.0 ms"
+        },
+        {
+          "metric": "rag.latency_ms.p95",
+          "value": "2185.0 ms",
+          "compare_value": "2410.0 ms",
+          "delta": "+225.0 ms"
+        },
+        {
+          "metric": "rag.tokens.total",
+          "value": "17,650",
+          "compare_value": "18,400",
+          "delta": "+750"
+        },
+        {
+          "metric": "retrieval.citation_accuracy@10",
+          "value": "86.0%",
+          "compare_value": "78.0%",
+          "delta": "-8.0%"
+        },
+        {
+          "metric": "retrieval.citation_accuracy@5",
+          "value": "74.0%",
+          "compare_value": "68.0%",
+          "delta": "-6.0%"
+        },
+        {
+          "metric": "retrieval.recall@10",
+          "value": "90.0%",
+          "compare_value": "84.0%",
+          "delta": "-6.0%"
+        },
+        {
+          "metric": "retrieval.recall@5",
+          "value": "80.0%",
+          "compare_value": "72.0%",
+          "delta": "-8.0%"
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "records": [
+        {
+          "scope_type": null,
+          "scope_id": null,
+          "metric": "rag.answer_relevancy.avg",
+          "value_a": "85.0%",
+          "value_b": "79.0%",
+          "delta": "-6.0%"
+        },
+        {
+          "scope_type": null,
+          "scope_id": null,
+          "metric": "rag.cost_usd.avg",
+          "value_a": "$0.003960",
+          "value_b": "$0.004320",
+          "delta": "$+0.000360"
+        },
+        {
+          "scope_type": null,
+          "scope_id": null,
+          "metric": "rag.cost_usd.total",
+          "value_a": "$0.039600",
+          "value_b": "$0.043200",
+          "delta": "$+0.003600"
+        },
+        {
+          "scope_type": null,
+          "scope_id": null,
+          "metric": "rag.faithfulness.avg",
+          "value_a": "88.0%",
+          "value_b": "81.0%",
+          "delta": "-7.0%"
+        },
+        {
+          "scope_type": null,
+          "scope_id": null,
+          "metric": "rag.latency_ms.avg",
+          "value_a": "1275.0 ms",
+          "value_b": "1420.0 ms",
+          "delta": "+145.0 ms"
+        },
+        {
+          "scope_type": null,
+          "scope_id": null,
+          "metric": "rag.latency_ms.p50",
+          "value_a": "1015.0 ms",
+          "value_b": "1180.0 ms",
+          "delta": "+165.0 ms"
+        },
+        {
+          "scope_type": null,
+          "scope_id": null,
+          "metric": "rag.latency_ms.p95",
+          "value_a": "2185.0 ms",
+          "value_b": "2410.0 ms",
+          "delta": "+225.0 ms"
+        },
+        {
+          "scope_type": null,
+          "scope_id": null,
+          "metric": "rag.tokens.total",
+          "value_a": "17,650",
+          "value_b": "18,400",
+          "delta": "+750"
+        },
+        {
+          "scope_type": null,
+          "scope_id": null,
+          "metric": "retrieval.citation_accuracy@10",
+          "value_a": "86.0%",
+          "value_b": "78.0%",
+          "delta": "-8.0%"
+        },
+        {
+          "scope_type": null,
+          "scope_id": null,
+          "metric": "retrieval.citation_accuracy@5",
+          "value_a": "74.0%",
+          "value_b": "68.0%",
+          "delta": "-6.0%"
+        },
+        {
+          "scope_type": null,
+          "scope_id": null,
+          "metric": "retrieval.recall@10",
+          "value_a": "90.0%",
+          "value_b": "84.0%",
+          "delta": "-6.0%"
+        },
+        {
+          "scope_type": null,
+          "scope_id": null,
+          "metric": "retrieval.recall@5",
+          "value_a": "80.0%",
+          "value_b": "72.0%",
+          "delta": "-8.0%"
+        }
+      ]
+    }
+  ]
+}
