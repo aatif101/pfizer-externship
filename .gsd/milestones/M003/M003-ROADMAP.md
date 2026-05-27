@@ -25,7 +25,7 @@
 - [x] **S05: S05** `risk:Low-medium: mostly UX work but can accidentally regress existing tabs if done carelessly.` `depends:[]`
   > After this: Dashboard layout, typography, and table presentation feel demo-ready; Eval tab is readable and consistent with Compliance and Chat sections.
 
-- [ ] **S06: Complete R007 metric coverage** `risk:High: touches metric semantics, optional RAGAS or trace data, and requirement R007 completeness.` `depends:[S05]`
+- [x] **S06: Complete R007 metric coverage** `risk:High: touches metric semantics, optional RAGAS or trace data, and requirement R007 completeness.` `depends:[S05]`
   > After this: After this: Evaluation run history includes repeatable faithfulness or relevancy, citation, latency, and cost metrics where prerequisites are configured, with deterministic fallback behavior and tests when optional services are absent.
 
 - [ ] **S07: Implement R008 Langfuse tracing** `risk:High: cross-pipeline observability can leak sensitive data if sanitization boundaries are not enforced.` `depends:[S05]`

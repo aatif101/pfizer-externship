@@ -9,8 +9,8 @@
       "sourceFile": "STATE.md"
     },
     {
-      "id": "concept:phase:validating-milestone",
-      "label": "Phase: validating-milestone",
+      "id": "concept:phase:planning",
+      "label": "Phase: planning",
       "type": "concept",
       "confidence": "EXTRACTED",
       "sourceFile": "STATE.md"
@@ -446,6 +446,49 @@
       "label": "T04: Run full dashboard test suite and ensure no regressions to provider-free/read-only guarantees",
       "type": "task",
       "confidence": "EXTRACTED"
+    },
+    {
+      "id": "slice:M003:S06",
+      "label": "S06: Complete R007 metric coverage",
+      "type": "slice",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M003/slices/S06/S06-PLAN.md"
+    },
+    {
+      "id": "task:M003:S06:T01",
+      "label": "T01: Add bounded RAG evaluation observation storage",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "task:M003:S06:T02",
+      "label": "T02: Implement pure optional metric aggregation",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "task:M003:S06:T03",
+      "label": "T03: Wire optional RAG metrics into retrieval eval runs",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "task:M003:S06:T04",
+      "label": "T04: Keep Eval tab readable and credential-free for new metrics",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "task:M003:S06:T05",
+      "label": "T05: Run integrated R007 regression proof",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "slice:M003:S07",
+      "label": "M003/S07",
+      "type": "slice",
+      "confidence": "EXTRACTED"
     }
   ],
   "edges": [
@@ -850,7 +893,49 @@
       "to": "task:M003:S05:T04",
       "type": "contains",
       "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M003",
+      "to": "slice:M003:S06",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M003:S06",
+      "to": "task:M003:S06:T01",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M003:S06",
+      "to": "task:M003:S06:T02",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M003:S06",
+      "to": "task:M003:S06:T03",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M003:S06",
+      "to": "task:M003:S06:T04",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M003:S06",
+      "to": "task:M003:S06:T05",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M003",
+      "to": "slice:M003:S07",
+      "type": "contains",
+      "confidence": "EXTRACTED"
     }
   ],
-  "builtAt": "2026-05-22T18:42:04.506Z"
+  "builtAt": "2026-05-27T20:49:23.609Z"
 }
