@@ -8,7 +8,7 @@ from typing import Any
 import langfuse  # noqa: PLC0415
 from importlib.metadata import version
 import pytest
-from src.tracing import verify_langfuse_connection  # noqa: PLC0415
+from src.tracing import safe_update_current_trace, verify_langfuse_connection  # noqa: PLC0415
 
 
 def test_langfuse_v3_pinned() -> None:
@@ -62,6 +62,86 @@ class _FakeLangfuseContext:
         if self.raise_on_update:
             raise RuntimeError("trace backend unavailable")
         self.updates.append(kwargs)
+
+
+def test_safe_update_current_trace_filters_allowlist_and_bounds_values() -> None:
+    fake_context = _FakeLangfuseContext()
+    long_run_id = "run-" + ("x" * 400)
+    sent = safe_update_current_trace(
+        tags=["ingestion", "api_key=SHOULD_DROP"],
+        metadata={
+            "boundary": "ingest",
+            "status": "completed",
+            "run_id": long_run_id,
+            "count": 3,
+            "latency_ms": 12.5,
+            "page_text": "Acme supplier compliance approval raw page text must not leak",
+            "api_key": "pf_secret_SHOULD_NOT_APPEAR",
+            "provider_payload": {"nested": "raw payload must not be stringified"},
+        },
+        allowed_metadata_keys=frozenset({"boundary", "status", "run_id", "count", "latency_ms"}),
+        context=fake_context,
+    )
+
+    assert sent is True
+    assert len(fake_context.updates) == 1
+    update = fake_context.updates[0]
+    assert update["tags"] == ["ingestion"]
+    metadata = update["metadata"]
+    assert set(metadata) == {"boundary", "status", "run_id", "count", "latency_ms"}
+    assert metadata["run_id"].startswith("run-")
+    assert metadata["run_id"].endswith("[truncated:148]")
+    assert len(metadata["run_id"]) < len(long_run_id)
+    metadata_repr = repr(metadata)
+    assert "page_text" not in metadata_repr
+    assert "SHOULD_NOT_APPEAR" not in metadata_repr
+    assert "raw payload" not in metadata_repr
+    assert "Acme supplier" not in metadata_repr
+
+
+def test_safe_update_current_trace_drops_secret_looking_allowed_values() -> None:
+    fake_context = _FakeLangfuseContext()
+    sent = safe_update_current_trace(
+        metadata={
+            "boundary": "generation",
+            "run_id": "Bearer SECRET_TOKEN_SHOULD_NOT_APPEAR",
+            "doc_id": "doc-safe-001",
+            "cost_usd": float("nan"),
+            "status": object(),
+        },
+        allowed_metadata_keys=frozenset({"boundary", "run_id", "doc_id", "cost_usd", "status"}),
+        context=fake_context,
+    )
+
+    assert sent is True
+    metadata = fake_context.updates[0]["metadata"]
+    assert metadata == {"boundary": "generation", "doc_id": "doc-safe-001"}
+    assert "SECRET_TOKEN_SHOULD_NOT_APPEAR" not in repr(metadata)
+
+
+def test_safe_update_current_trace_noops_when_context_missing_or_empty() -> None:
+    assert safe_update_current_trace(
+        metadata={"boundary": "evaluation"},
+        allowed_metadata_keys=frozenset({"boundary"}),
+        context=object(),
+    ) is False
+    assert safe_update_current_trace(
+        metadata={"page_text": "raw text"},
+        allowed_metadata_keys=frozenset({"boundary"}),
+        context=_FakeLangfuseContext(),
+    ) is False
+
+
+def test_safe_update_current_trace_update_exception_is_noop() -> None:
+    failing_context = _FakeLangfuseContext(raise_on_update=True)
+
+    assert safe_update_current_trace(
+        tags=["evaluation"],
+        metadata={"boundary": "eval", "status": "failed"},
+        allowed_metadata_keys=frozenset({"boundary", "status"}),
+        context=failing_context,
+    ) is False
+    assert failing_context.updates == []
 
 
 @dataclass
