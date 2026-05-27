@@ -22,7 +22,7 @@
 - [x] **S04: S04** `risk:Medium: UI must avoid heavy computation on rerun and must not crash when prerequisites are missing.` `depends:[]`
   > After this: Open Streamlit and see a populated Eval tab listing eval runs and metrics, with the ability to select and compare two runs and clear guidance for missing gold and evals.
 
-- [ ] **S05: S05** `risk:Low-medium: mostly UX work but can accidentally regress existing tabs if done carelessly.` `depends:[]`
+- [x] **S05: S05** `risk:Low-medium: mostly UX work but can accidentally regress existing tabs if done carelessly.` `depends:[]`
   > After this: Dashboard layout, typography, and table presentation feel demo-ready; Eval tab is readable and consistent with Compliance and Chat sections.
 
 ## Boundary Map

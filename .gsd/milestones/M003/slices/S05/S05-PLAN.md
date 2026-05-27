@@ -36,12 +36,12 @@
   - Files: `src/dashboard/eval.py`, `tests/test_dashboard_eval_tab.py`, `src/dashboard/ui.py`
   - Verify: venv/Scripts/python.exe -m pytest tests/test_dashboard_eval_tab.py -q
 
-- [ ] **T03: Polish Compliance and Chat tabs for consistent presentation and actionable empty states** `est:60m`
+- [x] **T03: Polish Compliance and Chat tabs for consistent presentation and actionable empty states** `est:60m`
   Why: The demo experience depends on all tabs feeling cohesive; empty states should guide the evaluator to the next action.
   - Files: `src/dashboard/compliance.py`, `src/dashboard/chat.py`, `src/dashboard/ui.py`, `tests/test_dashboard_compliance_tab.py`, `tests/test_dashboard_chat_tab.py`
   - Verify: venv/Scripts/python.exe -m pytest tests/test_dashboard_compliance_tab.py tests/test_dashboard_chat_tab.py -q
 
-- [ ] **T04: Run full dashboard test suite and ensure no regressions to provider-free/read-only guarantees** `est:30m`
+- [x] **T04: Run full dashboard test suite and ensure no regressions to provider-free/read-only guarantees** `est:30m`
   Why: Polish work can accidentally change behavior; this task closes the loop with a broader regression run.
   - Files: `src/dashboard/eval.py`, `src/dashboard/compliance.py`, `src/dashboard/chat.py`, `src/dashboard/ui.py`, `tests/test_dashboard_eval_tab.py`, `tests/test_dashboard_compliance_tab.py`, `tests/test_dashboard_chat_tab.py`
   - Verify: venv/Scripts/python.exe -m pytest -q
