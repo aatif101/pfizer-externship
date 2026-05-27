@@ -15,15 +15,21 @@ Citation accuracy uses the top-k retrieved hits as "citations" for now.
 from __future__ import annotations
 
 import re
-import sqlite3
 import uuid
 from dataclasses import dataclass
 
+from src.eval.operational_metrics import (
+    aggregate_cost_metrics,
+    aggregate_latency_metrics,
+    aggregate_quality_metrics,
+    aggregate_token_metrics,
+)
 from src.eval.repository import (
     create_eval_run,
     get_latest_retrieval_index_run_id,
     list_gold_retrieval_queries,
     list_gold_retrieval_targets,
+    list_rag_eval_observations,
     mark_eval_run_complete,
     mark_eval_run_error,
     upsert_eval_metric,
@@ -143,87 +149,35 @@ def run_retrieval_eval(
 
 
 def _maybe_persist_latency_cost_metrics(db_path: str, run_id: str) -> None:
-    """Best-effort: persist numeric aggregates for latency/cost if present.
+    """Persist optional latency/cost/token aggregates from bounded observations.
 
-    This intentionally degrades gracefully because not all demo configurations
-    have tracing/cost tables available.
-
-    Redaction requirement (R010): do not persist any raw prompts/contexts/tokens.
-    Only numeric aggregates belong in eval_metrics.
-
-    Current implementation is a placeholder: it attempts a trivial query against
-    an optional `trace_spans`-like table if it exists, otherwise it no-ops.
-
-    Narrow failure handling:
-    - sqlite3.OperationalError: missing table/columns
+    This degrades gracefully when no observations exist for the run. Aggregation
+    is pure Python and avoids optional SQLite percentile functions. Only numeric
+    aggregates are written to ``eval_metrics``; observation rows never contain raw
+    prompts, answers, snippets, provider payloads, images, or document JSON.
     """
 
-    try:
-        conn = sqlite3.connect(db_path)
-        try:
-            # Optional schema (not guaranteed to exist). If it exists, we store
-            # a coarse latency summary.
-            row = conn.execute(
-                """
-                SELECT AVG(duration_ms), P50(duration_ms), P95(duration_ms)
-                FROM trace_spans
-                WHERE run_id = ?
-                """,
-                (run_id,),
-            ).fetchone()
-        finally:
-            conn.close()
-
-        if row is None:
-            return
-
-        avg_ms, p50_ms, p95_ms = row
-        if avg_ms is not None:
-            upsert_eval_metric(db_path, run_id, "retrieval.latency_ms.avg", float(avg_ms))
-        if p50_ms is not None:
-            upsert_eval_metric(db_path, run_id, "retrieval.latency_ms.p50", float(p50_ms))
-        if p95_ms is not None:
-            upsert_eval_metric(db_path, run_id, "retrieval.latency_ms.p95", float(p95_ms))
-
-    except sqlite3.OperationalError:
-        # Missing optional table/columns/functions; skip.
-        return
+    observations = list_rag_eval_observations(db_path, source_run_id=run_id)
+    metrics = {
+        **aggregate_latency_metrics(observations),
+        **aggregate_cost_metrics(observations),
+        **aggregate_token_metrics(observations),
+    }
+    for metric_name, metric_value in metrics.items():
+        upsert_eval_metric(db_path, run_id, metric_name, metric_value)
 
 
 def _maybe_persist_ragas_placeholder_metrics(db_path: str, run_id: str) -> None:
-    """Best-effort: compute/persist RAGAS metrics if installed + data available.
+    """Persist precomputed RAG quality aggregates from bounded observations.
 
-    For this slice, we keep it non-fatal and provider-free by default:
-    - If ragas isn't installed: ImportError -> skip
-    - If the DB doesn't have gold answers/contexts: sqlite3.OperationalError -> skip
-
-    This is intentionally a placeholder hook; real RAGAS integration should live
-    in a RAG eval runner once answer generation + citation spans are available.
-
-    Redaction requirement (R010): do not persist raw contexts, prompts, or tokens.
-    Persist only final numeric metric aggregates.
+    Despite the historical function name, this does not import RAGAS or call any
+    provider. It only averages already-computed numeric faithfulness and answer
+    relevancy values when they are present in ``rag_eval_observations``.
     """
 
-    try:
-        import ragas as _ragas  # noqa: F401
-    except ImportError:
-        return
-
-    # We don't have an agreed-upon schema for gold answers/contexts in this repo
-    # yet. Treat absence as a non-fatal no-op.
-    try:
-        conn = sqlite3.connect(db_path)
-        try:
-            conn.execute("SELECT 1 FROM gold_rag_answers LIMIT 1").fetchone()
-            conn.execute("SELECT 1 FROM gold_rag_contexts LIMIT 1").fetchone()
-        finally:
-            conn.close()
-    except sqlite3.OperationalError:
-        return
-
-    # Placeholder until RAG runner exists.
-    # If/when implemented: compute and upsert e.g. ragas.faithfulness, ragas.answer_relevancy.
-    return
+    observations = list_rag_eval_observations(db_path, source_run_id=run_id)
+    for metric_name, metric_value in aggregate_quality_metrics(observations).items():
+        upsert_eval_metric(db_path, run_id, metric_name, metric_value)
 
 
 def _sanitize_error(exc: Exception) -> str:
