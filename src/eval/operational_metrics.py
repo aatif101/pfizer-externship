@@ -27,9 +27,19 @@ TOTAL_TOKENS_TOTAL = "rag.tokens.total"
 FAITHFULNESS_AVG = "rag.faithfulness.avg"
 ANSWER_RELEVANCY_AVG = "rag.answer_relevancy.avg"
 
+EXTRACTION_LATENCY_AVG_MS = "extraction.latency_ms.avg"
+EXTRACTION_LATENCY_P50_MS = "extraction.latency_ms.p50"
+EXTRACTION_LATENCY_P95_MS = "extraction.latency_ms.p95"
+EXTRACTION_COST_TOTAL_USD = "extraction.cost_usd.total"
+EXTRACTION_COST_AVG_USD = "extraction.cost_usd.avg"
+EXTRACTION_INPUT_TOKENS_TOTAL = "extraction.tokens.input"
+EXTRACTION_OUTPUT_TOKENS_TOTAL = "extraction.tokens.output"
+EXTRACTION_TOTAL_TOKENS_TOTAL = "extraction.tokens.total"
+
 _NUMERIC_FIELDS = {
     "latency_ms",
     "cost_usd",
+    "estimated_cost_usd",
     "input_tokens",
     "output_tokens",
     "total_tokens",
@@ -79,6 +89,41 @@ def aggregate_observation_metrics(observations: Iterable[Any]) -> dict[str, floa
     answer_relevancy_values = _numeric_values(rows, "answer_relevancy")
     if answer_relevancy_values:
         metrics[ANSWER_RELEVANCY_AVG] = _average(answer_relevancy_values)
+
+    return metrics
+
+
+def aggregate_extraction_usage_metrics(observations: Iterable[Any]) -> dict[str, float]:
+    """Aggregate bounded extraction usage rows into provider-free eval metrics.
+
+    Extraction observations use ``estimated_cost_usd`` rather than the RAG
+    observation ``cost_usd`` field. Missing or null numeric values remain absent;
+    they are never zero-filled. Malformed non-null values raise ``ValueError``.
+    """
+
+    rows = list(observations)
+    metrics: dict[str, float] = {}
+
+    latency_values = _numeric_values(rows, "latency_ms")
+    if latency_values:
+        metrics[EXTRACTION_LATENCY_AVG_MS] = _average(latency_values)
+        metrics[EXTRACTION_LATENCY_P50_MS] = _percentile(latency_values, 50)
+        metrics[EXTRACTION_LATENCY_P95_MS] = _percentile(latency_values, 95)
+
+    cost_values = _numeric_values(rows, "estimated_cost_usd")
+    if cost_values:
+        metrics[EXTRACTION_COST_TOTAL_USD] = float(sum(cost_values))
+        metrics[EXTRACTION_COST_AVG_USD] = _average(cost_values)
+
+    token_metric_names = {
+        "input_tokens": EXTRACTION_INPUT_TOKENS_TOTAL,
+        "output_tokens": EXTRACTION_OUTPUT_TOKENS_TOTAL,
+        "total_tokens": EXTRACTION_TOTAL_TOKENS_TOTAL,
+    }
+    for field_name, metric_name in token_metric_names.items():
+        token_values = _numeric_values(rows, field_name)
+        if token_values:
+            metrics[metric_name] = float(sum(token_values))
 
     return metrics
 
