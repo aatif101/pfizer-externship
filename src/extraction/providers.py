@@ -55,12 +55,30 @@ class ProviderFieldPayload:
 
 
 @dataclass(frozen=True)
+class ProviderUsageMetadata:
+    """Bounded provider usage metadata safe to persist for observability.
+
+    This DTO intentionally contains only numeric token/cost telemetry and model
+    identity. It must not grow prompt text, page text, provider payloads, images,
+    PDFs, secrets, or local file paths.
+    """
+
+    model: str | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
+    estimated_cost_usd: float | None = None
+
+
+@dataclass(frozen=True)
 class ProviderExtractionResult:
     """Provider response shape consumed by the extraction pipeline."""
 
     fields: tuple[ProviderFieldPayload, ...]
     trace_id: str | None = None
     provider_name: str | None = None
+    provider_model: str | None = None
+    usage_metadata: ProviderUsageMetadata | None = None
 
 
 class SDFExtractionProvider(Protocol):

@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
+from time import perf_counter
 from typing import Any
 from uuid import uuid4
 
@@ -23,6 +24,7 @@ from src.extraction.models import ExtractedField, ReviewState, SDFExtractionReco
 from src.extraction.providers import ProviderExtractionResult, ProviderFieldPayload, SDFExtractionProvider
 from src.extraction.repository import upsert_extraction_record
 from src.extraction.risk import compute_record_risk
+from src.eval.repository import ExtractionUsageObservationRow, insert_extraction_usage_observation
 from src.tracing import observe, safe_update_current_trace
 
 
@@ -124,11 +126,13 @@ def extract_document(
             raise DocumentNotFoundError("Document metadata was not found for extraction.", run_id=effective_run_id, doc_id=doc_id)
         _validate_pages_for_extraction(loaded, run_id=effective_run_id)
 
+        provider_started_at = perf_counter()
         provider_result = provider.extract_fields(
             document=loaded.document,
             pages=loaded.pages,
             run_id=effective_run_id,
         )
+        provider_latency_ms = (perf_counter() - provider_started_at) * 1000
         fields = _normalize_fields(
             provider_result,
             pages=loaded.pages,
@@ -150,6 +154,12 @@ def extract_document(
         record.age_days = risk.age_days
 
         upsert_extraction_record(db_path, record)
+        _insert_text_usage_observation(
+            db_path,
+            record=record,
+            provider_result=provider_result,
+            latency_ms=provider_latency_ms,
+        )
 
         diagnostics = ExtractionDiagnostics(
             run_id=effective_run_id,
@@ -206,6 +216,53 @@ def _error_trace_metadata(exc: BaseException, *, run_id: str, doc_id: str) -> di
     if isinstance(exc, ExtractionPipelineError):
         metadata["reason_code"] = exc.reason_code
     return metadata
+
+
+def _insert_text_usage_observation(
+    db_path: str,
+    *,
+    record: SDFExtractionRecord,
+    provider_result: ProviderExtractionResult,
+    latency_ms: float,
+) -> None:
+    usage = provider_result.usage_metadata
+    provider_model = provider_result.provider_model or (usage.model if usage is not None else None)
+    status = _usage_observation_status(record)
+    insert_extraction_usage_observation(
+        db_path,
+        ExtractionUsageObservationRow(
+            run_id=record.run_id or "",
+            doc_id=record.doc_id,
+            stage="text_extraction",
+            provider=provider_result.provider_name,
+            model=provider_model,
+            status=status,
+            latency_ms=latency_ms,
+            input_tokens=usage.input_tokens if usage is not None else None,
+            output_tokens=usage.output_tokens if usage is not None else None,
+            total_tokens=usage.total_tokens if usage is not None else None,
+            estimated_cost_usd=usage.estimated_cost_usd if usage is not None else None,
+            trace_id=provider_result.trace_id,
+            error_reason=_usage_observation_error_reason(status),
+        ),
+    )
+
+
+def _usage_observation_status(record: SDFExtractionRecord) -> str:
+    review_states = [field.review_state for field in record.fields.values()]
+    if review_states and all(state is ReviewState.ABSTAINED for state in review_states):
+        return "abstained"
+    if record.dashboard_needs_review:
+        return "needs_review"
+    return "complete"
+
+
+def _usage_observation_error_reason(status: str) -> str | None:
+    if status == "abstained":
+        return "all_fields_abstained"
+    if status == "needs_review":
+        return "fields_need_review"
+    return None
 
 
 def _validate_pages_for_extraction(loaded: LoadedDocumentPages, *, run_id: str) -> None:

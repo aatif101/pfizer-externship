@@ -25,11 +25,14 @@ from src.extraction.providers import (
     ProviderExtractionResult,
     ProviderFieldPayload,
     ProviderSourceEvidence,
+    ProviderUsageMetadata,
 )
 
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 MALFORMED_OUTPUT_REASON = "Provider returned malformed structured output."
 _PROVIDER_NAME = "gemini"
+_GEMINI_2_5_FLASH_INPUT_USD_PER_1M = 0.15
+_GEMINI_2_5_FLASH_OUTPUT_USD_PER_1M = 0.60
 
 
 @dataclass(frozen=True)
@@ -93,19 +96,22 @@ class GeminiSDFExtractionProvider:
                 f"doc_id={document.doc_id}, error_class={exc.__class__.__name__})."
             ) from exc
 
+        usage_metadata = _extract_usage_metadata(response, model=self.model)
         response_text = _response_text(response)
         payload = _parse_json_object(response_text)
         if payload is None:
-            return _malformed_result(trace_id=_response_trace_id(response))
+            return _malformed_result(trace_id=_response_trace_id(response), model=self.model, usage_metadata=usage_metadata)
 
         fields = _parse_fields(payload)
         if fields is None:
-            return _malformed_result(trace_id=_response_trace_id(response))
+            return _malformed_result(trace_id=_response_trace_id(response), model=self.model, usage_metadata=usage_metadata)
 
         return ProviderExtractionResult(
             fields=tuple(fields),
             trace_id=_response_trace_id(response),
             provider_name=_PROVIDER_NAME,
+            provider_model=self.model,
+            usage_metadata=usage_metadata,
         )
 
     def _generate_content_with_retry(self, *, contents: str) -> Any:
@@ -210,6 +216,58 @@ def _response_trace_id(response: Any) -> str | None:
     return None
 
 
+def _extract_usage_metadata(response: Any, *, model: str) -> ProviderUsageMetadata | None:
+    raw_usage = getattr(response, "usage_metadata", None)
+    if raw_usage is None and isinstance(response, dict):
+        raw_usage = response.get("usage_metadata")
+    if raw_usage is None:
+        return None
+
+    input_tokens = _optional_int(_usage_value(raw_usage, "prompt_token_count"))
+    output_tokens = _optional_int(_usage_value(raw_usage, "candidates_token_count"))
+    total_tokens = _optional_int(_usage_value(raw_usage, "total_token_count"))
+    if input_tokens is None and output_tokens is None and total_tokens is None:
+        return None
+
+    return ProviderUsageMetadata(
+        model=model,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total_tokens,
+        estimated_cost_usd=_estimate_gemini_cost_usd(
+            model=model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        ),
+    )
+
+
+def _usage_value(raw_usage: Any, field_name: str) -> Any:
+    if isinstance(raw_usage, dict):
+        return raw_usage.get(field_name)
+    return getattr(raw_usage, field_name, None)
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        integer = int(value)
+    except (TypeError, ValueError):
+        return None
+    return integer if integer >= 0 else None
+
+
+def _estimate_gemini_cost_usd(*, model: str, input_tokens: int | None, output_tokens: int | None) -> float | None:
+    if model.strip().lower() != DEFAULT_GEMINI_MODEL:
+        return None
+    if input_tokens is None and output_tokens is None:
+        return None
+    input_cost = ((input_tokens or 0) / 1_000_000) * _GEMINI_2_5_FLASH_INPUT_USD_PER_1M
+    output_cost = ((output_tokens or 0) / 1_000_000) * _GEMINI_2_5_FLASH_OUTPUT_USD_PER_1M
+    return input_cost + output_cost
+
+
 def _parse_json_object(text: str) -> dict[str, Any] | None:
     stripped = text.strip()
     if not stripped:
@@ -277,7 +335,12 @@ def _float_or_zero(value: Any) -> float:
         return 0.0
 
 
-def _malformed_result(*, trace_id: str | None) -> ProviderExtractionResult:
+def _malformed_result(
+    *,
+    trace_id: str | None,
+    model: str,
+    usage_metadata: ProviderUsageMetadata | None,
+) -> ProviderExtractionResult:
     return ProviderExtractionResult(
         fields=tuple(
             ProviderFieldPayload(
@@ -290,6 +353,8 @@ def _malformed_result(*, trace_id: str | None) -> ProviderExtractionResult:
         ),
         trace_id=trace_id,
         provider_name=_PROVIDER_NAME,
+        provider_model=model,
+        usage_metadata=usage_metadata,
     )
 
 
