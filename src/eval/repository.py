@@ -12,6 +12,7 @@ This module builds on the canonical evaluation schema introduced in
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 from dataclasses import dataclass
 from typing import Any
@@ -64,6 +65,33 @@ class RAGEvalObservationRow:
     answer_relevancy: float | None = None
     cited_doc_id: str | None = None
     cited_page_num: int | None = None
+    created_at: str | None = None
+
+
+@dataclass(frozen=True)
+class ExtractionUsageObservationRow:
+    """Bounded extraction usage telemetry persisted without raw document data.
+
+    This row intentionally carries only run/document identifiers, extraction
+    stage/model metadata, status, sanitized error reason, trace id, and numeric
+    token/latency/cost fields. It must not store prompts, page text, provider
+    payloads, images, PDFs, secrets, or local confidential paths.
+    """
+
+    observation_id: int | None = None
+    run_id: str = ""
+    doc_id: str = ""
+    stage: str = "extraction"
+    provider: str | None = None
+    model: str | None = None
+    status: str = "observed"
+    latency_ms: float | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
+    estimated_cost_usd: float | None = None
+    trace_id: str | None = None
+    error_reason: str | None = None
     created_at: str | None = None
 
 
@@ -242,9 +270,12 @@ def _coerce_nullable_float(value: Any, field_name: str) -> float | None:
     if value is None:
         return None
     try:
-        return float(value)
+        numeric_value = float(value)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{field_name} must be numeric or None") from exc
+    if not math.isfinite(numeric_value):
+        raise ValueError(f"{field_name} must be finite or None")
+    return numeric_value
 
 
 def _coerce_nullable_int(value: Any, field_name: str) -> int | None:
@@ -361,6 +392,124 @@ def list_rag_eval_observations(
             cited_doc_id=row[11],
             cited_page_num=row[12],
             created_at=row[13],
+        )
+        for row in rows
+    ]
+
+
+def insert_extraction_usage_observation(db_path: str, observation: ExtractionUsageObservationRow) -> int:
+    """Persist one bounded extraction usage observation and return its row id.
+
+    Numeric-like values are normalized before binding. Invalid numeric inputs
+    raise ``ValueError`` before opening a write transaction, so malformed
+    telemetry cannot create partial rows. SQLite integrity/schema errors are
+    rolled back and surfaced to callers as normal repository exceptions.
+    """
+
+    latency_ms = _coerce_nullable_float(observation.latency_ms, "latency_ms")
+    input_tokens = _coerce_nullable_int(observation.input_tokens, "input_tokens")
+    output_tokens = _coerce_nullable_int(observation.output_tokens, "output_tokens")
+    total_tokens = _coerce_nullable_int(observation.total_tokens, "total_tokens")
+    estimated_cost_usd = _coerce_nullable_float(observation.estimated_cost_usd, "estimated_cost_usd")
+
+    conn = _connect(db_path)
+    try:
+        cursor = conn.execute(
+            """
+            INSERT INTO extraction_usage_observations (
+                run_id, doc_id, stage, provider, model, status, latency_ms,
+                input_tokens, output_tokens, total_tokens, estimated_cost_usd,
+                trace_id, error_reason
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                observation.run_id,
+                observation.doc_id,
+                observation.stage,
+                observation.provider,
+                observation.model,
+                observation.status,
+                latency_ms,
+                input_tokens,
+                output_tokens,
+                total_tokens,
+                estimated_cost_usd,
+                observation.trace_id,
+                observation.error_reason,
+            ),
+        )
+        conn.commit()
+        return int(cursor.lastrowid)
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def list_extraction_usage_observations(
+    db_path: str,
+    *,
+    run_id: str | None = None,
+    doc_id: str | None = None,
+    stage: str | None = None,
+    status: str | None = None,
+    limit: int = 100,
+) -> list[ExtractionUsageObservationRow]:
+    """List bounded extraction usage observations by indexed filters."""
+
+    clauses: list[str] = []
+    params: list[Any] = []
+    if run_id is not None:
+        clauses.append("run_id = ?")
+        params.append(run_id)
+    if doc_id is not None:
+        clauses.append("doc_id = ?")
+        params.append(doc_id)
+    if stage is not None:
+        clauses.append("stage = ?")
+        params.append(stage)
+    if status is not None:
+        clauses.append("status = ?")
+        params.append(status)
+
+    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    params.append(_coerce_nullable_int(limit, "limit") or 100)
+
+    conn = _connect(db_path)
+    try:
+        rows = conn.execute(
+            f"""
+            SELECT observation_id, run_id, doc_id, stage, provider, model, status,
+                   latency_ms, input_tokens, output_tokens, total_tokens,
+                   estimated_cost_usd, trace_id, error_reason, created_at
+            FROM extraction_usage_observations
+            {where_sql}
+            ORDER BY observation_id ASC
+            LIMIT ?
+            """,
+            params,
+        ).fetchall()
+    finally:
+        conn.close()
+
+    return [
+        ExtractionUsageObservationRow(
+            observation_id=row[0],
+            run_id=row[1],
+            doc_id=row[2],
+            stage=row[3],
+            provider=row[4],
+            model=row[5],
+            status=row[6],
+            latency_ms=row[7],
+            input_tokens=row[8],
+            output_tokens=row[9],
+            total_tokens=row[10],
+            estimated_cost_usd=row[11],
+            trace_id=row[12],
+            error_reason=row[13],
+            created_at=row[14],
         )
         for row in rows
     ]

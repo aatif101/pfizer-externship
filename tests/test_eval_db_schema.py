@@ -36,9 +36,65 @@ def test_init_db_idempotent(tmp_path: Path) -> None:
     assert "eval_runs" in tables
     assert "eval_metrics" in tables
     assert "rag_eval_observations" in tables
+    assert "extraction_usage_observations" in tables
     assert "gold_extraction_labels" in tables
     assert "gold_retrieval_queries" in tables
     assert "gold_retrieval_targets" in tables
+
+
+def test_extraction_usage_observations_schema_is_bounded_and_indexed(tmp_path: Path) -> None:
+    db_path = str(tmp_path / "eval_schema.sqlite")
+    init_db(db_path)
+
+    conn = sqlite3.connect(db_path)
+    try:
+        columns = _column_names(conn, "extraction_usage_observations")
+        indexes = _index_names(conn)
+    finally:
+        conn.close()
+
+    assert {
+        "observation_id",
+        "run_id",
+        "doc_id",
+        "stage",
+        "provider",
+        "model",
+        "status",
+        "latency_ms",
+        "input_tokens",
+        "output_tokens",
+        "total_tokens",
+        "estimated_cost_usd",
+        "trace_id",
+        "error_reason",
+        "created_at",
+    } <= columns
+    assert "idx_extraction_usage_run_id" in indexes
+    assert "idx_extraction_usage_doc_id" in indexes
+    assert "idx_extraction_usage_stage" in indexes
+    assert "idx_extraction_usage_status" in indexes
+    assert "idx_extraction_usage_run_doc_stage" in indexes
+
+    forbidden_fragments = (
+        "prompt",
+        "page_text",
+        "raw_response",
+        "provider_payload",
+        "payload",
+        "image",
+        "blob",
+        "pdf",
+        "file_path",
+        "docling_json",
+        "secret",
+        "api_key",
+    )
+    assert not any(
+        forbidden in column
+        for column in columns
+        for forbidden in forbidden_fragments
+    )
 
 
 def test_rag_eval_observations_schema_is_bounded_and_indexed(tmp_path: Path) -> None:
@@ -146,6 +202,7 @@ def test_init_db_upgrades_older_schema(tmp_path: Path) -> None:
     assert "eval_runs" in tables
     assert "eval_metrics" in tables
     assert "rag_eval_observations" in tables
+    assert "extraction_usage_observations" in tables
     assert "gold_extraction_labels" in tables
     assert "gold_retrieval_queries" in tables
     assert "gold_retrieval_targets" in tables

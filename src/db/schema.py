@@ -184,6 +184,24 @@ CREATE TABLE IF NOT EXISTS rag_eval_observations (
     created_at       TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 
+CREATE TABLE IF NOT EXISTS extraction_usage_observations (
+    observation_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id              TEXT NOT NULL REFERENCES extraction_runs(run_id) ON DELETE CASCADE,
+    doc_id              TEXT NOT NULL REFERENCES documents(doc_id) ON DELETE CASCADE,
+    stage               TEXT NOT NULL,
+    provider            TEXT,
+    model               TEXT,
+    status              TEXT NOT NULL,
+    latency_ms          REAL,
+    input_tokens        INTEGER,
+    output_tokens       INTEGER,
+    total_tokens        INTEGER,
+    estimated_cost_usd  REAL,
+    trace_id            TEXT,
+    error_reason        TEXT,
+    created_at          TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
 CREATE TABLE IF NOT EXISTS gold_extraction_labels (
     doc_id           TEXT NOT NULL REFERENCES documents(doc_id) ON DELETE CASCADE,
     field_name       TEXT NOT NULL,
@@ -268,6 +286,11 @@ CREATE INDEX IF NOT EXISTS idx_eval_metrics_run_id           ON eval_metrics(run
 CREATE INDEX IF NOT EXISTS idx_eval_metrics_metric_name      ON eval_metrics(metric_name);
 CREATE INDEX IF NOT EXISTS idx_rag_eval_obs_source_run_id    ON rag_eval_observations(source_run_id);
 CREATE INDEX IF NOT EXISTS idx_rag_eval_obs_query_id         ON rag_eval_observations(query_id);
+CREATE INDEX IF NOT EXISTS idx_extraction_usage_run_id       ON extraction_usage_observations(run_id);
+CREATE INDEX IF NOT EXISTS idx_extraction_usage_doc_id       ON extraction_usage_observations(doc_id);
+CREATE INDEX IF NOT EXISTS idx_extraction_usage_stage        ON extraction_usage_observations(stage);
+CREATE INDEX IF NOT EXISTS idx_extraction_usage_status       ON extraction_usage_observations(status);
+CREATE INDEX IF NOT EXISTS idx_extraction_usage_run_doc_stage ON extraction_usage_observations(run_id, doc_id, stage);
 CREATE INDEX IF NOT EXISTS idx_gold_extraction_doc_id        ON gold_extraction_labels(doc_id);
 CREATE INDEX IF NOT EXISTS idx_gold_retrieval_query_text     ON gold_retrieval_queries(query_text);
 CREATE INDEX IF NOT EXISTS idx_retrieval_runs_built_at      ON retrieval_index_runs(built_at);
