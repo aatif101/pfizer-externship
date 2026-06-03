@@ -1,95 +1,45 @@
-# Pfizer SDF Intelligence System
+# Project
 
 ## What This Is
 
-An end-to-end AI-powered pharmaceutical document intelligence and compliance system for Pfizer supplier documentation (SDFs). The system ingests a folder of pharmaceutical PDFs (certificates of analysis, vendor certificates, compliance forms — many scanned or stamped) and delivers: automated field extraction with compliance flagging, a visual + hybrid RAG chatbot, and a Streamlit compliance dashboard with full observability. Built as a Pfizer externship demo to showcase AI engineering capability on real-world pharma document workflows.
+Pfizer SDF Intelligence System is an end-to-end AI-powered pharmaceutical document intelligence and compliance system for supplier documentation. The project ingests pharmaceutical PDFs into SQLite with Docling page text and page images, extracts structured SDF metadata with source evidence, computes compliance risk, supports grounded document Q&A, and exposes Streamlit Compliance, Chat, and Eval dashboards.
+
+The current system has completed ingestion, baseline extraction/compliance, text retrieval and RAG chat, observability, and evaluation dashboard milestones. A real confidential 5-document SDF baseline has been created locally from already-ingested supplier PDFs, with human-approved gold extraction labels and measured baseline/candidate runs.
 
 ## Core Value
 
-A pharmaceutical compliance officer can upload a folder of supplier documents and immediately see which ones are expired or at risk, ask natural language questions across the entire corpus, and trust every answer is grounded in a cited source page — with no hallucination.
+A pharmaceutical compliance reviewer can inspect supplier documents and trust that extracted fields, risk flags, and answers are grounded in cited source evidence, while the engineering evaluator can compare extraction candidates honestly against a real human-approved baseline without leaking confidential artifacts.
 
-## Current Implementation State
+## Project Shape
 
-Migrated from GSD 1.0 `.planning/` artifacts on 2026-05-19. Phase 1 foundation work is implemented in code and verified in the Python 3.11 project virtual environment.
+- **Complexity:** complex
+- **Why:** The project crosses PDF ingestion, SQLite persistence, LLM extraction, visual fallback, Streamlit dashboards, evaluation metrics, confidential local artifacts, and live Gemini API usage.
 
-Implemented Phase 1 surfaces:
+## Current State
 
-- SQLite schema for documents, pages, extractions, and evaluations.
-- Docling VLM-based PDF conversion wrapper.
-- pypdfium2 150 DPI page rasterization into PNG blobs.
-- Typer ingestion CLI.
-- Streamlit shell with Compliance, Chat, and Eval tabs.
-- Langfuse v3 tracing helper.
+- M001 validated Docling ingestion, structured SDF extraction, compliance risk, and Compliance dashboard basics.
+- M002 validated CPU-friendly text retrieval and grounded RAG Chat.
+- M003 validated evaluation dashboard history, optional metrics, and tracing/observability hardening.
+- A local real 5-document SDF evaluation baseline exists in ignored `compliance.db` and `local_data/` artifacts.
+- Latest hardening added dashboard latest-write warnings, prompt packet policy, placeholder/date guards, and a guarded candidate eval run.
 
-Verification baseline at migration:
+## Architecture / Key Patterns
 
-- `./venv/Scripts/python.exe -m pip install -e ".[dev]"` succeeds.
-- `./venv/Scripts/python.exe -m pytest -q` passed before migration cleanup with 15 tests passing.
-- Global Python 3.14 is not a supported execution environment for this project.
+- Python 3.11 project virtual environment is the supported runtime.
+- SQLite is the local persistence boundary for documents, pages, extraction rows, compliance rows, retrieval index rows, gold labels, eval runs, and eval metrics.
+- Extraction uses provider-neutral Pydantic contracts under `src/extraction`, with Gemini behind a lazy runtime adapter and fake providers in routine tests.
+- Non-abstained fields require source page and verbatim span. Abstained fields require a reason.
+- Compliance risk is deterministic and conservative.
+- RAG answer generation is service-owned: retrieval evidence is authoritative and provider output does not own citations.
+- Trace and observation metadata must be allowlisted and bounded; raw page text, prompts, provider payloads, images, Docling JSON, full hashes, and secrets must not leak.
+
+## Capability Contract
+
+See `.gsd/REQUIREMENTS.md` for the explicit capability contract, requirement status, and coverage mapping.
 
 ## Milestone Sequence
 
-- [ ] M001: Phase 2 Extraction and Compliance - Extract SDF metadata, compute compliance risk, and display validated results in Streamlit.
-- [ ] M002: Retrieval and RAG Chatbot - Build hybrid retrieval and grounded document Q&A with page-level citations.
-- [ ] M003: Dashboard Evaluation and Polish - Add eval harness, benchmark reporting, architecture docs, and demo polish.
-
-## Requirements
-
-### Validated
-
-- Phase 1 foundation and ingestion scaffolding is implemented and testable in Python 3.11.
-
-### Active
-
-**Phase 2 Extraction and Compliance:**
-
-- Extract structured metadata (doc type, vendor name, manufacturing date, effective date, revision date, expiry date) via VLM extraction into validated Pydantic models.
-- Include source text span and source page reference per extracted field.
-- Flag documents by age: green (<2 years), amber (2-3 years), red (>3 years).
-- Store extraction results and compliance flags in SQLite.
-- Surface extracted compliance records in the Streamlit Compliance tab.
-
-**Future phases retained from GSD 1.0 plan:**
-
-- Hybrid RAG chatbot: BM25 + dense retrieval, fused with reranker.
-- Streamlit dashboard: sortable compliance table, source page links, risk coloring.
-- Eval harness: extraction F1, retrieval recall@5, answer faithfulness, citation accuracy, latency, cost.
-- ColQwen visual retrieval in Qdrant.
-- Agentic extraction critic loop and LangGraph agentic RAG.
-- HITL low-confidence review queue.
-- Phase 1 vs Phase 2 benchmark and demo polish.
-
-### Out of Scope
-
-- Production deployment / hosting infrastructure — demo only.
-- Authentication / multi-user access control — single-user demo.
-- Ingestion of non-PDF formats — PDF-only for v1.
-- Fine-tuning any models — API/pretrained models only.
-
-## Context
-
-- Externship context: Pfizer demo project for stakeholders/evaluators.
-- Documents: mix of real Pfizer SDFs and synthetic/publicly available pharma PDFs.
-- Runtime: local development on Python 3.11; Colab Pro L4 remains acceptable for GPU-heavy visual retrieval.
-- Current repo was originally generated with GSD 1.0 and has been normalized into current `.gsd/` artifacts for future work.
-
-## Constraints
-
-- Python 3.11 is the supported local runtime.
-- Avoid global Python 3.14 for test/dev commands unless dependencies are repaired separately.
-- Tech stack remains Python, Docling, Qdrant, LangGraph, Langfuse, Streamlit, Pydantic, RAGAS, and API-based VLMs.
-- Do not track local secrets or provider tokens; `settings.local.json` is local-only.
-
-## Key Decisions
-
-| Decision | Rationale | Outcome |
-|----------|-----------|---------|
-| Python 3.11 is the supported runtime | Global Python 3.14 produced dependency failures; project venv Python 3.11 passes tests | Active |
-| Keep Phase 1 implementation and proceed through cleanup before Phase 2 | Phase 1 code is small and testable; cleanup reduces risk before extraction work | Active |
-| Treat `settings.local.json` as local-only | A token-like value had been tracked previously; local settings must not be committed | Active |
-| Use Docling for PDF conversion and pypdfium2 for page rasterization | Existing implementation passes tests; Docling page image generation remains separate from rasterization path | Active |
-| Revisit Docling VLM API before heavy ingestion work | Current tests show deprecation warning for legacy VLM options | Active |
-
-## Evolution
-
-This document is the current-state replacement for `.planning/PROJECT.md`. Historical GSD 1.0 artifacts remain under `.planning/` for reference.
+- [x] M001: Phase 2 Extraction and Compliance — Ingest and extract SDF fields into compliance dashboard records.
+- [x] M002: Retrieval and RAG Chatbot — Build grounded text retrieval and cited answer generation.
+- [x] M003: Dashboard Evaluation and Polish — Persist and display evaluation history, optional metrics, and trace-safe observability.
+- [ ] M004: Real SDF Extraction Evaluation Hardening — Preserve extraction runs, capture Gemini cost, add targeted visual fallback, and compare against the real 5-document baseline.

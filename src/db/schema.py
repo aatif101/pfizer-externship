@@ -74,6 +74,66 @@ CREATE TABLE IF NOT EXISTS compliance_records (
     source_verbatim_span    TEXT
 );
 
+CREATE TABLE IF NOT EXISTS extraction_runs (
+    run_id          TEXT PRIMARY KEY,
+    status          TEXT NOT NULL,
+    document_count  INTEGER NOT NULL DEFAULT 0,
+    field_count     INTEGER NOT NULL DEFAULT 0,
+    trace_id         TEXT,
+    started_at       TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    completed_at     TIMESTAMP,
+    created_at       TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    updated_at       TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS extraction_history (
+    history_id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id            TEXT NOT NULL REFERENCES extraction_runs(run_id) ON DELETE CASCADE,
+    doc_id            TEXT NOT NULL REFERENCES documents(doc_id) ON DELETE CASCADE,
+    field_name        TEXT NOT NULL,
+    field_value       TEXT,
+    confidence        REAL,
+    source_page       INTEGER,
+    source_bbox       TEXT,
+    verbatim_span     TEXT,
+    trace_id          TEXT,
+    created_at        TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    needs_review      BOOLEAN DEFAULT 0,
+    review_state      TEXT,
+    abstention_reason TEXT,
+    normalized_value  TEXT,
+    extracted_at      TIMESTAMP,
+    updated_at        TIMESTAMP,
+    UNIQUE (run_id, doc_id, field_name)
+);
+
+CREATE TABLE IF NOT EXISTS compliance_record_history (
+    history_id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id                  TEXT NOT NULL REFERENCES extraction_runs(run_id) ON DELETE CASCADE,
+    doc_id                  TEXT NOT NULL REFERENCES documents(doc_id) ON DELETE CASCADE,
+    doc_type                TEXT,
+    vendor_name             TEXT,
+    manufacturing_date      TEXT,
+    effective_date          TEXT,
+    revision_date           TEXT,
+    expiry_date             TEXT,
+    aggregate_confidence    REAL,
+    review_state            TEXT,
+    needs_review            BOOLEAN DEFAULT 0,
+    trace_id                TEXT,
+    extracted_at            TIMESTAMP,
+    created_at              TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    updated_at              TIMESTAMP,
+    risk_level              TEXT,
+    risk_reason             TEXT,
+    compliance_status       TEXT,
+    age_days                INTEGER,
+    source_page             INTEGER,
+    source_bbox             TEXT,
+    source_verbatim_span    TEXT,
+    UNIQUE (run_id, doc_id)
+);
+
 -- LEGACY: Phase 1 evaluation surface (per-metric rows without run grouping).
 -- Keep for backward compatibility; new evaluation code should use eval_runs + eval_metrics.
 CREATE TABLE IF NOT EXISTS evaluations (
@@ -188,6 +248,19 @@ CREATE INDEX IF NOT EXISTS idx_compliance_vendor_name       ON compliance_record
 CREATE INDEX IF NOT EXISTS idx_compliance_expiry_date       ON compliance_records(expiry_date);
 CREATE INDEX IF NOT EXISTS idx_compliance_trace_id          ON compliance_records(trace_id);
 CREATE INDEX IF NOT EXISTS idx_compliance_run_id            ON compliance_records(run_id);
+CREATE INDEX IF NOT EXISTS idx_extraction_runs_started_at   ON extraction_runs(started_at);
+CREATE INDEX IF NOT EXISTS idx_extraction_runs_created_at   ON extraction_runs(created_at);
+CREATE INDEX IF NOT EXISTS idx_extraction_runs_status       ON extraction_runs(status);
+CREATE INDEX IF NOT EXISTS idx_extraction_history_run_id    ON extraction_history(run_id);
+CREATE INDEX IF NOT EXISTS idx_extraction_history_doc_id    ON extraction_history(doc_id);
+CREATE INDEX IF NOT EXISTS idx_extraction_history_run_doc   ON extraction_history(run_id, doc_id);
+CREATE INDEX IF NOT EXISTS idx_extraction_history_trace_id  ON extraction_history(trace_id);
+CREATE INDEX IF NOT EXISTS idx_compliance_history_run_id    ON compliance_record_history(run_id);
+CREATE INDEX IF NOT EXISTS idx_compliance_history_doc_id    ON compliance_record_history(doc_id);
+CREATE INDEX IF NOT EXISTS idx_compliance_history_run_doc   ON compliance_record_history(run_id, doc_id);
+CREATE INDEX IF NOT EXISTS idx_compliance_history_trace_id  ON compliance_record_history(trace_id);
+CREATE INDEX IF NOT EXISTS idx_compliance_history_risk      ON compliance_record_history(risk_level);
+CREATE INDEX IF NOT EXISTS idx_compliance_history_review    ON compliance_record_history(review_state);
 CREATE INDEX IF NOT EXISTS idx_evaluations_run_id           ON evaluations(run_id);
 CREATE INDEX IF NOT EXISTS idx_eval_runs_status              ON eval_runs(status);
 CREATE INDEX IF NOT EXISTS idx_eval_runs_created_at          ON eval_runs(created_at);

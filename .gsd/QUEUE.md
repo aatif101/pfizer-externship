@@ -1,3 +1,3 @@
 # Queue
 
-- No queued milestones.
+- 🔄 **M004: Real SDF Extraction Evaluation Hardening**
