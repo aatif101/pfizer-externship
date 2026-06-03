@@ -72,8 +72,8 @@ def _safe_error_message(exc: BaseException, *, doc_id: str | None = None) -> str
     return "Extraction failed (" + ", ".join(parts) + ")."
 
 
-def _extract_one(*, db_path: str, doc_id: str, provider: SDFExtractionProvider) -> None:
-    result = run_extraction(db_path, doc_id, provider)
+def _extract_one(*, db_path: str, doc_id: str, provider: SDFExtractionProvider, run_id: str | None = None) -> None:
+    result = run_extraction(db_path, doc_id, provider, run_id=run_id)
     diagnostics = result.diagnostics
     typer.echo(
         "OK "
@@ -91,13 +91,17 @@ def extract_command(
     doc_id: Annotated[str, typer.Option("--doc-id", help="Document ID to extract.")],
     db_path: Annotated[str, typer.Option("--db-path", help="SQLite compliance database path.")],
     provider_name: Annotated[str, typer.Option("--provider", help="Extraction provider to use.")] = "gemini",
+    run_id: Annotated[str | None, typer.Option("--run-id", help="Optional extraction run ID to persist.")] = None,
 ) -> None:
     """Extract and persist one ingested document's six SDF fields."""
 
-    typer.echo(f"Starting extraction doc_id={doc_id} provider={provider_name} trace_status={_trace_status()}")
+    typer.echo(
+        f"Starting extraction doc_id={doc_id} provider={provider_name} "
+        f"trace_status={_trace_status()} run_id={run_id or 'auto'}"
+    )
     try:
         provider = build_provider(provider_name)
-        _extract_one(db_path=db_path, doc_id=doc_id, provider=provider)
+        _extract_one(db_path=db_path, doc_id=doc_id, provider=provider, run_id=run_id)
     except ExtractionConfigurationError as exc:
         typer.echo(_safe_error_message(exc, doc_id=doc_id), err=True)
         raise typer.Exit(2) from exc
@@ -110,6 +114,7 @@ def extract_command(
 def extract_all_command(
     db_path: Annotated[str, typer.Option("--db-path", help="SQLite compliance database path.")],
     provider_name: Annotated[str, typer.Option("--provider", help="Extraction provider to use.")] = "gemini",
+    run_id: Annotated[str | None, typer.Option("--run-id", help="Optional shared extraction run ID to persist.")] = None,
 ) -> None:
     """Extract and persist all documents with status='ingested'."""
 
@@ -122,7 +127,8 @@ def extract_all_command(
         raise typer.Exit(1)
 
     typer.echo(
-        f"Starting batch extraction provider={provider_name} trace_status={_trace_status()} docs={len(documents)}"
+        f"Starting batch extraction provider={provider_name} trace_status={_trace_status()} "
+        f"docs={len(documents)} run_id={run_id or 'auto'}"
     )
     try:
         provider = build_provider(provider_name)
@@ -138,7 +144,7 @@ def extract_all_command(
     for document in documents:
         doc_id = str(document["doc_id"])
         try:
-            _extract_one(db_path=db_path, doc_id=doc_id, provider=provider)
+            _extract_one(db_path=db_path, doc_id=doc_id, provider=provider, run_id=run_id)
             succeeded += 1
         except (ExtractionPipelineError, ExtractionProviderError) as exc:
             failed += 1

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+from datetime import date, datetime, timezone
 
 import pytest
 
+from src.db.queries import insert_document
 from src.db.schema import init_db
 from src.eval.repository import (
     RAGEvalObservationRow,
@@ -14,11 +16,81 @@ from src.eval.repository import (
     list_gold_extraction_labels,
     list_gold_retrieval_queries,
     list_gold_retrieval_targets,
+    list_predicted_extractions,
+    list_predicted_extractions_for_run,
     list_rag_eval_observations,
     mark_eval_run_complete,
     mark_eval_run_error,
     upsert_eval_metric,
 )
+from src.extraction.models import ExtractedField, ReviewState, SDFExtractionRecord, SDFFieldName, SourceEvidence
+from src.extraction.repository import upsert_extraction_record
+
+
+def _eval_field(
+    field_name: SDFFieldName,
+    raw_value: str,
+    *,
+    normalized_value: str | None = None,
+    normalized_date: date | None = None,
+    review_state: ReviewState = ReviewState.PENDING,
+) -> ExtractedField:
+    return ExtractedField(
+        field_name=field_name,
+        raw_value=raw_value,
+        normalized_value=normalized_value if normalized_value is not None else raw_value,
+        normalized_date=normalized_date,
+        confidence=0.9,
+        evidence=SourceEvidence(page_num=0, bbox={"x": 1, "y": 2}, verbatim_span=raw_value),
+        review_state=review_state,
+    )
+
+
+def _eval_record(doc_id: str, *, vendor_name: str, run_id: str) -> SDFExtractionRecord:
+    fields = {
+        SDFFieldName.DOC_TYPE: _eval_field(SDFFieldName.DOC_TYPE, "Supplier Declaration Form", normalized_value="SDF"),
+        SDFFieldName.VENDOR_NAME: _eval_field(SDFFieldName.VENDOR_NAME, vendor_name),
+        SDFFieldName.MANUFACTURING_DATE: _eval_field(
+            SDFFieldName.MANUFACTURING_DATE,
+            "2024-01-05",
+            normalized_date=date(2024, 1, 5),
+        ),
+        SDFFieldName.EFFECTIVE_DATE: _eval_field(
+            SDFFieldName.EFFECTIVE_DATE,
+            "2024-02-01",
+            normalized_date=date(2024, 2, 1),
+        ),
+        SDFFieldName.REVISION_DATE: _eval_field(
+            SDFFieldName.REVISION_DATE,
+            "2024-03-15",
+            normalized_date=date(2024, 3, 15),
+            review_state=ReviewState.REVIEWED,
+        ),
+        SDFFieldName.EXPIRY_DATE: _eval_field(
+            SDFFieldName.EXPIRY_DATE,
+            "2027-01-31",
+            normalized_date=date(2027, 1, 31),
+        ),
+    }
+    return SDFExtractionRecord(
+        doc_id=doc_id,
+        filename=f"{doc_id}.pdf",
+        fields=fields,
+        trace_id=f"trace-{run_id}",
+        run_id=run_id,
+        extracted_at=datetime(2026, 5, 19, 12, 0, tzinfo=timezone.utc),
+    )
+
+
+def _insert_eval_document(db_path: str, doc_id: str) -> None:
+    insert_document(
+        db_path,
+        doc_id=doc_id,
+        filename=f"{doc_id}.pdf",
+        file_path=f"/tmp/{doc_id}.pdf",
+        page_count=1,
+        docling_json=None,
+    )
 
 
 def test_eval_run_create_and_list_is_idempotent(tmp_path):
@@ -96,6 +168,50 @@ def test_gold_list_helpers_return_empty_lists_on_empty_db(tmp_path):
     assert list_gold_extraction_labels(db_path) == []
     assert list_gold_retrieval_queries(db_path) == []
     assert list_gold_retrieval_targets(db_path, "missing") == []
+
+
+def test_list_predicted_extractions_for_run_filters_history_without_latest_fallback(tmp_path):
+    db_path = str(tmp_path / "eval.db")
+    init_db(db_path)
+    _insert_eval_document(db_path, "doc-a")
+    _insert_eval_document(db_path, "doc-b")
+
+    upsert_extraction_record(db_path, _eval_record("doc-a", vendor_name="Baseline Vendor A", run_id="baseline-run"))
+    upsert_extraction_record(db_path, _eval_record("doc-b", vendor_name="Baseline Vendor B", run_id="baseline-run"))
+    upsert_extraction_record(db_path, _eval_record("doc-a", vendor_name="Candidate Vendor A", run_id="candidate-run"))
+
+    baseline_rows = list_predicted_extractions_for_run(db_path, "baseline-run")
+    candidate_rows = list_predicted_extractions_for_run(db_path, "candidate-run")
+    latest_rows = list_predicted_extractions(db_path)
+
+    assert len(baseline_rows) == 12
+    assert len(candidate_rows) == 6
+    assert [(row["doc_id"], row["field_name"]) for row in baseline_rows] == sorted(
+        (row["doc_id"], row["field_name"]) for row in baseline_rows
+    )
+    baseline_vendors = [row for row in baseline_rows if row["field_name"] == "vendor_name"]
+    assert baseline_vendors == [
+        {
+            "doc_id": "doc-a",
+            "field_name": "vendor_name",
+            "normalized_value": "Baseline Vendor A",
+            "review_state": "pending",
+        },
+        {
+            "doc_id": "doc-b",
+            "field_name": "vendor_name",
+            "normalized_value": "Baseline Vendor B",
+            "review_state": "pending",
+        },
+    ]
+    assert [row["normalized_value"] for row in candidate_rows if row["field_name"] == "vendor_name"] == [
+        "Candidate Vendor A"
+    ]
+    assert [row["normalized_value"] for row in latest_rows if row["field_name"] == "vendor_name"] == [
+        "Candidate Vendor A",
+        "Baseline Vendor B",
+    ]
+    assert list_predicted_extractions_for_run(db_path, "missing-run") == []
 
 
 def test_rag_eval_observation_insert_and_list_multiple_rows(tmp_path):

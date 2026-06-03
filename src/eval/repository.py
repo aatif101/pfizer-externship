@@ -410,6 +410,32 @@ def list_predicted_extractions(db_path: str) -> list[dict[str, Any]]:
     return [dict(zip(columns, row)) for row in rows]
 
 
+def list_predicted_extractions_for_run(db_path: str, run_id: str) -> list[dict[str, Any]]:
+    """List predicted extraction rows for a specific extraction run.
+
+    Returns dict rows with: doc_id, field_name, normalized_value, review_state.
+    This intentionally reads only from additive `extraction_history` rows and
+    does not fall back to latest-write `extractions` rows when a run is missing.
+    """
+
+    conn = _connect(db_path)
+    try:
+        rows = conn.execute(
+            """
+            SELECT doc_id, field_name, normalized_value, review_state
+            FROM extraction_history
+            WHERE run_id = ?
+            ORDER BY doc_id ASC, field_name ASC
+            """,
+            (run_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    columns = ["doc_id", "field_name", "normalized_value", "review_state"]
+    return [dict(zip(columns, row)) for row in rows]
+
+
 def list_gold_retrieval_queries(db_path: str) -> list[dict[str, Any]]:
     conn = _connect(db_path)
     try:

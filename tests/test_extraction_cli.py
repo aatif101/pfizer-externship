@@ -15,7 +15,7 @@ from src.extraction.providers import (
     ProviderFieldPayload,
     ProviderSourceEvidence,
 )
-from src.extraction.repository import list_compliance_records
+from src.extraction.repository import list_compliance_records, list_compliance_records_for_run
 
 runner = CliRunner()
 
@@ -33,6 +33,7 @@ Expiry Date: 2027-01-31
 class FakeProvider:
     fail_doc_id: str | None = None
     calls: list[str] | None = None
+    run_ids: list[str] | None = None
 
     def extract_fields(
         self,
@@ -43,6 +44,8 @@ class FakeProvider:
     ) -> ProviderExtractionResult:
         if self.calls is not None:
             self.calls.append(document.doc_id)
+        if self.run_ids is not None:
+            self.run_ids.append(run_id)
         if self.fail_doc_id == document.doc_id:
             raise ExtractionProviderError("Fake provider failed without leaking text.")
         return ProviderExtractionResult(fields=_all_fields(), trace_id="trace-cli-fake", provider_name="fake")
@@ -107,6 +110,28 @@ def test_extract_command_persists_compliance_row_with_safe_operator_output(monke
     assert list_compliance_records(tmp_db_path)[0]["doc_id"] == "doc-001"
 
 
+def test_extract_command_uses_explicit_run_id_for_provider_and_history(monkeypatch, tmp_db_path: str) -> None:
+    init_db(tmp_db_path)
+    _prepare_doc(tmp_db_path, "doc-001")
+    provider = FakeProvider(calls=[], run_ids=[])
+    monkeypatch.setattr(cli, "build_provider", lambda provider_name: provider)
+
+    result = runner.invoke(
+        cli.app,
+        ["extract", "--doc-id", "doc-001", "--db-path", tmp_db_path, "--run-id", "baseline-run"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert provider.calls == ["doc-001"]
+    assert provider.run_ids == ["baseline-run"]
+    assert "run_id=baseline-run" in result.output
+    rows = list_compliance_records_for_run(tmp_db_path, "baseline-run")
+    assert len(rows) == 1
+    assert rows[0]["doc_id"] == "doc-001"
+    assert rows[0]["run_id"] == "baseline-run"
+    assert "Acme Pharma Ltd." not in result.output
+
+
 def test_extract_all_filters_ingested_docs_deterministically_and_summarizes(monkeypatch, tmp_db_path: str) -> None:
     init_db(tmp_db_path)
     _prepare_doc(tmp_db_path, "doc-b")
@@ -122,6 +147,26 @@ def test_extract_all_filters_ingested_docs_deterministically_and_summarizes(monk
     assert "SUMMARY attempted=2 succeeded=2 failed=0" in result.output
     rows = list_compliance_records(tmp_db_path)
     assert {row["doc_id"] for row in rows} == {"doc-a", "doc-b"}
+    assert "Supplier Declaration Form" not in result.output
+
+
+def test_extract_all_uses_shared_explicit_run_id_for_provider_and_history(monkeypatch, tmp_db_path: str) -> None:
+    init_db(tmp_db_path)
+    _prepare_doc(tmp_db_path, "doc-b")
+    _prepare_doc(tmp_db_path, "doc-a")
+    provider = FakeProvider(calls=[], run_ids=[])
+    monkeypatch.setattr(cli, "build_provider", lambda provider_name: provider)
+
+    result = runner.invoke(cli.app, ["extract-all", "--db-path", tmp_db_path, "--run-id", "candidate-run"])
+
+    assert result.exit_code == 0, result.output
+    assert provider.calls == ["doc-a", "doc-b"]
+    assert provider.run_ids == ["candidate-run", "candidate-run"]
+    assert "run_id=candidate-run" in result.output
+    assert "SUMMARY attempted=2 succeeded=2 failed=0" in result.output
+    rows = list_compliance_records_for_run(tmp_db_path, "candidate-run")
+    assert {row["doc_id"] for row in rows} == {"doc-a", "doc-b"}
+    assert {row["run_id"] for row in rows} == {"candidate-run"}
     assert "Supplier Declaration Form" not in result.output
 
 
