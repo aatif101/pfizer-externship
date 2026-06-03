@@ -14,12 +14,6 @@ def test_compliance_tab_empty_state_uses_shared_copy(monkeypatch) -> None:
     from tests.test_compliance_dashboard import FakeStreamlit
 
     fake_st = FakeStreamlit()
-    fake_st.headers = []
-
-    def header(message: str) -> None:
-        fake_st.headers.append(message)
-
-    fake_st.header = header  # type: ignore[attr-defined]
 
     monkeypatch.setattr("src.dashboard.compliance.st", fake_st)
     monkeypatch.setattr("src.dashboard.ui.st", fake_st)
@@ -28,9 +22,14 @@ def test_compliance_tab_empty_state_uses_shared_copy(monkeypatch) -> None:
     render_compliance_tab("empty-dashboard.db")
 
     assert fake_st.headers == ["Compliance"]
-    assert fake_st.info_messages == ["No compliance records are available yet."]
+    assert fake_st.info_messages == [
+        "Selected extraction view: current latest-write compatibility state.",
+        "No compliance records are available yet.",
+    ]
     assert fake_st.caption_messages == [
         "Review extracted compliance status and risk signals with source evidence.",
+        "View metadata: latest compatibility state reflects the current rows in `compliance_records`; "
+        "select a run below to inspect persisted baseline, candidate, or historical extraction history.",
         "Ingest documents and run extraction to populate this SQLite-backed dashboard. "
         "Looking for persisted records in `empty-dashboard.db`.",
     ]

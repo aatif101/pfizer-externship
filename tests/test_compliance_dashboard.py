@@ -16,7 +16,7 @@ from src.dashboard.compliance import (
 from src.db.queries import insert_document
 from src.db.schema import init_db
 from src.extraction.models import ExtractedField, ReviewState, SDFExtractionRecord, SDFFieldName, SourceEvidence
-from src.extraction.repository import upsert_extraction_record
+from src.extraction.repository import ExtractionRunSummary, upsert_extraction_record
 
 
 def make_field(
@@ -324,20 +324,25 @@ def test_format_compliance_rows_handles_null_source_evidence_without_exceptions(
 def test_render_compliance_tab_empty_state_does_not_crash(monkeypatch) -> None:
     fake_st = FakeStreamlit()
     monkeypatch.setattr("src.dashboard.compliance.st", fake_st)
+    monkeypatch.setattr("src.dashboard.ui.st", fake_st)
     monkeypatch.setattr("src.dashboard.compliance.render_empty_state", fake_st.render_empty_state)
     monkeypatch.setattr("src.dashboard.compliance.load_compliance_rows", lambda db_path: [])
 
     render_compliance_tab("empty-dashboard.db")
 
     assert fake_st.info_messages == [
-        "Selected extraction view: latest compatibility state.",
+        "Selected extraction view: current latest-write compatibility state.",
         "No compliance records are available yet.",
     ]
     assert fake_st.caption_messages == [
+        "Review extracted compliance status and risk signals with source evidence.",
+        "View metadata: latest compatibility state reflects the current rows in `compliance_records`; "
+        "select a run below to inspect persisted baseline, candidate, or historical extraction history.",
         "Ingest documents and run extraction to populate this SQLite-backed dashboard. "
-        "Looking for persisted records in `empty-dashboard.db`."
+        "Looking for persisted records in `empty-dashboard.db`.",
     ]
     assert fake_st.dataframes == []
+    assert fake_st.selectboxes[0]["label"] == "Extraction run view"
 
 
 def test_render_compliance_tab_populated_source_detail_is_lazy_and_tolerates_missing_image(monkeypatch) -> None:
@@ -368,6 +373,7 @@ def test_render_compliance_tab_populated_source_detail_is_lazy_and_tolerates_mis
     ]
 
     monkeypatch.setattr("src.dashboard.compliance.st", fake_st)
+    monkeypatch.setattr("src.dashboard.ui.st", fake_st)
     monkeypatch.setattr("src.dashboard.compliance.load_compliance_rows", lambda db_path: rows)
 
     def fake_get_page_image(db_path: str, doc_id: str, page_num: int):
@@ -382,7 +388,7 @@ def test_render_compliance_tab_populated_source_detail_is_lazy_and_tolerates_mis
     assert fake_st.metrics[("Red", 1)] == 1
     assert fake_st.metrics[("Needs review", 1)] == 1
     assert fake_st.info_messages == [
-        "Selected extraction view: latest compatibility state.",
+        "Selected extraction view: current latest-write compatibility state.",
         "Current extraction state: latest persisted compliance rows from extraction run "
         "`run-render-001`. Historical baselines and candidates are preserved in the Eval tab.",
     ]
@@ -391,9 +397,176 @@ def test_render_compliance_tab_populated_source_detail_is_lazy_and_tolerates_mis
     assert "**Risk reason:** Document is expired." in fake_st.markdown_messages
     assert "**Source page:** Page 3" in fake_st.markdown_messages
     assert "**Source verbatim span:** Expiry Date: 2026-01-31" in fake_st.markdown_messages
-    assert fake_st.caption_messages == ["No source preview available for the selected document/page."]
+    assert fake_st.caption_messages == [
+        "Review extracted compliance status and risk signals with source evidence.",
+        "View metadata: latest compatibility state reflects the current rows in `compliance_records`; "
+        "select a run below to inspect persisted baseline, candidate, or historical extraction history.",
+        "No source preview available for the selected document/page.",
+    ]
     assert fake_st.images == []
     assert image_calls == [("populated-dashboard.db", "doc-render-001", 2)]
+
+
+def test_render_compliance_tab_selected_run_labels_and_rows_change(tmp_db_path: str, monkeypatch) -> None:
+    prepare_compliance_db(tmp_db_path)
+    upsert_extraction_record(
+        tmp_db_path,
+        make_record(
+            vendor_name="Baseline Vendor",
+            trace_id="trace-baseline",
+            run_id="run-baseline-001",
+            risk_level="green",
+            risk_reason="Baseline document is in date.",
+            compliance_status="compliant",
+            age_days=100,
+        ),
+    )
+    upsert_extraction_record(
+        tmp_db_path,
+        make_record(
+            vendor_name="Candidate Vendor",
+            trace_id="trace-candidate",
+            run_id="run-candidate-001",
+            risk_level="red",
+            risk_reason="Candidate document is expired.",
+            compliance_status="needs_review",
+            age_days=900,
+        ),
+    )
+    fake_st = FakeStreamlit()
+    fake_st.selected_options_by_label["Extraction run view"] = "run:run-baseline-001"
+
+    monkeypatch.setattr("src.dashboard.compliance.st", fake_st)
+    monkeypatch.setattr("src.dashboard.ui.st", fake_st)
+
+    render_compliance_tab(tmp_db_path)
+
+    extraction_selector = fake_st.selectboxes[0]
+    assert extraction_selector["label"] == "Extraction run view"
+    assert extraction_selector["options"] == ["latest", "run:run-baseline-001", "run:run-candidate-001"]
+    assert any("Baseline run: run-baseline-001" in label for label in extraction_selector["labels"])
+    assert any("Candidate run: run-candidate-001" in label for label in extraction_selector["labels"])
+    assert fake_st.info_messages[0] == "Selected extraction view: Baseline run `run-baseline-001`."
+    assert "view=Baseline run" in fake_st.caption_messages[1]
+    assert "trace_id=trace-baseline" in fake_st.caption_messages[1]
+    assert fake_st.dataframes[0][0]["Vendor"] == "Baseline Vendor"
+    assert fake_st.dataframes[0][0]["Run ID"] == "run-baseline-001"
+    assert fake_st.dataframes[0][0]["Trace ID"] == "trace-baseline"
+    assert all(row["Vendor"] != "Candidate Vendor" for row in fake_st.dataframes[0])
+    assert fake_st.info_messages[1] == (
+        "Selected extraction state: showing only rows from Baseline run `run-baseline-001`; "
+        "latest-write compatibility rows are not mixed into this historical view."
+    )
+
+
+def test_render_compliance_tab_unknown_historical_empty_state_names_selected_run(tmp_db_path: str, monkeypatch) -> None:
+    prepare_compliance_db(tmp_db_path)
+    upsert_extraction_record(tmp_db_path, make_record(vendor_name="Latest Vendor", run_id="run-latest-001"))
+    conn = sqlite3.connect(tmp_db_path)
+    conn.execute(
+        """
+        INSERT INTO extraction_runs (
+            run_id, status, document_count, field_count, trace_id,
+            started_at, completed_at, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "run-qa-archive-001",
+            "completed",
+            0,
+            0,
+            "trace-archive",
+            "2026-05-19T12:30:00+00:00",
+            "2026-05-19T12:31:00+00:00",
+            "2026-05-19T12:30:00+00:00",
+            "2026-05-19T12:31:00+00:00",
+        ),
+    )
+    conn.commit()
+    conn.close()
+    fake_st = FakeStreamlit()
+    fake_st.selected_options_by_label["Extraction run view"] = "run:run-qa-archive-001"
+
+    monkeypatch.setattr("src.dashboard.compliance.st", fake_st)
+    monkeypatch.setattr("src.dashboard.ui.st", fake_st)
+    monkeypatch.setattr("src.dashboard.compliance.render_empty_state", fake_st.render_empty_state)
+
+    render_compliance_tab(tmp_db_path)
+
+    assert fake_st.info_messages == [
+        "Selected extraction view: Historical run `run-qa-archive-001`.",
+        "No compliance records are available for Historical run `run-qa-archive-001`.",
+    ]
+    assert "Selected view: Historical run `run-qa-archive-001`" in fake_st.caption_messages[-1]
+    assert "trace_id=trace-archive" in fake_st.caption_messages[-1]
+    assert fake_st.dataframes == []
+
+
+def test_render_compliance_tab_source_detail_image_lookup_uses_selected_run_row(monkeypatch) -> None:
+    fake_st = FakeStreamlit()
+    fake_st.selected_options_by_label["Extraction run view"] = "run:run-candidate-visual"
+    fake_st.selected_options_by_label["Select a document"] = "doc-selected"
+    image_calls: list[tuple[str, str, int]] = []
+    summaries = [
+        ExtractionRunSummary(
+            run_id="run-candidate-visual",
+            status="completed",
+            document_count=2,
+            field_count=12,
+            trace_id="trace-candidate-visual",
+            started_at="2026-05-19T12:30:00+00:00",
+            completed_at="2026-05-19T12:31:00+00:00",
+            created_at="2026-05-19T12:30:00+00:00",
+            updated_at="2026-05-19T12:31:00+00:00",
+        )
+    ]
+    rows = [
+        {
+            "doc_id": "doc-unselected",
+            "doc_type": "Supplier Declaration Form",
+            "vendor_name": "Unselected Vendor",
+            "trace_id": "trace-candidate-visual",
+            "run_id": "run-candidate-visual",
+            "risk_level": "green",
+            "risk_reason": "Unselected row.",
+            "compliance_status": "compliant",
+            "source_page": 1,
+            "source_bbox": "{}",
+            "source_verbatim_span": "Unselected span",
+        },
+        {
+            "doc_id": "doc-selected",
+            "doc_type": "Supplier Declaration Form",
+            "vendor_name": "Selected Vendor",
+            "trace_id": "trace-candidate-visual",
+            "run_id": "run-candidate-visual",
+            "risk_level": "amber",
+            "risk_reason": "Selected row.",
+            "compliance_status": "needs_review",
+            "source_page": 4,
+            "source_bbox": "{}",
+            "source_verbatim_span": "Selected span",
+        },
+    ]
+
+    monkeypatch.setattr("src.dashboard.compliance.st", fake_st)
+    monkeypatch.setattr("src.dashboard.ui.st", fake_st)
+    monkeypatch.setattr("src.dashboard.compliance.load_extraction_run_summaries", lambda db_path: summaries)
+    monkeypatch.setattr("src.dashboard.compliance._load_compliance_rows_for_selection", lambda *args: rows)
+
+    def fake_get_page_image(db_path: str, doc_id: str, page_num: int):
+        image_calls.append((db_path, doc_id, page_num))
+        return b"image-bytes"
+
+    monkeypatch.setattr("src.dashboard.compliance.get_page_image", fake_get_page_image)
+
+    render_compliance_tab("visual-dashboard.db")
+
+    assert fake_st.dataframes[0][0]["Vendor"] == "Unselected Vendor"
+    assert fake_st.dataframes[0][1]["Vendor"] == "Selected Vendor"
+    assert "**Risk reason:** Selected row." in fake_st.markdown_messages
+    assert image_calls == [("visual-dashboard.db", "doc-selected", 4)]
+    assert fake_st.images == [(b"image-bytes", "Page 5")]
 
 
 class FakeMetricColumn:
@@ -413,6 +586,16 @@ class FakeStreamlit:
         self.images: list[object] = []
         self.metrics: dict[tuple[str, int], int] = {}
         self.subheaders: list[str] = []
+        self.headers: list[str] = []
+        self.divider_count = 0
+        self.selectboxes: list[dict[str, object]] = []
+        self.selected_options_by_label: dict[str, str] = {}
+
+    def header(self, message: str) -> None:
+        self.headers.append(message)
+
+    def divider(self) -> None:
+        self.divider_count += 1
 
     def info(self, message: str) -> None:
         self.info_messages.append(message)
@@ -437,10 +620,12 @@ class FakeStreamlit:
         self.subheaders.append(message)
 
     def selectbox(self, label: str, *, options: list[str], format_func=None) -> str:
-        assert label in {"Select extraction view", "Select a document"}
-        if format_func is not None:
-            assert isinstance(format_func(options[0]), str)
-        return options[0]
+        assert label in {"Extraction run view", "Select a document"}
+        labels = [format_func(option) if format_func is not None else option for option in options]
+        self.selectboxes.append({"label": label, "options": list(options), "labels": labels})
+        selected = self.selected_options_by_label.get(label, options[0])
+        assert selected in options
+        return selected
 
     def markdown(self, message: str) -> None:
         self.markdown_messages.append(message)

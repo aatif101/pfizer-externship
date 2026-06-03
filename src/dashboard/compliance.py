@@ -175,28 +175,23 @@ def render_compliance_tab(db_path: str | None = None) -> None:
         "Review extracted compliance status and risk signals with source evidence.",
     )
     selected_option_id = st.selectbox(
-        "Select extraction view",
+        "Extraction run view",
         options=[option.option_id for option in selector_options],
         format_func=lambda option_id: option_by_id[option_id].display_label,
     )
     selected_option = option_by_id.get(str(selected_option_id), selector_options[0])
     rows = format_compliance_rows(
-        _load_compliance_rows_for_selection(resolved_db_path, str(selected_option_id), summaries)
+        _load_compliance_rows_for_selection(resolved_db_path, selected_option.option_id, summaries)
     )
     _render_selected_extraction_view(selected_option)
 
     if not rows:
-        render_empty_state(
-            "No compliance records are available yet.",
-            caption=(
-                "Ingest documents and run extraction to populate this SQLite-backed dashboard. "
-                f"Looking for persisted records in `{resolved_db_path}`."
-            ),
-        )
+        message, caption = _empty_state_for_selection(selected_option, resolved_db_path)
+        render_empty_state(message, caption=caption)
         return
 
     _render_summary_metrics(rows)
-    _render_current_extraction_state(rows)
+    _render_current_extraction_state(rows, selected_option)
 
     render_section_divider()
     st.subheader("Compliance records")
@@ -304,16 +299,62 @@ def _bounded_label_value(value: Any) -> str:
 
 
 def _render_selected_extraction_view(option: RunSelectorOption) -> None:
-    if option.view_kind == "latest":
-        st.info("Selected extraction view: latest compatibility state.")
-        return
+    st.info(f"Selected extraction view: {_selected_view_label(option)}.")
+    st.caption(_selected_view_diagnostics(option))
 
-    st.info(
-        "Selected extraction view: "
-        f"{_labelize(option.view_kind)} `{_bounded_label_value(option.run_id or '')}` "
-        f"({int(option.document_count)} documents, {int(option.field_count)} fields, "
-        f"status {_bounded_label_value(option.status or 'unknown')})."
+
+def _selected_view_label(option: RunSelectorOption) -> str:
+    if option.view_kind == "latest":
+        return "current latest-write compatibility state"
+    return f"{_run_kind_label(option.view_kind)} `{_bounded_label_value(option.run_id or '')}`"
+
+
+def _selected_view_diagnostics(option: RunSelectorOption) -> str:
+    if option.view_kind == "latest":
+        return (
+            "View metadata: latest compatibility state reflects the current rows in `compliance_records`; "
+            "select a run below to inspect persisted baseline, candidate, or historical extraction history."
+        )
+
+    metadata = [
+        f"view={_run_kind_label(option.view_kind)}",
+        f"run_id={_bounded_label_value(option.run_id or _UNKNOWN_LABEL)}",
+        f"status={_bounded_label_value(option.status or _UNKNOWN_LABEL)}",
+        f"documents={int(option.document_count)}",
+        f"fields={int(option.field_count)}",
+        f"trace_id={_bounded_label_value(option.trace_id or _UNKNOWN_LABEL)}",
+        f"started={_bounded_label_value(option.started_at or _UNKNOWN_LABEL)}",
+        f"completed={_bounded_label_value(option.completed_at or _UNKNOWN_LABEL)}",
+    ]
+    return "Run metadata: " + " • ".join(metadata)
+
+
+def _empty_state_for_selection(option: RunSelectorOption, db_path: str) -> tuple[str, str]:
+    if option.view_kind == "latest":
+        return (
+            "No compliance records are available yet.",
+            "Ingest documents and run extraction to populate this SQLite-backed dashboard. "
+            f"Looking for persisted records in `{db_path}`.",
+        )
+
+    label = _selected_view_label(option)
+    return (
+        f"No compliance records are available for {label}.",
+        "The selected run exists in extraction history, but no compliance rows were found for this view. "
+        f"Selected view: {label}; status={_bounded_label_value(option.status or _UNKNOWN_LABEL)}; "
+        f"documents={int(option.document_count)}; fields={int(option.field_count)}; "
+        f"trace_id={_bounded_label_value(option.trace_id or _UNKNOWN_LABEL)}.",
     )
+
+
+def _run_kind_label(view_kind: str) -> str:
+    if view_kind == "baseline":
+        return "Baseline run"
+    if view_kind == "candidate":
+        return "Candidate run"
+    if view_kind == "historical":
+        return "Historical run"
+    return _labelize(view_kind)
 
 
 def _render_summary_metrics(rows: list[dict[str, Any]]) -> None:
@@ -329,7 +370,14 @@ def _render_summary_metrics(rows: list[dict[str, Any]]) -> None:
     review_col.metric("Needs review", needs_review_count)
 
 
-def _render_current_extraction_state(rows: list[dict[str, Any]]) -> None:
+def _render_current_extraction_state(rows: list[dict[str, Any]], selected_option: RunSelectorOption) -> None:
+    if selected_option.view_kind != "latest":
+        st.info(
+            f"Selected extraction state: showing only rows from {_selected_view_label(selected_option)}; "
+            "latest-write compatibility rows are not mixed into this historical view."
+        )
+        return
+
     run_ids = sorted({str(row.get("run_id") or "").strip() for row in rows if row.get("run_id")})
     if not run_ids:
         st.info(
