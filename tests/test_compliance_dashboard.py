@@ -5,7 +5,14 @@ import sqlite3
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from src.dashboard.compliance import format_compliance_rows, load_compliance_rows, render_compliance_tab
+from src.dashboard.compliance import (
+    build_run_selector_options,
+    format_compliance_rows,
+    load_compliance_rows,
+    load_compliance_rows_for_selection,
+    load_extraction_run_summaries,
+    render_compliance_tab,
+)
 from src.db.queries import insert_document
 from src.db.schema import init_db
 from src.extraction.models import ExtractedField, ReviewState, SDFExtractionRecord, SDFFieldName, SourceEvidence
@@ -39,7 +46,17 @@ def make_field(
     )
 
 
-def make_record() -> SDFExtractionRecord:
+def make_record(
+    *,
+    vendor_name: str = "Acme Pharma",
+    expiry_date: date = date(2026, 1, 31),
+    trace_id: str = "trace-dashboard-001",
+    run_id: str | None = "run-dashboard-001",
+    risk_level: str = "amber",
+    risk_reason: str = "Oldest relevant date is between 2 and 3 years old.",
+    compliance_status: str = "needs_review",
+    age_days: int = 865,
+) -> SDFExtractionRecord:
     return SDFExtractionRecord(
         doc_id="doc-dashboard-001",
         filename="supplier-sdf.pdf",
@@ -51,7 +68,7 @@ def make_record() -> SDFExtractionRecord:
             ),
             SDFFieldName.VENDOR_NAME: make_field(
                 SDFFieldName.VENDOR_NAME,
-                "Acme Pharma",
+                vendor_name,
                 confidence=0.92,
             ),
             SDFFieldName.MANUFACTURING_DATE: make_field(
@@ -78,20 +95,20 @@ def make_record() -> SDFExtractionRecord:
             ),
             SDFFieldName.EXPIRY_DATE: make_field(
                 SDFFieldName.EXPIRY_DATE,
-                "2026-01-31",
-                normalized_date=date(2026, 1, 31),
+                expiry_date.isoformat(),
+                normalized_date=expiry_date,
                 confidence=0.78,
                 page_num=2,
-                verbatim_span="Expiry Date: 2026-01-31",
+                verbatim_span=f"Expiry Date: {expiry_date.isoformat()}",
             ),
         },
-        trace_id="trace-dashboard-001",
-        run_id="run-dashboard-001",
+        trace_id=trace_id,
+        run_id=run_id,
         extracted_at=datetime(2026, 5, 19, 12, 0, tzinfo=timezone.utc),
-        risk_level="amber",
-        risk_reason="Oldest relevant date is between 2 and 3 years old.",
-        compliance_status="needs_review",
-        age_days=865,
+        risk_level=risk_level,
+        risk_reason=risk_reason,
+        compliance_status=compliance_status,
+        age_days=age_days,
     )
 
 
@@ -160,6 +177,122 @@ def test_load_compliance_rows_returns_empty_for_missing_table(tmp_db_path: str) 
     assert load_compliance_rows(tmp_db_path) == []
 
 
+def test_load_run_selector_options_and_rows_for_latest_and_explicit_runs(tmp_db_path: str) -> None:
+    prepare_compliance_db(tmp_db_path)
+    upsert_extraction_record(
+        tmp_db_path,
+        make_record(
+            vendor_name="Baseline Vendor",
+            expiry_date=date(2026, 1, 31),
+            trace_id="trace-baseline",
+            run_id="run-baseline-001",
+            risk_level="green",
+            risk_reason="Baseline document is in date.",
+            compliance_status="compliant",
+            age_days=100,
+        ),
+    )
+    upsert_extraction_record(
+        tmp_db_path,
+        make_record(
+            vendor_name="Candidate Vendor",
+            expiry_date=date(2027, 2, 28),
+            trace_id="trace-candidate",
+            run_id="run-candidate-001",
+            risk_level="amber",
+            risk_reason="Candidate document needs review.",
+            compliance_status="needs_review",
+            age_days=400,
+        ),
+    )
+
+    summaries = load_extraction_run_summaries(tmp_db_path)
+    options = build_run_selector_options(summaries)
+
+    assert options[0].option_id == "latest"
+    assert options[0].display_label == "Latest compatibility state"
+    assert options[0].view_kind == "latest"
+    assert {option.view_kind for option in options[1:]} == {"baseline", "candidate"}
+    assert {option.document_count for option in options[1:]} == {1}
+    assert {option.field_count for option in options[1:]} == {6}
+    assert all("Vendor" not in option.display_label for option in options)
+    assert any("Baseline run: run-baseline-001" in option.display_label for option in options)
+    assert any("Candidate run: run-candidate-001" in option.display_label for option in options)
+
+    latest_rows = load_compliance_rows_for_selection(tmp_db_path, "latest")
+    baseline_rows = load_compliance_rows_for_selection(tmp_db_path, "run:run-baseline-001")
+    candidate_rows = load_compliance_rows_for_selection(tmp_db_path, "run:run-candidate-001")
+
+    assert [row["vendor_name"] for row in latest_rows] == ["Candidate Vendor"]
+    assert [row["run_id"] for row in latest_rows] == ["run-candidate-001"]
+    assert [row["vendor_name"] for row in baseline_rows] == ["Baseline Vendor"]
+    assert [row["run_id"] for row in baseline_rows] == ["run-baseline-001"]
+    assert [row["vendor_name"] for row in candidate_rows] == ["Candidate Vendor"]
+    assert [row["run_id"] for row in candidate_rows] == ["run-candidate-001"]
+
+
+def test_run_selector_missing_history_tables_returns_latest_only_state(tmp_db_path: str) -> None:
+    init_db(tmp_db_path)
+    conn = sqlite3.connect(tmp_db_path)
+    conn.execute("DROP TABLE extraction_runs")
+    conn.execute("DROP TABLE extraction_history")
+    conn.execute("DROP TABLE compliance_record_history")
+    conn.commit()
+    conn.close()
+
+    assert load_extraction_run_summaries(tmp_db_path) == []
+    options = build_run_selector_options(load_extraction_run_summaries(tmp_db_path))
+
+    assert len(options) == 1
+    assert options[0].option_id == "latest"
+    assert options[0].view_kind == "latest"
+    assert load_compliance_rows_for_selection(tmp_db_path, "run:missing-history") == []
+
+
+def test_unknown_selector_id_falls_back_to_latest_compatibility_rows(tmp_db_path: str) -> None:
+    prepare_compliance_db(tmp_db_path)
+    upsert_extraction_record(
+        tmp_db_path,
+        make_record(vendor_name="Latest Vendor", trace_id="trace-latest", run_id="run-latest-001"),
+    )
+
+    rows = load_compliance_rows_for_selection(tmp_db_path, "run:not-a-known-run")
+
+    assert [row["vendor_name"] for row in rows] == ["Latest Vendor"]
+    assert [row["run_id"] for row in rows] == ["run-latest-001"]
+
+
+def test_explicit_run_selector_with_no_compliance_rows_does_not_fall_back_to_latest(tmp_db_path: str) -> None:
+    prepare_compliance_db(tmp_db_path)
+    upsert_extraction_record(tmp_db_path, make_record(vendor_name="Latest Vendor", run_id="run-latest-001"))
+    conn = sqlite3.connect(tmp_db_path)
+    conn.execute(
+        """
+        INSERT INTO extraction_runs (
+            run_id, status, document_count, field_count, trace_id,
+            started_at, completed_at, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "run-candidate-empty",
+            "completed",
+            0,
+            0,
+            "trace-empty",
+            "2026-05-19T12:30:00+00:00",
+            "2026-05-19T12:31:00+00:00",
+            "2026-05-19T12:30:00+00:00",
+            "2026-05-19T12:31:00+00:00",
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    rows = load_compliance_rows_for_selection(tmp_db_path, "run:run-candidate-empty")
+
+    assert rows == []
+
+
 def test_format_compliance_rows_handles_null_source_evidence_without_exceptions() -> None:
     formatted = format_compliance_rows(
         [
@@ -196,7 +329,10 @@ def test_render_compliance_tab_empty_state_does_not_crash(monkeypatch) -> None:
 
     render_compliance_tab("empty-dashboard.db")
 
-    assert fake_st.info_messages == ["No compliance records are available yet."]
+    assert fake_st.info_messages == [
+        "Selected extraction view: latest compatibility state.",
+        "No compliance records are available yet.",
+    ]
     assert fake_st.caption_messages == [
         "Ingest documents and run extraction to populate this SQLite-backed dashboard. "
         "Looking for persisted records in `empty-dashboard.db`."
@@ -246,8 +382,9 @@ def test_render_compliance_tab_populated_source_detail_is_lazy_and_tolerates_mis
     assert fake_st.metrics[("Red", 1)] == 1
     assert fake_st.metrics[("Needs review", 1)] == 1
     assert fake_st.info_messages == [
+        "Selected extraction view: latest compatibility state.",
         "Current extraction state: latest persisted compliance rows from extraction run "
-        "`run-render-001`. Historical baselines and candidates are preserved in the Eval tab."
+        "`run-render-001`. Historical baselines and candidates are preserved in the Eval tab.",
     ]
     assert fake_st.dataframes[0][0]["Risk"] == "Red"
     assert fake_st.dataframes[0][0]["Vendor"] == "Acme Pharma"
@@ -299,8 +436,10 @@ class FakeStreamlit:
     def subheader(self, message: str) -> None:
         self.subheaders.append(message)
 
-    def selectbox(self, label: str, *, options: list[str]) -> str:
-        assert label == "Select a document"
+    def selectbox(self, label: str, *, options: list[str], format_func=None) -> str:
+        assert label in {"Select extraction view", "Select a document"}
+        if format_func is not None:
+            assert isinstance(format_func(options[0]), str)
         return options[0]
 
     def markdown(self, message: str) -> None:

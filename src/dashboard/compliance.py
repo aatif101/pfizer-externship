@@ -7,13 +7,19 @@ provider or tracing runtime code.
 from __future__ import annotations
 
 import sqlite3
+from dataclasses import dataclass
 from typing import Any
 
 import streamlit as st
 
 from src.dashboard.ui import render_empty_state, render_section_divider, render_tab_header
 from src.db.queries import get_page_image
-from src.extraction.repository import list_compliance_records
+from src.extraction.repository import (
+    ExtractionRunSummary,
+    list_compliance_records,
+    list_compliance_records_for_run,
+    list_extraction_run_summaries,
+)
 
 
 _UNKNOWN_LABEL = "Unknown"
@@ -54,6 +60,27 @@ _TABLE_COLUMN_LABELS: dict[str, str] = {
     "trace_id": "Trace ID",
 }
 _RISK_ORDER: tuple[str, ...] = ("red", "amber", "green", "unknown")
+_LATEST_OPTION_ID = "latest"
+_RUN_OPTION_PREFIX = "run:"
+_MAX_LABEL_VALUE_CHARS = 80
+
+
+@dataclass(frozen=True)
+class RunSelectorOption:
+    """Display-only state for one compliance dashboard run selector option."""
+
+    option_id: str
+    display_label: str
+    view_kind: str
+    run_id: str | None
+    status: str | None
+    document_count: int
+    field_count: int
+    trace_id: str | None
+    started_at: str | None
+    completed_at: str | None
+    created_at: str | None = None
+    updated_at: str | None = None
 
 
 def load_compliance_rows(db_path: str) -> list[dict[str, Any]]:
@@ -67,6 +94,57 @@ def load_compliance_rows(db_path: str) -> list[dict[str, Any]]:
 
     try:
         return list_compliance_records(db_path)
+    except sqlite3.OperationalError as exc:
+        if _is_missing_database_or_table(exc):
+            return []
+        raise
+
+
+def load_extraction_run_summaries(db_path: str) -> list[ExtractionRunSummary]:
+    """Return bounded extraction run summaries, or none for uninitialized DBs."""
+
+    try:
+        return list_extraction_run_summaries(db_path)
+    except sqlite3.OperationalError as exc:
+        if _is_missing_database_or_table(exc):
+            return []
+        raise
+
+
+def build_run_selector_options(summaries: list[ExtractionRunSummary]) -> list[RunSelectorOption]:
+    """Build display-safe selector options with latest-write compatibility first."""
+
+    options = [
+        RunSelectorOption(
+            option_id=_LATEST_OPTION_ID,
+            display_label="Latest compatibility state",
+            view_kind="latest",
+            run_id=None,
+            status=None,
+            document_count=0,
+            field_count=0,
+            trace_id=None,
+            started_at=None,
+            completed_at=None,
+        )
+    ]
+    options.extend(_run_selector_option(summary) for summary in summaries)
+    return options
+
+
+def load_compliance_rows_for_selection(db_path: str, selected_option_id: str | None) -> list[dict[str, Any]]:
+    """Load latest or run-specific compliance rows for a validated selector id.
+
+    Unknown or malformed option IDs intentionally fall back to latest-write state
+    so user-controlled selector values cannot become arbitrary run-id queries.
+    """
+
+    selected_run_id = _run_id_for_selected_option(load_extraction_run_summaries(db_path), selected_option_id)
+    if selected_run_id is None:
+        return load_compliance_rows(db_path)
+
+    try:
+        return list_compliance_records_for_run(db_path, selected_run_id)
     except sqlite3.OperationalError as exc:
         if _is_missing_database_or_table(exc):
             return []
@@ -88,12 +166,24 @@ def render_compliance_tab(db_path: str | None = None) -> None:
     """
 
     resolved_db_path = _resolve_db_path(db_path)
-    rows = format_compliance_rows(load_compliance_rows(resolved_db_path))
+    summaries = load_extraction_run_summaries(resolved_db_path)
+    selector_options = build_run_selector_options(summaries)
+    option_by_id = {option.option_id: option for option in selector_options}
 
     render_tab_header(
         "Compliance",
         "Review extracted compliance status and risk signals with source evidence.",
     )
+    selected_option_id = st.selectbox(
+        "Select extraction view",
+        options=[option.option_id for option in selector_options],
+        format_func=lambda option_id: option_by_id[option_id].display_label,
+    )
+    selected_option = option_by_id.get(str(selected_option_id), selector_options[0])
+    rows = format_compliance_rows(
+        _load_compliance_rows_for_selection(resolved_db_path, str(selected_option_id), summaries)
+    )
+    _render_selected_extraction_view(selected_option)
 
     if not rows:
         render_empty_state(
@@ -127,6 +217,103 @@ def _resolve_db_path(db_path: str | None) -> str:
     from src.config import get_settings
 
     return get_settings().db_path
+
+
+def _load_compliance_rows_for_selection(
+    db_path: str,
+    selected_option_id: str | None,
+    summaries: list[ExtractionRunSummary],
+) -> list[dict[str, Any]]:
+    selected_run_id = _run_id_for_selected_option(summaries, selected_option_id)
+    if selected_run_id is None:
+        return load_compliance_rows(db_path)
+
+    try:
+        return list_compliance_records_for_run(db_path, selected_run_id)
+    except sqlite3.OperationalError as exc:
+        if _is_missing_database_or_table(exc):
+            return []
+        raise
+
+
+def _run_id_for_selected_option(summaries: list[ExtractionRunSummary], selected_option_id: str | None) -> str | None:
+    if not selected_option_id or selected_option_id == _LATEST_OPTION_ID:
+        return None
+    valid_run_ids = {summary.run_id for summary in summaries}
+    if not selected_option_id.startswith(_RUN_OPTION_PREFIX):
+        return None
+    run_id = selected_option_id.removeprefix(_RUN_OPTION_PREFIX)
+    if run_id not in valid_run_ids:
+        return None
+    return run_id
+
+
+def _run_selector_option(summary: ExtractionRunSummary) -> RunSelectorOption:
+    view_kind = _run_view_kind(summary.run_id)
+    return RunSelectorOption(
+        option_id=f"{_RUN_OPTION_PREFIX}{summary.run_id}",
+        display_label=_run_display_label(summary, view_kind),
+        view_kind=view_kind,
+        run_id=summary.run_id,
+        status=summary.status,
+        document_count=int(summary.document_count or 0),
+        field_count=int(summary.field_count or 0),
+        trace_id=summary.trace_id,
+        started_at=summary.started_at,
+        completed_at=summary.completed_at,
+        created_at=summary.created_at,
+        updated_at=summary.updated_at,
+    )
+
+
+def _run_view_kind(run_id: str) -> str:
+    normalized = run_id.lower()
+    if "baseline" in normalized:
+        return "baseline"
+    if "candidate" in normalized:
+        return "candidate"
+    return "historical"
+
+
+def _run_display_label(summary: ExtractionRunSummary, view_kind: str) -> str:
+    prefix = {
+        "baseline": "Baseline run",
+        "candidate": "Candidate run",
+        "historical": "Historical run",
+    }[view_kind]
+    parts = [
+        f"{prefix}: {_bounded_label_value(summary.run_id)}",
+        _bounded_label_value(summary.status or "unknown"),
+        f"{int(summary.document_count or 0)} docs",
+        f"{int(summary.field_count or 0)} fields",
+    ]
+    if summary.trace_id:
+        parts.append(f"trace {_bounded_label_value(summary.trace_id)}")
+    if summary.started_at:
+        parts.append(f"started {_bounded_label_value(summary.started_at)}")
+    if summary.completed_at:
+        parts.append(f"completed {_bounded_label_value(summary.completed_at)}")
+    return " • ".join(parts)
+
+
+def _bounded_label_value(value: Any) -> str:
+    text = str(value).replace("\n", " ").replace("\r", " ").strip()
+    if len(text) > _MAX_LABEL_VALUE_CHARS:
+        return f"{text[:_MAX_LABEL_VALUE_CHARS]}…"
+    return text
+
+
+def _render_selected_extraction_view(option: RunSelectorOption) -> None:
+    if option.view_kind == "latest":
+        st.info("Selected extraction view: latest compatibility state.")
+        return
+
+    st.info(
+        "Selected extraction view: "
+        f"{_labelize(option.view_kind)} `{_bounded_label_value(option.run_id or '')}` "
+        f"({int(option.document_count)} documents, {int(option.field_count)} fields, "
+        f"status {_bounded_label_value(option.status or 'unknown')})."
+    )
 
 
 def _render_summary_metrics(rows: list[dict[str, Any]]) -> None:
