@@ -159,6 +159,19 @@ Page references must be 0-indexed. For every non-abstained field include a short
 verbatim_span copied from the cited page. If uncertain or unsupported, set all
 value fields to null and provide an abstention_reason. Never invent values.
 
+Packet labeling policy:
+Many supplier PDFs are packets containing emails, handwritten notes, template
+pages, processing records, SDS pages, and multiple supporting certificates.
+First identify the most directly relevant certificate/quality/compliance
+document for the product/material itself, then extract all six fields from that
+primary sub-document only. Prefer Certificate of Analysis, Certificate of
+Quality, Certificate of Compliance, or equivalent product/material certificates.
+Do not use email dates, handwritten notes, template release dates, delivery
+dates, retest dates, processing records, or unrelated attachment dates as values
+for the six fields unless the exact target field is explicitly present in the
+primary product/material certificate. For example, do not map Delivery Date to
+effective_date and do not map Retest Date to expiry_date.
+
 JSON schema:
 {{
   "trace_id": "optional provider trace id",

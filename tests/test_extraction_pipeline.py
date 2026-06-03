@@ -520,7 +520,108 @@ def test_invalid_bbox_shape_abstains_field_without_crashing(tmp_db_path: str) ->
     assert vendor.abstention_reason == "Provider returned a non-JSON-serializable source bounding box."
 
 
-def test_empty_page_list_returns_typed_failure_without_provider_call(tmp_db_path: str) -> None:
+def test_placeholder_values_are_abstained_instead_of_persisted(tmp_db_path: str) -> None:
+    page_text = PAGE_TEXT + "\nManufacturing Date: MMM/YYYY\nBatch Number: XXXXXXX\n"
+    prepare_doc(tmp_db_path, page_text=page_text)
+    placeholder = provider_field(
+        SDFFieldName.MANUFACTURING_DATE,
+        "MMM/YYYY",
+        span="Manufacturing Date: MMM/YYYY",
+        confidence=0.99,
+    )
+
+    extract_document(
+        tmp_db_path,
+        "doc-001",
+        FakeProvider(fields=all_fields({SDFFieldName.MANUFACTURING_DATE: placeholder})),
+        today=date(2026, 1, 1),
+    )
+
+    stored = get_extraction_record(tmp_db_path, "doc-001")
+    assert stored is not None
+    manufacturing = stored.fields[SDFFieldName.MANUFACTURING_DATE]
+    assert manufacturing.review_state == ReviewState.ABSTAINED
+    assert manufacturing.raw_value is None
+    assert manufacturing.abstention_reason == "Provider returned a placeholder/redacted value rather than a real field value."
+
+
+def test_delivery_date_is_not_accepted_as_effective_date(tmp_db_path: str) -> None:
+    page_text = PAGE_TEXT + "\nDelivery Date: 04/17/2025\n"
+    prepare_doc(tmp_db_path, page_text=page_text)
+    delivery_as_effective = provider_field(
+        SDFFieldName.EFFECTIVE_DATE,
+        "2025-04-17",
+        normalized_date="2025-04-17",
+        span="Delivery Date: 04/17/2025",
+        confidence=0.99,
+    )
+
+    extract_document(
+        tmp_db_path,
+        "doc-001",
+        FakeProvider(fields=all_fields({SDFFieldName.EFFECTIVE_DATE: delivery_as_effective})),
+        today=date(2026, 1, 1),
+    )
+
+    stored = get_extraction_record(tmp_db_path, "doc-001")
+    assert stored is not None
+    effective = stored.fields[SDFFieldName.EFFECTIVE_DATE]
+    assert effective.review_state == ReviewState.ABSTAINED
+    assert effective.raw_value is None
+    assert effective.abstention_reason == "Provider mapped Delivery Date to effective_date, but delivery dates are not effective dates."
+
+
+def test_retest_date_is_not_accepted_as_expiry_date(tmp_db_path: str) -> None:
+    page_text = PAGE_TEXT + "\nRetest Date: 29FEB2028\n"
+    prepare_doc(tmp_db_path, page_text=page_text)
+    retest_as_expiry = provider_field(
+        SDFFieldName.EXPIRY_DATE,
+        "2028-02-29",
+        normalized_date="2028-02-29",
+        span="Retest Date: 29FEB2028",
+        confidence=0.99,
+    )
+
+    extract_document(
+        tmp_db_path,
+        "doc-001",
+        FakeProvider(fields=all_fields({SDFFieldName.EXPIRY_DATE: retest_as_expiry})),
+        today=date(2026, 1, 1),
+    )
+
+    stored = get_extraction_record(tmp_db_path, "doc-001")
+    assert stored is not None
+    expiry = stored.fields[SDFFieldName.EXPIRY_DATE]
+    assert expiry.review_state == ReviewState.ABSTAINED
+    assert expiry.raw_value is None
+    assert expiry.abstention_reason == "Provider mapped Retest Date to expiry_date, but retest dates are not expiry dates."
+
+
+def test_explicit_not_applicable_expiry_value_is_still_allowed(tmp_db_path: str) -> None:
+    page_text = PAGE_TEXT + "\nExpiration Date: N/A\n"
+    prepare_doc(tmp_db_path, page_text=page_text)
+    not_applicable_expiry = provider_field(
+        SDFFieldName.EXPIRY_DATE,
+        "N/A",
+        normalized_value="N/A",
+        span="Expiration Date: N/A",
+        confidence=0.99,
+    )
+
+    extract_document(
+        tmp_db_path,
+        "doc-001",
+        FakeProvider(fields=all_fields({SDFFieldName.EXPIRY_DATE: not_applicable_expiry})),
+        today=date(2026, 1, 1),
+    )
+
+    stored = get_extraction_record(tmp_db_path, "doc-001")
+    assert stored is not None
+    expiry = stored.fields[SDFFieldName.EXPIRY_DATE]
+    assert expiry.review_state == ReviewState.PENDING
+    assert expiry.value_for_dashboard == "N/A"
+
+
     prepare_doc(tmp_db_path, include_page=False)
     provider = FakeProvider(fields=all_fields())
 

@@ -27,6 +27,12 @@ from src.tracing import observe, safe_update_current_trace
 
 
 LOW_CONFIDENCE_REVIEW_THRESHOLD = 0.75
+_PLACEHOLDER_VALUE_RE = re.compile(
+    r"^(?:x{2,}(?:[-/][a-z]{3}|[-/]x{2,})*|m{3}/y{4}|a{3}n{3,}|assigned|tbd|to be determined)$",
+    re.IGNORECASE,
+)
+_DELIVERY_DATE_RE = re.compile(r"\bdelivery\s+date\b", re.IGNORECASE)
+_RETEST_DATE_RE = re.compile(r"\bretest\s+date\b", re.IGNORECASE)
 _EXTRACTION_TRACE_ALLOWED_KEYS = frozenset(
     {
         "boundary",
@@ -264,6 +270,10 @@ def _normalize_field(
     if not _span_matches_page_text(span, page.page_text or ""):
         return _abstained_field(field_name, "Provider source span was not found in the cited page text.", payload=payload)
 
+    guard_reason = _field_value_guard_reason(field_name, payload, span)
+    if guard_reason is not None:
+        return _abstained_field(field_name, guard_reason, payload=payload)
+
     confidence = _clamp_confidence(payload.confidence)
     review_state = ReviewState.NEEDS_REVIEW if confidence < low_confidence_threshold else ReviewState.PENDING
     return ExtractedField(
@@ -309,6 +319,34 @@ def _has_payload_value(payload: ProviderFieldPayload) -> bool:
         value is not None and (not isinstance(value, str) or bool(value.strip()))
         for value in (payload.raw_value, payload.normalized_value, payload.normalized_date)
     )
+
+
+def _field_value_guard_reason(
+    field_name: SDFFieldName,
+    payload: ProviderFieldPayload,
+    span: str,
+) -> str | None:
+    value_fragments = [
+        _clean_text(payload.raw_value),
+        _clean_text(str(payload.normalized_value)) if payload.normalized_value is not None else None,
+        _clean_text(str(payload.normalized_date)) if payload.normalized_date is not None else None,
+    ]
+    if any(_is_placeholder_value(fragment) for fragment in value_fragments if fragment is not None):
+        return "Provider returned a placeholder/redacted value rather than a real field value."
+
+    if field_name is SDFFieldName.EFFECTIVE_DATE and _DELIVERY_DATE_RE.search(span):
+        return "Provider mapped Delivery Date to effective_date, but delivery dates are not effective dates."
+
+    if field_name is SDFFieldName.EXPIRY_DATE and _RETEST_DATE_RE.search(span):
+        return "Provider mapped Retest Date to expiry_date, but retest dates are not expiry dates."
+
+    return None
+
+
+def _is_placeholder_value(value: str) -> bool:
+    cleaned = _normalize_for_span_match(value)
+    compact = re.sub(r"\s+", "", cleaned)
+    return bool(_PLACEHOLDER_VALUE_RE.fullmatch(cleaned) or _PLACEHOLDER_VALUE_RE.fullmatch(compact))
 
 
 def _span_matches_page_text(span: str, page_text: str) -> bool:

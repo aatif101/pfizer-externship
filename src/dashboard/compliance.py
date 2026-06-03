@@ -106,6 +106,7 @@ def render_compliance_tab(db_path: str | None = None) -> None:
         return
 
     _render_summary_metrics(rows)
+    _render_current_extraction_state(rows)
 
     render_section_divider()
     st.subheader("Compliance records")
@@ -139,6 +140,30 @@ def _render_summary_metrics(rows: list[dict[str, Any]]) -> None:
     green_col.metric("Green", counts["green"])
     unknown_col.metric("Unknown", counts["unknown"])
     review_col.metric("Needs review", needs_review_count)
+
+
+def _render_current_extraction_state(rows: list[dict[str, Any]]) -> None:
+    run_ids = sorted({str(row.get("run_id") or "").strip() for row in rows if row.get("run_id")})
+    if not run_ids:
+        st.info(
+            "Current extraction state: latest persisted compliance rows. No extraction run IDs are recorded for these rows."
+        )
+        return
+
+    if len(run_ids) == 1:
+        st.info(
+            "Current extraction state: latest persisted compliance rows from extraction run "
+            f"`{run_ids[0]}`. Historical baselines and candidates are preserved in the Eval tab."
+        )
+        return
+
+    preview = ", ".join(f"`{run_id}`" for run_id in run_ids[:5])
+    suffix = "" if len(run_ids) <= 5 else f", plus {len(run_ids) - 5} more"
+    st.info(
+        "Current extraction state: latest persisted compliance rows spanning "
+        f"{len(run_ids)} document-level extraction runs ({preview}{suffix}). "
+        "This table is latest-write state; historical baselines and candidates are preserved in the Eval tab."
+    )
 
 
 def _risk_counts(rows: list[dict[str, Any]]) -> dict[str, int]:

@@ -134,6 +134,10 @@ def test_gemini_provider_parses_structured_six_field_output_without_network() ->
     assert call["model"] == "gemini-2.5-flash"
     assert call["config"]["response_mime_type"] == "application/json"
     assert "Run id: run-gemini-001" in call["contents"]
+    assert "Packet labeling policy" in call["contents"]
+    assert "primary product/material certificate" in call["contents"]
+    assert "do not map Delivery Date to" in call["contents"]
+    assert "do not map Retest Date to expiry_date" in call["contents"]
 
 
 def test_malformed_gemini_json_becomes_abstention_records(tmp_db_path: str) -> None:

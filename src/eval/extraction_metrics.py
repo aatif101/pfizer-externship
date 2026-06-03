@@ -35,6 +35,8 @@ from dataclasses import dataclass
 
 
 _WHITESPACE_RE = re.compile(r"\s+")
+_ISO_YEAR_MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
+_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def _clean_string(value: str) -> str:
@@ -81,6 +83,11 @@ def normalize_extracted_value(field_name: str, value: str | None) -> str | None:
         return None
 
     if _looks_date_like_field(field_name):
+        # Preserve explicit ISO precision. Some real supplier certificates only
+        # provide month-level dates (YYYY-MM); dateutil would silently invent a
+        # day from today's date, corrupting human labels and exact-match evals.
+        if _ISO_DATE_RE.fullmatch(cleaned) or _ISO_YEAR_MONTH_RE.fullmatch(cleaned):
+            return cleaned
         try:
             from dateutil import parser as date_parser  # type: ignore
 

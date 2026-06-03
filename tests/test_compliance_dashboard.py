@@ -245,6 +245,10 @@ def test_render_compliance_tab_populated_source_detail_is_lazy_and_tolerates_mis
     assert fake_st.metrics[("Total documents", 1)] == 1
     assert fake_st.metrics[("Red", 1)] == 1
     assert fake_st.metrics[("Needs review", 1)] == 1
+    assert fake_st.info_messages == [
+        "Current extraction state: latest persisted compliance rows from extraction run "
+        "`run-render-001`. Historical baselines and candidates are preserved in the Eval tab."
+    ]
     assert fake_st.dataframes[0][0]["Risk"] == "Red"
     assert fake_st.dataframes[0][0]["Vendor"] == "Acme Pharma"
     assert "**Risk reason:** Document is expired." in fake_st.markdown_messages

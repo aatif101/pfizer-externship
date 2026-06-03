@@ -1,8 +1,22 @@
 compliance.db
 *.db
+*.sqlite
 .env
 settings.local.json
+
+# Confidential local document/data artifacts — never commit supplier PDFs,
+# page images, populated DBs, or private benchmark outputs.
+SDFs/
+data/sdfs/
 data/pdfs/
+private/
+local_data/
+reports/private/
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.webp
 __pycache__/
 *.pyc
 .pytest_cache/
