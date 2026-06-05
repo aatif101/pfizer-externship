@@ -11,7 +11,7 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from time import perf_counter
-from typing import Any
+from typing import Any, Mapping
 from uuid import uuid4
 
 try:
@@ -19,9 +19,17 @@ try:
 except Exception:  # pragma: no cover - exercised only when optional Langfuse is absent/broken
     langfuse_context = None  # type: ignore[assignment]
 
-from src.db.queries import DocumentPage, LoadedDocumentPages, load_document_pages
+from src.db.queries import DocumentMetadata, DocumentPage, LoadedDocumentPages, load_document_pages
 from src.extraction.models import ExtractedField, ReviewState, SDFExtractionRecord, SDFFieldName, SourceEvidence
-from src.extraction.providers import ProviderExtractionResult, ProviderFieldPayload, SDFExtractionProvider
+from src.extraction.providers import (
+    ProviderExtractionResult,
+    ProviderFieldPayload,
+    SDFExtractionProvider,
+    SDFVisualFallbackProvider,
+    VisualFallbackProviderResult,
+    VisualFallbackRequest,
+    VisualFallbackRequestPlan,
+)
 from src.extraction.repository import upsert_extraction_record
 from src.extraction.risk import compute_record_risk
 from src.eval.repository import ExtractionUsageObservationRow, insert_extraction_usage_observation
@@ -100,6 +108,94 @@ class ExtractionPipelineResult:
 
     record: SDFExtractionRecord
     diagnostics: ExtractionDiagnostics
+
+
+VISUAL_FALLBACK_ELIGIBLE_REASON_CODES: dict[ReviewState, str] = {
+    ReviewState.ABSTAINED: "field_abstained",
+    ReviewState.NEEDS_REVIEW: "field_needs_review",
+}
+VISUAL_FALLBACK_SKIP_NO_ELIGIBLE_FIELDS = "no_eligible_fields"
+VISUAL_FALLBACK_SKIP_MISSING_PAGE_IMAGES = "missing_page_images"
+VISUAL_FALLBACK_SKIP_NOT_CONFIGURED = "not_configured"
+
+
+def compute_visual_fallback_eligibility(
+    fields: Mapping[SDFFieldName, ExtractedField],
+) -> dict[SDFFieldName, str]:
+    """Return bounded field-level reason codes for fields eligible for visual fallback.
+
+    Eligibility is intentionally narrow: only normalized text fields that are
+    ``ABSTAINED`` or ``NEEDS_REVIEW`` may enter visual fallback. Good grounded
+    ``PENDING`` values are excluded so a later visual provider cannot overwrite
+    them through the targeted fallback seam.
+    """
+
+    eligibility: dict[SDFFieldName, str] = {}
+    for field_name in SDFFieldName:
+        field = fields.get(field_name)
+        if field is None:
+            continue
+        reason_code = VISUAL_FALLBACK_ELIGIBLE_REASON_CODES.get(field.review_state)
+        if reason_code is not None:
+            eligibility[field_name] = reason_code
+    return eligibility
+
+
+def build_visual_fallback_request_plan(
+    fields: Mapping[SDFFieldName, ExtractedField],
+    pages: tuple[DocumentPage, ...],
+) -> VisualFallbackRequestPlan:
+    """Build a sanitized targeted visual fallback request, or a bounded skip plan.
+
+    The ready request contains only eligible field names, selected pages whose
+    ``image_blob`` is populated, and generic reason codes. It must not be used as
+    a persistence/logging DTO for image bytes; downstream usage observations
+    should persist only the returned status/reason code.
+    """
+
+    eligibility = compute_visual_fallback_eligibility(fields)
+    if not eligibility:
+        return VisualFallbackRequestPlan(status="skipped", reason_code=VISUAL_FALLBACK_SKIP_NO_ELIGIBLE_FIELDS)
+
+    pages_with_images = tuple(page for page in pages if page.image_blob is not None)
+    if not pages_with_images:
+        return VisualFallbackRequestPlan(status="skipped", reason_code=VISUAL_FALLBACK_SKIP_MISSING_PAGE_IMAGES)
+
+    eligible_field_names = tuple(field_name for field_name in SDFFieldName if field_name in eligibility)
+    request = VisualFallbackRequest(
+        eligible_field_names=eligible_field_names,
+        pages=pages_with_images,
+        reason_codes={field_name: eligibility[field_name] for field_name in eligible_field_names},
+    )
+    return VisualFallbackRequestPlan(status="ready", request=request)
+
+
+def extract_visual_fallback_candidates(
+    *,
+    document: DocumentMetadata,
+    fields: Mapping[SDFFieldName, ExtractedField],
+    pages: tuple[DocumentPage, ...],
+    run_id: str,
+    visual_provider: SDFVisualFallbackProvider | None,
+) -> VisualFallbackProviderResult:
+    """Invoke visual fallback only when configured and eligible.
+
+    This helper establishes the no-op contract for orchestration: no provider is
+    called when there are no eligible fields, when images are unavailable, or when
+    no visual provider is configured. All skip reasons are bounded generic codes.
+    """
+
+    plan = build_visual_fallback_request_plan(fields, pages)
+    if plan.request is None:
+        return VisualFallbackProviderResult(plan=plan)
+    if visual_provider is None:
+        return VisualFallbackProviderResult(
+            plan=VisualFallbackRequestPlan(status="skipped", reason_code=VISUAL_FALLBACK_SKIP_NOT_CONFIGURED)
+        )
+    return VisualFallbackProviderResult(
+        plan=plan,
+        provider_result=visual_provider.extract_visual_fields(document=document, request=plan.request, run_id=run_id),
+    )
 
 
 @observe(name="sdf_extract_document")

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 from src.db.queries import DocumentMetadata, DocumentPage
 from src.extraction.models import SDFFieldName
@@ -81,6 +81,54 @@ class ProviderExtractionResult:
     usage_metadata: ProviderUsageMetadata | None = None
 
 
+VisualFallbackReasonCode = Literal[
+    "field_abstained",
+    "field_needs_review",
+    "no_eligible_fields",
+    "missing_page_images",
+    "not_configured",
+]
+VisualFallbackStatus = Literal["ready", "skipped", "complete", "abstained", "error"]
+
+
+@dataclass(frozen=True)
+class VisualFallbackRequest:
+    """Bounded visual fallback request for targeted image-based extraction.
+
+    ``eligible_field_names`` and ``reason_codes`` are the only field-level
+    context needed by visual providers. ``pages`` must contain selected
+    ``DocumentPage`` objects whose ``image_blob`` is populated; callers should
+    not include raw page text in prompts, local paths, PDFs, secrets, or previous
+    provider payloads when adapting this request to a live API.
+    """
+
+    eligible_field_names: tuple[SDFFieldName, ...]
+    pages: tuple[DocumentPage, ...]
+    reason_codes: dict[SDFFieldName, VisualFallbackReasonCode]
+
+
+@dataclass(frozen=True)
+class VisualFallbackRequestPlan:
+    """Decision made before a visual provider can be invoked.
+
+    A skipped plan carries only a bounded reason code. A ready plan carries the
+    sanitized request object; no raw values, spans, page text, image bytes, paths,
+    provider payloads, prompts, or secrets should be persisted from this object.
+    """
+
+    status: VisualFallbackStatus
+    reason_code: VisualFallbackReasonCode | None = None
+    request: VisualFallbackRequest | None = None
+
+
+@dataclass(frozen=True)
+class VisualFallbackProviderResult:
+    """Visual fallback invocation outcome safe for orchestration tests."""
+
+    plan: VisualFallbackRequestPlan
+    provider_result: ProviderExtractionResult | None = None
+
+
 class SDFExtractionProvider(Protocol):
     """Minimal protocol for an SDF field-extraction provider."""
 
@@ -92,3 +140,16 @@ class SDFExtractionProvider(Protocol):
         run_id: str,
     ) -> ProviderExtractionResult:
         """Return candidate six-field SDF extractions for an ingested document."""
+
+
+class SDFVisualFallbackProvider(Protocol):
+    """Optional provider protocol for targeted image-based fallback extraction."""
+
+    def extract_visual_fields(
+        self,
+        *,
+        document: DocumentMetadata,
+        request: VisualFallbackRequest,
+        run_id: str,
+    ) -> ProviderExtractionResult:
+        """Return candidate fields for the request's eligible field allowlist."""

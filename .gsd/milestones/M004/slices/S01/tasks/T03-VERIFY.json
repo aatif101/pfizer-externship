@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "taskId": "T03",
+  "unitId": "M004/S01/T03",
+  "timestamp": 1780525108107,
+  "passed": true,
+  "discoverySource": "task-plan",
+  "checks": [
+    {
+      "command": "venv/Scripts/python.exe -m pytest -q tests/test_extraction_cli.py tests/test_eval_repository.py tests/test_extraction_persistence.py",
+      "exitCode": 0,
+      "durationMs": 9118,
+      "verdict": "pass"
+    }
+  ]
+}

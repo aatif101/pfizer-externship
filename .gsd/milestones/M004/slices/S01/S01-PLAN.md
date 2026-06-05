@@ -30,12 +30,12 @@ Upstream surfaces consumed: `src/db/schema.py`, `src/extraction/models.py`, `src
   - Files: `src/db/schema.py`, `tests/test_extraction_run_history_schema.py`
   - Verify: venv/Scripts/python.exe -m pytest -q tests/test_extraction_run_history_schema.py tests/test_db.py
 
-- [ ] **T02: Persist and query extraction run history** `est:2h`
+- [x] **T02: Persist and query extraction run history** `est:2h`
   Expected executor skills for task plan frontmatter: tdd, verify-before-complete.
   - Files: `src/extraction/repository.py`, `tests/test_extraction_persistence.py`
   - Verify: venv/Scripts/python.exe -m pytest -q tests/test_extraction_persistence.py tests/test_extraction_pipeline.py
 
-- [ ] **T03: Wire shared run identity into CLI and eval reads** `est:1.5h`
+- [x] **T03: Wire shared run identity into CLI and eval reads** `est:1.5h`
   Expected executor skills for task plan frontmatter: tdd, verify-before-complete.
   - Files: `src/extraction/cli.py`, `src/eval/repository.py`, `tests/test_extraction_cli.py`, `tests/test_eval_repository.py`
   - Verify: venv/Scripts/python.exe -m pytest -q tests/test_extraction_cli.py tests/test_eval_repository.py tests/test_extraction_persistence.py

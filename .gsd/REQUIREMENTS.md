@@ -4,38 +4,6 @@ This file is the explicit capability and coverage contract for the project.
 
 ## Active
 
-### R011 — Preserve extraction and compliance results by run so baseline and candidate runs can coexist without overwriting historical meaning.
-- Class: continuity
-- Status: active
-- Description: Preserve extraction and compliance results by run so baseline and candidate runs can coexist without overwriting historical meaning.
-- Why it matters: Candidate experiments must be honestly comparable against the real baseline without silently changing what dashboard state means.
-- Source: user
-- Primary owning slice: M004/S01
-- Validation: Mapped to M004/S01. Validated when two runs for the same document can be persisted and queried independently while latest-write compatibility remains intact.
-- Notes: M004 uses additive run-scoped history while preserving existing latest-write extraction and compliance tables for compatibility.
-
-### R012 — Let the Compliance dashboard select and clearly label extraction runs, including baseline, candidate, and current latest-write state.
-- Class: primary-user-loop
-- Status: active
-- Description: Let the Compliance dashboard select and clearly label extraction runs, including baseline, candidate, and current latest-write state.
-- Why it matters: Evaluators need to know exactly which extraction run they are inspecting before trusting compliance records.
-- Source: user
-- Primary owning slice: M004/S02
-- Supporting slices: M004/S01
-- Validation: Mapped to M004/S02. Validated by dashboard tests and browser verification showing run selector and run identity labels.
-- Notes: Dashboard must avoid ambiguous latest-write display and provide friendly empty states when no run-scoped rows exist.
-
-### R013 — Capture bounded Gemini extraction token and cost observations for text and visual extraction calls.
-- Class: operability
-- Status: active
-- Description: Capture bounded Gemini extraction token and cost observations for text and visual extraction calls.
-- Why it matters: Real extraction quality must be evaluated alongside cost and token usage, especially once visual calls are introduced.
-- Source: user
-- Primary owning slice: M004/S03
-- Supporting slices: M004/S04,M004/S05
-- Validation: Mapped to M004/S03. Validated when mocked Gemini usage metadata persists bounded observations and aggregates into eval metrics without raw confidential content.
-- Notes: Observation rows must include bounded metadata only: run id, doc id, stage, model, token counts, estimated cost, status, and sanitized error reason. They must not include prompts, raw page text, provider payloads, images, or secrets.
-
 ### R014 — Run targeted visual extraction fallback for abstained, suspicious, ungrounded, low-confidence, or missing SDF fields using stored page images from local compliance.db.
 - Class: core-capability
 - Status: active
@@ -133,6 +101,27 @@ This file is the explicit capability and coverage contract for the project.
 - Validation: Validated in M002 S05 by final offline regression: CLI index build, hybrid retrieval, fake-provider answer generation, Streamlit Chat rendering, cited grounded answers, unrelated-query abstention, and provider failure paths passed deterministically with fixture SQLite data and no live secrets.
 - Notes: Initial M002 implementation uses the planned hybrid text retrieval baseline. Visual retrieval remains separate under R006.
 
+### R007 — Maintain an evaluation harness with extraction F1, retrieval recall, faithfulness/relevancy, citation accuracy, latency, and cost metrics.
+- Class: quality-attribute
+- Status: validated
+- Description: Maintain an evaluation harness with extraction F1, retrieval recall, faithfulness/relevancy, citation accuracy, latency, and cost metrics.
+- Why it matters: The demo needs evidence, not just claims, especially for compliance-oriented AI.
+- Source: migration from GSD 1.0 EVAL and BENCH requirements
+- Primary owning slice: M003
+- Validation: Validated across M003 evaluation slices and S08 closeout evidence: persisted SQLite eval run history supports extraction/retrieval/RAG metric families including extraction F1, retrieval recall, citation accuracy, faithfulness/relevancy, latency, cost, and token metrics. S08 runtime UAT artifacts prove the Streamlit Eval tab renders two synthetic complete runs, metric history, comparison deltas, fresh-database no-runs guidance, and no traceback. Fresh closeout verification: `venv/Scripts/python.exe -m pytest -q tests/test_dashboard_eval_tab.py tests/test_eval_repository.py tests/test_retrieval_eval_optional_metrics.py tests/test_app.py tests/test_s08_uat_seed.py` exited 0 with 30 passed; artifact validation confirmed 2 populated runs, 12 required metric names, and 0 rows in fresh eval tables.
+- Notes: M003 S08 provides final runtime UAT evidence for dashboard-visible persisted evaluation history using sanitized synthetic data. Optional live services remain gracefully absent; no provider payloads, raw prompts/answers/snippets, document text/images, Docling JSON, full hashes, or secrets are included in evidence.
+
+### R008 — Trace ingestion, extraction, retrieval, generation, and evaluation operations with Langfuse while avoiding secret leakage.
+- Class: operability
+- Status: validated
+- Description: Trace ingestion, extraction, retrieval, generation, and evaluation operations with Langfuse while avoiding secret leakage.
+- Why it matters: Observability is necessary for debugging and for auditability in a pharmaceutical document workflow.
+- Source: migration from GSD 1.0 OBS-01 and readiness cleanup
+- Primary owning slice: M003
+- Supporting slices: M001,M002
+- Validation: Validated in M003 S07 by focused offline pytest verification covering Langfuse trace metadata across ingestion/storage, extraction, retrieval/generation existing trace safety, and retrieval evaluation/optional metrics. Evidence: `venv/Scripts/python.exe -m pytest -q tests/test_tracing.py tests/test_retrieval_eval_runner.py tests/test_retrieval_eval_optional_metrics.py tests/test_extraction_pipeline.py tests/test_ingest.py` exited 0 with 51 passed and 18 warnings, proving missing/failing Langfuse does not crash and forbidden raw content/secrets are excluded.
+- Notes: M003 S07 completed full cross-pipeline Langfuse tracing through `src.tracing.safe_update_current_trace` allowlisted metadata. Dashboard tracing was intentionally out of scope; S08 remains for Eval tab UAT evidence rather than R008 implementation.
+
 ### R009 — Use Python 3.11 project virtual environment for development and verification; do not rely on global Python 3.14.
 - Class: constraint
 - Status: validated
@@ -153,26 +142,37 @@ This file is the explicit capability and coverage contract for the project.
 - Validation: Validated by project hygiene plus M002 verification that public CLI/service/Chat/tracing diagnostics avoid secrets, raw provider payloads, full page text, image blobs, Docling JSON, and full content hashes.
 - Notes: settings.local.json was untracked and added to .gitignore during migration cleanup. Any previously exposed provider key must remain revoked/rotated. Future provider, tracing, and evaluation work must preserve the M002 redaction/bounded-diagnostics contract.
 
-### R008 — Trace ingestion, extraction, retrieval, generation, and evaluation operations with Langfuse while avoiding secret leakage.
+### R011 — Preserve extraction and compliance results by run so baseline and candidate runs can coexist without overwriting historical meaning.
+- Class: continuity
+- Status: validated
+- Description: Preserve extraction and compliance results by run so baseline and candidate runs can coexist without overwriting historical meaning.
+- Why it matters: Candidate experiments must be honestly comparable against the real baseline without silently changing what dashboard state means.
+- Source: user
+- Primary owning slice: M004/S01
+- Validation: M004/S01 closeout verification passed: tests persist two SDFExtractionRecord values for the same doc_id with different run_id values, reconstruct each run independently through run-scoped repository APIs, and confirm latest-write get/list compatibility remains intact.
+- Notes: Validated by Windows-safe pytest closeout run .gsd/exec/0712d0ec-1619-4cbd-9db7-f155b778e736.stdout.
+
+### R012 — Let the Compliance dashboard select and clearly label extraction runs, including baseline, candidate, and current latest-write state.
+- Class: primary-user-loop
+- Status: validated
+- Description: Let the Compliance dashboard select and clearly label extraction runs, including baseline, candidate, and current latest-write state.
+- Why it matters: Evaluators need to know exactly which extraction run they are inspecting before trusting compliance records.
+- Source: user
+- Primary owning slice: M004/S02
+- Supporting slices: M004/S01
+- Validation: M004/S02 validated by repository-backed pytest coverage and fake Streamlit render tests for the Compliance dashboard run selector. Closeout verification via Windows-safe gsd_exec runtime=node ran venv\Scripts\python.exe -m pytest -q tests/test_compliance_dashboard.py tests/test_dashboard_compliance_tab.py tests/test_dashboard_ui_helpers.py tests/test_app.py tests/test_extraction_persistence.py tests/test_extraction_run_history_schema.py and reported 54 passed with exit code 0.
+- Notes: The dashboard can select latest compatibility state or explicit historical extraction runs and labels baseline, candidate, historical, and latest views without falling back from selected empty historical runs to latest rows.
+
+### R013 — Capture bounded Gemini extraction token and cost observations for text and visual extraction calls.
 - Class: operability
 - Status: validated
-- Description: Trace ingestion, extraction, retrieval, generation, and evaluation operations with Langfuse while avoiding secret leakage.
-- Why it matters: Observability is necessary for debugging and for auditability in a pharmaceutical document workflow.
-- Source: migration from GSD 1.0 OBS-01 and readiness cleanup
-- Primary owning slice: M003
-- Supporting slices: M001,M002
-- Validation: Validated in M003 S07 by focused offline pytest verification covering Langfuse trace metadata across ingestion/storage, extraction, retrieval/generation existing trace safety, and retrieval evaluation/optional metrics. Evidence: `venv/Scripts/python.exe -m pytest -q tests/test_tracing.py tests/test_retrieval_eval_runner.py tests/test_retrieval_eval_optional_metrics.py tests/test_extraction_pipeline.py tests/test_ingest.py` exited 0 with 51 passed and 18 warnings, proving missing/failing Langfuse does not crash and forbidden raw content/secrets are excluded.
-- Notes: M003 S07 completed full cross-pipeline Langfuse tracing through `src.tracing.safe_update_current_trace` allowlisted metadata. Dashboard tracing was intentionally out of scope; S08 remains for Eval tab UAT evidence rather than R008 implementation.
-
-### R007 — Maintain an evaluation harness with extraction F1, retrieval recall, faithfulness/relevancy, citation accuracy, latency, and cost metrics.
-- Class: quality-attribute
-- Status: validated
-- Description: Maintain an evaluation harness with extraction F1, retrieval recall, faithfulness/relevancy, citation accuracy, latency, and cost metrics.
-- Why it matters: The demo needs evidence, not just claims, especially for compliance-oriented AI.
-- Source: migration from GSD 1.0 EVAL and BENCH requirements
-- Primary owning slice: M003
-- Validation: Validated across M003 evaluation slices and S08 closeout evidence: persisted SQLite eval run history supports extraction/retrieval/RAG metric families including extraction F1, retrieval recall, citation accuracy, faithfulness/relevancy, latency, cost, and token metrics. S08 runtime UAT artifacts prove the Streamlit Eval tab renders two synthetic complete runs, metric history, comparison deltas, fresh-database no-runs guidance, and no traceback. Fresh closeout verification: `venv/Scripts/python.exe -m pytest -q tests/test_dashboard_eval_tab.py tests/test_eval_repository.py tests/test_retrieval_eval_optional_metrics.py tests/test_app.py tests/test_s08_uat_seed.py` exited 0 with 30 passed; artifact validation confirmed 2 populated runs, 12 required metric names, and 0 rows in fresh eval tables.
-- Notes: M003 S08 provides final runtime UAT evidence for dashboard-visible persisted evaluation history using sanitized synthetic data. Optional live services remain gracefully absent; no provider payloads, raw prompts/answers/snippets, document text/images, Docling JSON, full hashes, or secrets are included in evidence.
+- Description: Capture bounded Gemini extraction token and cost observations for text and visual extraction calls.
+- Why it matters: Real extraction quality must be evaluated alongside cost and token usage, especially once visual calls are introduced.
+- Source: user
+- Primary owning slice: M004/S03
+- Supporting slices: M004/S04,M004/S05
+- Validation: M004/S03 validated by Windows-native pytest gates proving mocked Gemini usage metadata persists bounded observations and aggregates into eval_metrics without raw confidential content: gsd_exec 376a460c-b25a-4cd4-9015-fc2fd7f6303d ran all planned S03 commands and passed (10 + 36 + 26 tests).
+- Notes: S03 covers text extraction calls and establishes the observation/eval contract for S04 visual fallback reuse.
 
 ## Deferred
 
@@ -198,13 +198,13 @@ This file is the explicit capability and coverage contract for the project.
 | R004 | primary-user-loop | validated | M001 | M003 | Validated in S04 by SQLite-backed dashboard tests and full regression: Compliance tab renders persisted records with metadata, age/risk display, confidence, review state, run/trace metadata, and source page/span details; empty/missing DB states are friendly and app startup is smoke-tested. |
 | R005 | core-capability | validated | M002 | none | Validated in M002 S05 by final offline regression: CLI index build, hybrid retrieval, fake-provider answer generation, Streamlit Chat rendering, cited grounded answers, unrelated-query abstention, and provider failure paths passed deterministically with fixture SQLite data and no live secrets. |
 | R006 | differentiator | deferred | future visual retrieval milestone | none | Validated when visual retrieval improves or complements recall on scanned/table-heavy pages in the gold set. |
+| R007 | quality-attribute | validated | M003 | none | Validated across M003 evaluation slices and S08 closeout evidence: persisted SQLite eval run history supports extraction/retrieval/RAG metric families including extraction F1, retrieval recall, citation accuracy, faithfulness/relevancy, latency, cost, and token metrics. S08 runtime UAT artifacts prove the Streamlit Eval tab renders two synthetic complete runs, metric history, comparison deltas, fresh-database no-runs guidance, and no traceback. Fresh closeout verification: `venv/Scripts/python.exe -m pytest -q tests/test_dashboard_eval_tab.py tests/test_eval_repository.py tests/test_retrieval_eval_optional_metrics.py tests/test_app.py tests/test_s08_uat_seed.py` exited 0 with 30 passed; artifact validation confirmed 2 populated runs, 12 required metric names, and 0 rows in fresh eval tables. |
+| R008 | operability | validated | M003 | M001,M002 | Validated in M003 S07 by focused offline pytest verification covering Langfuse trace metadata across ingestion/storage, extraction, retrieval/generation existing trace safety, and retrieval evaluation/optional metrics. Evidence: `venv/Scripts/python.exe -m pytest -q tests/test_tracing.py tests/test_retrieval_eval_runner.py tests/test_retrieval_eval_optional_metrics.py tests/test_extraction_pipeline.py tests/test_ingest.py` exited 0 with 51 passed and 18 warnings, proving missing/failing Langfuse does not crash and forbidden raw content/secrets are excluded. |
 | R009 | constraint | validated | M001 | none | Validated by repeated M001/M002 verification through the project Python 3.11 virtualenv using the Windows-compatible `venv/Scripts/python.exe` command path; global Python 3.14 is not the supported project runtime. |
 | R010 | compliance/security | validated | M001 | none | Validated by project hygiene plus M002 verification that public CLI/service/Chat/tracing diagnostics avoid secrets, raw provider payloads, full page text, image blobs, Docling JSON, and full content hashes. |
-| R008 | operability | validated | M003 | M001,M002 | Validated in M003 S07 by focused offline pytest verification covering Langfuse trace metadata across ingestion/storage, extraction, retrieval/generation existing trace safety, and retrieval evaluation/optional metrics. Evidence: `venv/Scripts/python.exe -m pytest -q tests/test_tracing.py tests/test_retrieval_eval_runner.py tests/test_retrieval_eval_optional_metrics.py tests/test_extraction_pipeline.py tests/test_ingest.py` exited 0 with 51 passed and 18 warnings, proving missing/failing Langfuse does not crash and forbidden raw content/secrets are excluded. |
-| R007 | quality-attribute | validated | M003 | none | Validated across M003 evaluation slices and S08 closeout evidence: persisted SQLite eval run history supports extraction/retrieval/RAG metric families including extraction F1, retrieval recall, citation accuracy, faithfulness/relevancy, latency, cost, and token metrics. S08 runtime UAT artifacts prove the Streamlit Eval tab renders two synthetic complete runs, metric history, comparison deltas, fresh-database no-runs guidance, and no traceback. Fresh closeout verification: `venv/Scripts/python.exe -m pytest -q tests/test_dashboard_eval_tab.py tests/test_eval_repository.py tests/test_retrieval_eval_optional_metrics.py tests/test_app.py tests/test_s08_uat_seed.py` exited 0 with 30 passed; artifact validation confirmed 2 populated runs, 12 required metric names, and 0 rows in fresh eval tables. |
-| R011 | continuity | active | M004/S01 | none | Mapped to M004/S01. Validated when two runs for the same document can be persisted and queried independently while latest-write compatibility remains intact. |
-| R012 | primary-user-loop | active | M004/S02 | M004/S01 | Mapped to M004/S02. Validated by dashboard tests and browser verification showing run selector and run identity labels. |
-| R013 | operability | active | M004/S03 | M004/S04,M004/S05 | Mapped to M004/S03. Validated when mocked Gemini usage metadata persists bounded observations and aggregates into eval metrics without raw confidential content. |
+| R011 | continuity | validated | M004/S01 | none | M004/S01 closeout verification passed: tests persist two SDFExtractionRecord values for the same doc_id with different run_id values, reconstruct each run independently through run-scoped repository APIs, and confirm latest-write get/list compatibility remains intact. |
+| R012 | primary-user-loop | validated | M004/S02 | M004/S01 | M004/S02 validated by repository-backed pytest coverage and fake Streamlit render tests for the Compliance dashboard run selector. Closeout verification via Windows-safe gsd_exec runtime=node ran venv\Scripts\python.exe -m pytest -q tests/test_compliance_dashboard.py tests/test_dashboard_compliance_tab.py tests/test_dashboard_ui_helpers.py tests/test_app.py tests/test_extraction_persistence.py tests/test_extraction_run_history_schema.py and reported 54 passed with exit code 0. |
+| R013 | operability | validated | M004/S03 | M004/S04,M004/S05 | M004/S03 validated by Windows-native pytest gates proving mocked Gemini usage metadata persists bounded observations and aggregates into eval_metrics without raw confidential content: gsd_exec 376a460c-b25a-4cd4-9015-fc2fd7f6303d ran all planned S03 commands and passed (10 + 36 + 26 tests). |
 | R014 | core-capability | active | M004/S04 | M004/S01,M004/S03 | Mapped to M004/S04. Validated when visual fallback fills or improves only eligible suspicious fields and records bounded failures for missing images or provider errors. |
 | R015 | quality-attribute | active | M004/S05 | M004/S01,M004/S02,M004/S03,M004/S04 | Mapped to M004/S05. Validated when a final candidate eval run is persisted and compared against real-text and packet-aware baselines in metrics and dashboard surfaces. |
 | R016 | compliance/security | active | M004/S05 | M004/S01,M004/S02,M004/S03,M004/S04 | Mapped to M004/S05. Validated by git status and ignored-file checks after real evaluation runs. |
@@ -212,7 +212,7 @@ This file is the explicit capability and coverage contract for the project.
 
 ## Coverage Summary
 
-- Active requirements: 7
-- Mapped to slices: 7
-- Validated: 9 (R001, R002, R003, R004, R005, R009, R010, R008, R007)
+- Active requirements: 4
+- Mapped to slices: 4
+- Validated: 12 (R001, R002, R003, R004, R005, R007, R008, R009, R010, R011, R012, R013)
 - Unmapped active requirements: 0
