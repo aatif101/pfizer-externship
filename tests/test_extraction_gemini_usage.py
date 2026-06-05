@@ -226,7 +226,12 @@ def test_pipeline_persists_one_bounded_text_usage_observation_for_mocked_gemini(
     result = extract_document(tmp_db_path, "doc-001", provider, today=date(2026, 1, 1), run_id="run-gemini-usage")
 
     assert result.record.dashboard_needs_review is False
-    rows = list_extraction_usage_observations(tmp_db_path, run_id="run-gemini-usage", doc_id="doc-001")
+    rows = list_extraction_usage_observations(
+        tmp_db_path,
+        run_id="run-gemini-usage",
+        doc_id="doc-001",
+        stage="text_extraction",
+    )
     assert len(rows) == 1
     row = rows[0]
     assert row.stage == "text_extraction"
@@ -254,7 +259,12 @@ def test_pipeline_persists_nullable_usage_fields_when_gemini_metadata_is_absent(
 
     extract_document(tmp_db_path, "doc-001", provider, today=date(2026, 1, 1), run_id="run-no-usage")
 
-    rows = list_extraction_usage_observations(tmp_db_path, run_id="run-no-usage", doc_id="doc-001")
+    rows = list_extraction_usage_observations(
+        tmp_db_path,
+        run_id="run-no-usage",
+        doc_id="doc-001",
+        stage="text_extraction",
+    )
     assert len(rows) == 1
     row = rows[0]
     assert row.status == "complete"
@@ -295,7 +305,12 @@ def test_malformed_gemini_json_with_usage_persists_abstained_usage_observation(t
     assert all(field.abstention_reason == MALFORMED_OUTPUT_REASON for field in stored.fields.values())
     assert set(stored.fields) == set(SDFFieldName)
 
-    rows = list_extraction_usage_observations(tmp_db_path, run_id="run-malformed-usage", doc_id="doc-001")
+    rows = list_extraction_usage_observations(
+        tmp_db_path,
+        run_id="run-malformed-usage",
+        doc_id="doc-001",
+        stage="text_extraction",
+    )
     assert len(rows) == 1
     row = rows[0]
     assert row.status == "abstained"

@@ -26,6 +26,7 @@ from src.extraction.providers import (
     ProviderFieldPayload,
     ProviderSourceEvidence,
     ProviderUsageMetadata,
+    VisualFallbackRequest,
 )
 
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
@@ -114,7 +115,7 @@ class GeminiSDFExtractionProvider:
             usage_metadata=usage_metadata,
         )
 
-    def _generate_content_with_retry(self, *, contents: str) -> Any:
+    def _generate_content_with_retry(self, *, contents: Any) -> Any:
         retrying = Retrying(
             stop=stop_after_attempt(self.max_attempts),
             wait=wait_none(),
@@ -126,7 +127,7 @@ class GeminiSDFExtractionProvider:
                 return self._generate_content(contents=contents)
         raise AssertionError("unreachable tenacity retry state")
 
-    def _generate_content(self, *, contents: str) -> Any:
+    def _generate_content(self, *, contents: Any) -> Any:
         client = self._get_client()
         config = {
             "response_mime_type": "application/json",
@@ -146,6 +147,100 @@ class GeminiSDFExtractionProvider:
             raise ExtractionConfigurationError("google-genai is installed/configured incorrectly for Gemini extraction.") from exc
         self._client = genai.Client(api_key=self._api_key)
         return self._client
+
+
+class GeminiSDFVisualFallbackProvider(GeminiSDFExtractionProvider):
+    """Gemini implementation of targeted image-based visual fallback extraction."""
+
+    def __init__(
+        self,
+        *,
+        api_key: str | None = None,
+        model: str | None = None,
+        client: Any | None = None,
+        client_factory: Callable[[str], Any] | None = None,
+        part_factory: Any | None = None,
+        max_attempts: int = 2,
+    ) -> None:
+        super().__init__(
+            api_key=api_key,
+            model=model,
+            client=client,
+            client_factory=client_factory,
+            max_attempts=max_attempts,
+        )
+        self._part_factory = part_factory
+
+    def extract_visual_fields(
+        self,
+        *,
+        document: DocumentMetadata,
+        request: VisualFallbackRequest,
+        run_id: str,
+    ) -> ProviderExtractionResult:
+        """Call Gemini with bounded instructions plus selected page image parts.
+
+        The request prompt intentionally excludes raw page text, local filesystem
+        paths, previous provider payloads, PDFs, secrets, and image bytes. Image
+        data is attached only as SDK ``Part`` objects for pages already selected
+        by the pipeline's visual fallback planner.
+        """
+
+        requested_fields = tuple(request.eligible_field_names)
+        try:
+            response = self._generate_content_with_retry(
+                contents=_build_visual_contents(
+                    document=document,
+                    request=request,
+                    run_id=run_id,
+                    part_factory=self._get_part_factory(),
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 - provider boundary sanitizes arbitrary SDK failures.
+            raise ExtractionProviderError(
+                "Gemini visual fallback provider failed after bounded retry "
+                f"(provider={_PROVIDER_NAME}, model={self.model}, run_id={run_id}, "
+                f"doc_id={document.doc_id}, error_class={exc.__class__.__name__})."
+            ) from exc
+
+        usage_metadata = _extract_usage_metadata(response, model=self.model)
+        response_text = _response_text(response)
+        payload = _parse_json_object(response_text)
+        if payload is None:
+            return _malformed_result(
+                trace_id=_response_trace_id(response),
+                model=self.model,
+                usage_metadata=usage_metadata,
+                field_names=requested_fields,
+            )
+
+        fields = _parse_fields(payload)
+        if fields is None:
+            return _malformed_result(
+                trace_id=_response_trace_id(response),
+                model=self.model,
+                usage_metadata=usage_metadata,
+                field_names=requested_fields,
+            )
+
+        allowed_fields = set(requested_fields)
+        return ProviderExtractionResult(
+            fields=tuple(_filter_requested_fields(fields, allowed_fields)),
+            trace_id=_response_trace_id(response),
+            provider_name=_PROVIDER_NAME,
+            provider_model=self.model,
+            usage_metadata=usage_metadata,
+        )
+
+    def _get_part_factory(self) -> Any:
+        if self._part_factory is not None:
+            return self._part_factory
+        try:
+            from google.genai.types import Part  # type: ignore[import-not-found]
+        except Exception as exc:  # noqa: BLE001 - optional dependency boundary.
+            raise ExtractionConfigurationError("google-genai is installed/configured incorrectly for Gemini visual fallback.") from exc
+        self._part_factory = Part
+        return self._part_factory
 
 
 def _build_contents(*, document: DocumentMetadata, pages: tuple[DocumentPage, ...], run_id: str) -> str:
@@ -197,6 +292,82 @@ JSON schema:
 Pages:
 {page_blocks}
 """
+
+
+def _build_visual_contents(
+    *,
+    document: DocumentMetadata,
+    request: VisualFallbackRequest,
+    run_id: str,
+    part_factory: Any,
+) -> list[Any]:
+    prompt = _build_visual_prompt(document=document, request=request, run_id=run_id)
+    image_parts = [
+        part_factory.from_bytes(data=page.image_blob, mime_type="image/png")
+        for page in request.pages
+        if page.image_blob is not None
+    ]
+    return [prompt, *image_parts]
+
+
+def _build_visual_prompt(*, document: DocumentMetadata, request: VisualFallbackRequest, run_id: str) -> str:
+    requested_fields = ", ".join(field.value for field in request.eligible_field_names)
+    page_numbers = ", ".join(str(page.page_num) for page in request.pages)
+    reason_lines = "\n".join(
+        f"- {field.value}: {request.reason_codes[field]}"
+        for field in request.eligible_field_names
+    )
+    return f"""You are performing targeted visual fallback extraction for Pfizer supplier SDF compliance metadata.
+Return ONLY valid JSON. Do not include markdown.
+
+Document id: {document.doc_id}
+Run id: {run_id}
+Image-backed page numbers: {page_numbers}
+
+Requested fields exactly: {requested_fields}
+Eligibility reason codes:
+{reason_lines}
+
+Use only the attached page images. Do not rely on page text, file paths, prior provider output, or unstated context.
+Only return fields from the requested field allowlist. If a requested field is uncertain or unsupported by the image, set all value fields to null and provide an abstention_reason.
+Page references must be 0-indexed and must reference one of the image-backed page numbers above. For every non-abstained field include a short verbatim_span visible in the cited page image.
+
+Packet labeling policy:
+Many supplier PDFs are packets containing emails, handwritten notes, template pages, processing records, SDS pages, and multiple supporting certificates.
+First identify the most directly relevant certificate/quality/compliance document for the product/material itself, then extract requested fields from that primary sub-document only.
+Do not use email dates, handwritten notes, template release dates, delivery dates, retest dates, processing records, or unrelated attachment dates as values unless the exact target field is explicitly present in the primary product/material certificate.
+
+JSON schema:
+{{
+  "trace_id": "optional provider trace id",
+  "fields": [
+    {{
+      "field_name": "one requested field name only",
+      "raw_value": "string or null",
+      "normalized_value": "string/number/boolean or null",
+      "normalized_date": "YYYY-MM-DD or null",
+      "confidence": 0.0,
+      "evidence": {{"page_num": 0, "verbatim_span": "short copied visible text", "bbox": null}},
+      "abstention_reason": "string or null"
+    }}
+  ]
+}}
+"""
+
+
+def _filter_requested_fields(
+    fields: list[ProviderFieldPayload],
+    allowed_fields: set[SDFFieldName],
+) -> list[ProviderFieldPayload]:
+    filtered: list[ProviderFieldPayload] = []
+    for field in fields:
+        try:
+            field_name = SDFFieldName(field.field_name)
+        except ValueError:
+            continue
+        if field_name in allowed_fields:
+            filtered.append(field)
+    return filtered
 
 
 def _response_text(response: Any) -> str:
@@ -340,7 +511,9 @@ def _malformed_result(
     trace_id: str | None,
     model: str,
     usage_metadata: ProviderUsageMetadata | None,
+    field_names: tuple[SDFFieldName, ...] | None = None,
 ) -> ProviderExtractionResult:
+    result_field_names = field_names or tuple(SDFFieldName)
     return ProviderExtractionResult(
         fields=tuple(
             ProviderFieldPayload(
@@ -349,7 +522,7 @@ def _malformed_result(
                 evidence=ProviderSourceEvidence(page_num=0),
                 abstention_reason=MALFORMED_OUTPUT_REASON,
             )
-            for field in SDFFieldName
+            for field in result_field_names
         ),
         trace_id=trace_id,
         provider_name=_PROVIDER_NAME,
