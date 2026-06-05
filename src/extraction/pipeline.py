@@ -198,6 +198,118 @@ def extract_visual_fallback_candidates(
     )
 
 
+@dataclass(frozen=True)
+class _VisualFallbackStageOutcome:
+    """Internal visual fallback stage result; safe fields only except transient normalized candidates."""
+
+    merged_fields: dict[SDFFieldName, ExtractedField]
+    status: str
+    reason_code: str | None = None
+    provider_result: ProviderExtractionResult | None = None
+    latency_ms: float | None = None
+
+
+def _run_visual_fallback_stage(
+    db_path: str,
+    *,
+    document: DocumentMetadata,
+    text_fields: dict[SDFFieldName, ExtractedField],
+    text_pages: tuple[DocumentPage, ...],
+    run_id: str,
+    visual_provider: SDFVisualFallbackProvider | None,
+    low_confidence_threshold: float,
+) -> _VisualFallbackStageOutcome:
+    """Run targeted visual fallback and merge only eligible improvements.
+
+    Image bytes are loaded only after a visual provider is configured and text
+    normalization produced at least one eligible field. Provider exceptions are
+    converted into a bounded error outcome so visual fallback cannot overwrite or
+    block the text extraction result.
+    """
+
+    if visual_provider is None:
+        return _VisualFallbackStageOutcome(
+            merged_fields=dict(text_fields),
+            status="skipped",
+            reason_code=VISUAL_FALLBACK_SKIP_NOT_CONFIGURED,
+        )
+
+    eligibility = compute_visual_fallback_eligibility(text_fields)
+    if not eligibility:
+        return _VisualFallbackStageOutcome(
+            merged_fields=dict(text_fields),
+            status="skipped",
+            reason_code=VISUAL_FALLBACK_SKIP_NO_ELIGIBLE_FIELDS,
+        )
+
+    loaded_with_images = load_document_pages(db_path, document.doc_id, include_image_bytes=True)
+    image_pages = loaded_with_images.pages if loaded_with_images is not None else text_pages
+    plan = build_visual_fallback_request_plan(text_fields, image_pages)
+    if plan.request is None:
+        return _VisualFallbackStageOutcome(
+            merged_fields=dict(text_fields),
+            status="skipped",
+            reason_code=plan.reason_code,
+        )
+
+    started_at = perf_counter()
+    try:
+        provider_result = visual_provider.extract_visual_fields(document=document, request=plan.request, run_id=run_id)
+    except Exception as exc:
+        return _VisualFallbackStageOutcome(
+            merged_fields=dict(text_fields),
+            status="error",
+            reason_code=_visual_provider_error_reason(exc),
+            latency_ms=(perf_counter() - started_at) * 1000,
+        )
+
+    latency_ms = (perf_counter() - started_at) * 1000
+    visual_fields = _normalize_fields(
+        provider_result,
+        pages=image_pages,
+        low_confidence_threshold=low_confidence_threshold,
+    )
+    merged_fields = _merge_visual_fallback_fields(text_fields, visual_fields)
+    status = "complete" if merged_fields != text_fields else "abstained"
+    reason_code = None if status == "complete" else "no_fields_improved"
+    return _VisualFallbackStageOutcome(
+        merged_fields=merged_fields,
+        status=status,
+        reason_code=reason_code,
+        provider_result=provider_result,
+        latency_ms=latency_ms,
+    )
+
+
+def _merge_visual_fallback_fields(
+    text_fields: Mapping[SDFFieldName, ExtractedField],
+    visual_fields: Mapping[SDFFieldName, ExtractedField],
+) -> dict[SDFFieldName, ExtractedField]:
+    """Merge visual candidates without allowing broad overwrite behavior."""
+
+    merged = dict(text_fields)
+    eligibility = compute_visual_fallback_eligibility(text_fields)
+    for field_name in eligibility:
+        current = text_fields[field_name]
+        candidate = visual_fields.get(field_name)
+        if candidate is None or candidate.review_state is ReviewState.ABSTAINED:
+            continue
+        if current.review_state is ReviewState.ABSTAINED:
+            merged[field_name] = candidate
+        elif current.review_state is ReviewState.NEEDS_REVIEW and candidate.review_state is ReviewState.PENDING:
+            merged[field_name] = candidate
+    return merged
+
+
+def _visual_provider_error_reason(exc: BaseException) -> str:
+    """Return a sanitized provider error class/reason code without exception text."""
+
+    reason_code = getattr(exc, "reason_code", None)
+    if isinstance(reason_code, str) and reason_code:
+        return reason_code
+    return exc.__class__.__name__
+
+
 @observe(name="sdf_extract_document")
 def extract_document(
     db_path: str,
@@ -207,6 +319,7 @@ def extract_document(
     today: date | None = None,
     low_confidence_threshold: float = LOW_CONFIDENCE_REVIEW_THRESHOLD,
     run_id: str | None = None,
+    visual_provider: SDFVisualFallbackProvider | None = None,
 ) -> ExtractionPipelineResult:
     """Extract and persist one document's six-field SDF record.
 
@@ -234,6 +347,16 @@ def extract_document(
             pages=loaded.pages,
             low_confidence_threshold=low_confidence_threshold,
         )
+        visual_outcome = _run_visual_fallback_stage(
+            db_path,
+            document=loaded.document,
+            text_fields=fields,
+            text_pages=loaded.pages,
+            run_id=effective_run_id,
+            visual_provider=visual_provider,
+            low_confidence_threshold=low_confidence_threshold,
+        )
+        fields = visual_outcome.merged_fields
 
         record = SDFExtractionRecord(
             doc_id=loaded.document.doc_id,
@@ -255,6 +378,11 @@ def extract_document(
             record=record,
             provider_result=provider_result,
             latency_ms=provider_latency_ms,
+        )
+        _insert_visual_fallback_usage_observation(
+            db_path,
+            record=record,
+            outcome=visual_outcome,
         )
 
         diagnostics = ExtractionDiagnostics(
@@ -340,6 +468,37 @@ def _insert_text_usage_observation(
             estimated_cost_usd=usage.estimated_cost_usd if usage is not None else None,
             trace_id=provider_result.trace_id,
             error_reason=_usage_observation_error_reason(status),
+        ),
+    )
+
+
+def _insert_visual_fallback_usage_observation(
+    db_path: str,
+    *,
+    record: SDFExtractionRecord,
+    outcome: _VisualFallbackStageOutcome,
+) -> None:
+    provider_result = outcome.provider_result
+    usage = provider_result.usage_metadata if provider_result is not None else None
+    provider_model = None
+    if provider_result is not None:
+        provider_model = provider_result.provider_model or (usage.model if usage is not None else None)
+    insert_extraction_usage_observation(
+        db_path,
+        ExtractionUsageObservationRow(
+            run_id=record.run_id or "",
+            doc_id=record.doc_id,
+            stage="visual_fallback",
+            provider=provider_result.provider_name if provider_result is not None else None,
+            model=provider_model,
+            status=outcome.status,
+            latency_ms=outcome.latency_ms,
+            input_tokens=usage.input_tokens if usage is not None else None,
+            output_tokens=usage.output_tokens if usage is not None else None,
+            total_tokens=usage.total_tokens if usage is not None else None,
+            estimated_cost_usd=usage.estimated_cost_usd if usage is not None else None,
+            trace_id=provider_result.trace_id if provider_result is not None else None,
+            error_reason=outcome.reason_code,
         ),
     )
 
