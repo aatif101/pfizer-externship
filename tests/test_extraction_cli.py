@@ -14,6 +14,7 @@ from src.extraction.providers import (
     ProviderExtractionResult,
     ProviderFieldPayload,
     ProviderSourceEvidence,
+    VisualFallbackRequest,
 )
 from src.extraction.repository import list_compliance_records, list_compliance_records_for_run
 
@@ -34,6 +35,7 @@ class FakeProvider:
     fail_doc_id: str | None = None
     calls: list[str] | None = None
     run_ids: list[str] | None = None
+    fields: tuple[ProviderFieldPayload, ...] | None = None
 
     def extract_fields(
         self,
@@ -48,7 +50,35 @@ class FakeProvider:
             self.run_ids.append(run_id)
         if self.fail_doc_id == document.doc_id:
             raise ExtractionProviderError("Fake provider failed without leaking text.")
-        return ProviderExtractionResult(fields=_all_fields(), trace_id="trace-cli-fake", provider_name="fake")
+        return ProviderExtractionResult(
+            fields=self.fields or _all_fields(),
+            trace_id="trace-cli-fake",
+            provider_name="fake",
+        )
+
+
+@dataclass
+class FakeVisualProvider:
+    calls: list[tuple[str, tuple[SDFFieldName, ...]]] | None = None
+    run_ids: list[str] | None = None
+    fields: tuple[ProviderFieldPayload, ...] | None = None
+
+    def extract_visual_fields(
+        self,
+        *,
+        document: DocumentMetadata,
+        request: VisualFallbackRequest,
+        run_id: str,
+    ) -> ProviderExtractionResult:
+        if self.calls is not None:
+            self.calls.append((document.doc_id, request.eligible_field_names))
+        if self.run_ids is not None:
+            self.run_ids.append(run_id)
+        return ProviderExtractionResult(
+            fields=self.fields or (),
+            trace_id="trace-cli-visual-fake",
+            provider_name="fake-visual",
+        )
 
 
 def _field(
@@ -79,7 +109,11 @@ def _all_fields() -> tuple[ProviderFieldPayload, ...]:
     )
 
 
-def _prepare_doc(db_path: str, doc_id: str, *, status: str = "ingested") -> None:
+def _all_fields_except_vendor() -> tuple[ProviderFieldPayload, ...]:
+    return tuple(field for field in _all_fields() if field.field_name is not SDFFieldName.VENDOR_NAME)
+
+
+def _prepare_doc(db_path: str, doc_id: str, *, status: str = "ingested", image_blob: bytes | None = None) -> None:
     insert_document(
         db_path,
         doc_id=doc_id,
@@ -88,7 +122,7 @@ def _prepare_doc(db_path: str, doc_id: str, *, status: str = "ingested") -> None
         page_count=1,
         docling_json=None,
     )
-    insert_page(db_path, doc_id=doc_id, page_num=0, page_text=PAGE_TEXT, image_blob=None)
+    insert_page(db_path, doc_id=doc_id, page_num=0, page_text=PAGE_TEXT, image_blob=image_blob)
     if status == "ingested":
         mark_document_ingested(db_path, doc_id)
 
@@ -114,7 +148,15 @@ def test_extract_command_uses_explicit_run_id_for_provider_and_history(monkeypat
     init_db(tmp_db_path)
     _prepare_doc(tmp_db_path, "doc-001")
     provider = FakeProvider(calls=[], run_ids=[])
+    visual_constructed = False
+
+    def fail_if_visual_provider_is_constructed(provider_name: str) -> FakeVisualProvider:
+        nonlocal visual_constructed
+        visual_constructed = True
+        raise AssertionError("visual provider should not be constructed without --visual-fallback")
+
     monkeypatch.setattr(cli, "build_provider", lambda provider_name: provider)
+    monkeypatch.setattr(cli, "build_visual_provider", fail_if_visual_provider_is_constructed)
 
     result = runner.invoke(
         cli.app,
@@ -124,11 +166,52 @@ def test_extract_command_uses_explicit_run_id_for_provider_and_history(monkeypat
     assert result.exit_code == 0, result.output
     assert provider.calls == ["doc-001"]
     assert provider.run_ids == ["baseline-run"]
+    assert visual_constructed is False
+    assert "visual_fallback=false" in result.output
     assert "run_id=baseline-run" in result.output
     rows = list_compliance_records_for_run(tmp_db_path, "baseline-run")
     assert len(rows) == 1
     assert rows[0]["doc_id"] == "doc-001"
     assert rows[0]["run_id"] == "baseline-run"
+    assert "Acme Pharma Ltd." not in result.output
+
+
+def test_extract_command_visual_fallback_flag_passes_visual_provider_and_run_id(monkeypatch, tmp_db_path: str) -> None:
+    init_db(tmp_db_path)
+    _prepare_doc(tmp_db_path, "doc-001", image_blob=b"fake-page-image")
+    provider = FakeProvider(calls=[], run_ids=[], fields=_all_fields_except_vendor())
+    visual_provider = FakeVisualProvider(
+        calls=[],
+        run_ids=[],
+        fields=(_field(SDFFieldName.VENDOR_NAME, "Acme Pharma Ltd."),),
+    )
+    monkeypatch.setattr(cli, "build_provider", lambda provider_name: provider)
+    monkeypatch.setattr(cli, "build_visual_provider", lambda provider_name: visual_provider)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "extract",
+            "--doc-id",
+            "doc-001",
+            "--db-path",
+            tmp_db_path,
+            "--run-id",
+            "visual-run",
+            "--visual-fallback",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert provider.calls == ["doc-001"]
+    assert provider.run_ids == ["visual-run"]
+    assert visual_provider.calls == [("doc-001", (SDFFieldName.VENDOR_NAME,))]
+    assert visual_provider.run_ids == ["visual-run"]
+    assert "visual_fallback=true" in result.output
+    assert "run_id=visual-run" in result.output
+    rows = list_compliance_records_for_run(tmp_db_path, "visual-run")
+    assert len(rows) == 1
+    assert rows[0]["doc_id"] == "doc-001"
     assert "Acme Pharma Ltd." not in result.output
 
 

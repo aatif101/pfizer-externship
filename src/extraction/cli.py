@@ -14,9 +14,14 @@ import typer
 
 from src.config import get_settings
 from src.db.queries import list_documents
-from src.extraction.gemini import GeminiSDFExtractionProvider
+from src.extraction.gemini import GeminiSDFExtractionProvider, GeminiSDFVisualFallbackProvider
 from src.extraction.pipeline import ExtractionPipelineError, extract_document as run_extraction
-from src.extraction.providers import ExtractionConfigurationError, ExtractionProviderError, SDFExtractionProvider
+from src.extraction.providers import (
+    ExtractionConfigurationError,
+    ExtractionProviderError,
+    SDFExtractionProvider,
+    SDFVisualFallbackProvider,
+)
 
 app = typer.Typer(help="Run Pfizer SDF extraction against ingested documents.", no_args_is_help=True)
 
@@ -39,7 +44,7 @@ class SafeCliError(RuntimeError):
 
 
 def build_provider(provider: str) -> SDFExtractionProvider:
-    """Construct the requested provider lazily.
+    """Construct the requested text provider lazily.
 
     Tests may monkeypatch this seam with a fake provider. The production default
     is Gemini and therefore fails clearly when ``GEMINI_API_KEY`` is absent.
@@ -49,6 +54,19 @@ def build_provider(provider: str) -> SDFExtractionProvider:
     if provider_name == "gemini":
         return GeminiSDFExtractionProvider()
     raise SafeCliError(f"Unsupported extraction provider '{provider}'.", exit_code=2)
+
+
+def build_visual_provider(provider: str) -> SDFVisualFallbackProvider:
+    """Construct the requested visual fallback provider lazily.
+
+    Visual fallback is opt-in only. This seam must not be called by default CLI
+    runs because constructing the live Gemini provider checks credentials.
+    """
+
+    provider_name = provider.strip().lower()
+    if provider_name == "gemini":
+        return GeminiSDFVisualFallbackProvider()
+    raise SafeCliError(f"Unsupported visual fallback provider '{provider}'.", exit_code=2)
 
 
 def _trace_status() -> str:
@@ -72,8 +90,15 @@ def _safe_error_message(exc: BaseException, *, doc_id: str | None = None) -> str
     return "Extraction failed (" + ", ".join(parts) + ")."
 
 
-def _extract_one(*, db_path: str, doc_id: str, provider: SDFExtractionProvider, run_id: str | None = None) -> None:
-    result = run_extraction(db_path, doc_id, provider, run_id=run_id)
+def _extract_one(
+    *,
+    db_path: str,
+    doc_id: str,
+    provider: SDFExtractionProvider,
+    run_id: str | None = None,
+    visual_provider: SDFVisualFallbackProvider | None = None,
+) -> None:
+    result = run_extraction(db_path, doc_id, provider, run_id=run_id, visual_provider=visual_provider)
     diagnostics = result.diagnostics
     typer.echo(
         "OK "
@@ -92,16 +117,31 @@ def extract_command(
     db_path: Annotated[str, typer.Option("--db-path", help="SQLite compliance database path.")],
     provider_name: Annotated[str, typer.Option("--provider", help="Extraction provider to use.")] = "gemini",
     run_id: Annotated[str | None, typer.Option("--run-id", help="Optional extraction run ID to persist.")] = None,
+    visual_fallback: Annotated[
+        bool,
+        typer.Option(
+            "--visual-fallback",
+            help="Opt in to targeted Gemini visual fallback for missing or suspicious fields.",
+        ),
+    ] = False,
 ) -> None:
     """Extract and persist one ingested document's six SDF fields."""
 
     typer.echo(
         f"Starting extraction doc_id={doc_id} provider={provider_name} "
-        f"trace_status={_trace_status()} run_id={run_id or 'auto'}"
+        f"trace_status={_trace_status()} run_id={run_id or 'auto'} "
+        f"visual_fallback={str(visual_fallback).lower()}"
     )
     try:
         provider = build_provider(provider_name)
-        _extract_one(db_path=db_path, doc_id=doc_id, provider=provider, run_id=run_id)
+        visual_provider = build_visual_provider(provider_name) if visual_fallback else None
+        _extract_one(
+            db_path=db_path,
+            doc_id=doc_id,
+            provider=provider,
+            run_id=run_id,
+            visual_provider=visual_provider,
+        )
     except ExtractionConfigurationError as exc:
         typer.echo(_safe_error_message(exc, doc_id=doc_id), err=True)
         raise typer.Exit(2) from exc
@@ -115,6 +155,13 @@ def extract_all_command(
     db_path: Annotated[str, typer.Option("--db-path", help="SQLite compliance database path.")],
     provider_name: Annotated[str, typer.Option("--provider", help="Extraction provider to use.")] = "gemini",
     run_id: Annotated[str | None, typer.Option("--run-id", help="Optional shared extraction run ID to persist.")] = None,
+    visual_fallback: Annotated[
+        bool,
+        typer.Option(
+            "--visual-fallback",
+            help="Opt in to targeted Gemini visual fallback for missing or suspicious fields.",
+        ),
+    ] = False,
 ) -> None:
     """Extract and persist all documents with status='ingested'."""
 
@@ -128,10 +175,12 @@ def extract_all_command(
 
     typer.echo(
         f"Starting batch extraction provider={provider_name} trace_status={_trace_status()} "
-        f"docs={len(documents)} run_id={run_id or 'auto'}"
+        f"docs={len(documents)} run_id={run_id or 'auto'} "
+        f"visual_fallback={str(visual_fallback).lower()}"
     )
     try:
         provider = build_provider(provider_name)
+        visual_provider = build_visual_provider(provider_name) if visual_fallback else None
     except ExtractionConfigurationError as exc:
         typer.echo(_safe_error_message(exc), err=True)
         raise typer.Exit(2) from exc
@@ -144,7 +193,13 @@ def extract_all_command(
     for document in documents:
         doc_id = str(document["doc_id"])
         try:
-            _extract_one(db_path=db_path, doc_id=doc_id, provider=provider, run_id=run_id)
+            _extract_one(
+                db_path=db_path,
+                doc_id=doc_id,
+                provider=provider,
+                run_id=run_id,
+                visual_provider=visual_provider,
+            )
             succeeded += 1
         except (ExtractionPipelineError, ExtractionProviderError) as exc:
             failed += 1
