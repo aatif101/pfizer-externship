@@ -23,7 +23,7 @@
 - [x] **S03: Gemini extraction usage observations** `risk:medium` `depends:[S01]`
   > After this: A mocked Gemini extraction persists bounded token and estimated-cost observations and exposes aggregate eval metrics without storing raw prompts or confidential data.
 
-- [ ] **S04: Targeted visual fallback extraction** `risk:high` `depends:[S01,S03]`
+- [x] **S04: Targeted visual fallback extraction** `risk:high` `depends:[S01,S03]`
   > After this: A suspicious-field extraction can invoke visual fallback on stored page images, fill only eligible missing or suspicious fields, and preserve good grounded text values.
 
 - [ ] **S05: Real five document comparison and UAT** `risk:high` `depends:[S02,S04]`

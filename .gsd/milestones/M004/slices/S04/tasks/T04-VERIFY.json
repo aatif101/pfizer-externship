@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "taskId": "T04",
+  "unitId": "M004/S04/T04",
+  "timestamp": 1780619645981,
+  "passed": true,
+  "discoverySource": "task-plan",
+  "checks": [
+    {
+      "command": "venv/Scripts/python.exe -m pytest -q tests/test_extraction_cli.py tests/test_visual_fallback_pipeline.py tests/test_extraction_gemini_visual.py tests/test_extraction_usage_observations.py tests/test_eval_repository.py",
+      "exitCode": 0,
+      "durationMs": 13650,
+      "verdict": "pass"
+    }
+  ]
+}

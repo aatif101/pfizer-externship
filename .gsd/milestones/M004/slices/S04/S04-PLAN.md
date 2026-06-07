@@ -31,17 +31,17 @@ Consumes S01 run-scoped history from `src/extraction/repository.py` and S03 boun
   - Files: `src/extraction/providers.py`, `src/extraction/pipeline.py`, `tests/test_visual_fallback_pipeline.py`
   - Verify: venv/Scripts/python.exe -m pytest -q tests/test_visual_fallback_pipeline.py tests/test_extraction_pipeline.py
 
-- [ ] **T02: Wire pipeline fallback arbitration and visual observations** `est:2h`
+- [x] **T02: Wire pipeline fallback arbitration and visual observations** `est:2h`
   skills_used: tdd, observability, security-review
   - Files: `src/extraction/pipeline.py`, `tests/test_visual_fallback_pipeline.py`
   - Verify: venv/Scripts/python.exe -m pytest -q tests/test_visual_fallback_pipeline.py tests/test_extraction_pipeline.py tests/test_extraction_persistence.py tests/test_extraction_usage_observations.py
 
-- [ ] **T03: Implement Gemini image-part visual fallback provider** `est:2h`
+- [x] **T03: Implement Gemini image-part visual fallback provider** `est:2h`
   skills_used: api-design, tdd, security-review
   - Files: `src/extraction/gemini.py`, `tests/test_extraction_gemini_visual.py`, `tests/test_extraction_gemini_usage.py`
   - Verify: venv/Scripts/python.exe -m pytest -q tests/test_extraction_gemini_visual.py tests/test_extraction_gemini_usage.py
 
-- [ ] **T04: Expose opt-in visual fallback wiring for extraction runs** `est:1h`
+- [x] **T04: Expose opt-in visual fallback wiring for extraction runs** `est:1h`
   skills_used: api-design, tdd, verify-before-complete
   - Files: `src/extraction/cli.py`, `tests/test_extraction_cli.py`
   - Verify: venv/Scripts/python.exe -m pytest -q tests/test_extraction_cli.py tests/test_visual_fallback_pipeline.py tests/test_extraction_gemini_visual.py tests/test_extraction_usage_observations.py tests/test_eval_repository.py

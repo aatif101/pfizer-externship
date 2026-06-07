@@ -4,17 +4,6 @@ This file is the explicit capability and coverage contract for the project.
 
 ## Active
 
-### R014 — Run targeted visual extraction fallback for abstained, suspicious, ungrounded, low-confidence, or missing SDF fields using stored page images from local compliance.db.
-- Class: core-capability
-- Status: active
-- Description: Run targeted visual extraction fallback for abstained, suspicious, ungrounded, low-confidence, or missing SDF fields using stored page images from local compliance.db.
-- Why it matters: The real 5-document baseline showed a text-layer ceiling where visually present certificate values were missing from Docling page text.
-- Source: user
-- Primary owning slice: M004/S04
-- Supporting slices: M004/S01,M004/S03
-- Validation: Mapped to M004/S04. Validated when visual fallback fills or improves only eligible suspicious fields and records bounded failures for missing images or provider errors.
-- Notes: This is a targeted visual extraction fallback, not full ColQwen or Qdrant visual retrieval. Good grounded text values must not be overwritten by visual candidates.
-
 ### R015 — Compare real extraction candidates against the human-approved 5-document gold baseline and existing packet-aware candidate runs.
 - Class: quality-attribute
 - Status: active
@@ -174,6 +163,17 @@ This file is the explicit capability and coverage contract for the project.
 - Validation: M004/S03 validated by Windows-native pytest gates proving mocked Gemini usage metadata persists bounded observations and aggregates into eval_metrics without raw confidential content: gsd_exec 376a460c-b25a-4cd4-9015-fc2fd7f6303d ran all planned S03 commands and passed (10 + 36 + 26 tests).
 - Notes: S03 covers text extraction calls and establishes the observation/eval contract for S04 visual fallback reuse.
 
+### R014 — Run targeted visual extraction fallback for abstained, suspicious, ungrounded, low-confidence, or missing SDF fields using stored page images from local compliance.db.
+- Class: core-capability
+- Status: validated
+- Description: Run targeted visual extraction fallback for abstained, suspicious, ungrounded, low-confidence, or missing SDF fields using stored page images from local compliance.db.
+- Why it matters: The real 5-document baseline showed a text-layer ceiling where visually present certificate values were missing from Docling page text.
+- Source: user
+- Primary owning slice: M004/S04
+- Supporting slices: M004/S01,M004/S03
+- Validation: M004/S04 validated by provider-free and integration pytest gates proving targeted visual fallback is requested only for eligible abstained or needs-review fields, fills eligible missing/suspicious fields from stored page images, preserves good PENDING text-derived values, records bounded visual_fallback usage observations, and exposes opt-in CLI wiring. Closeout evidence: gsd_exec 2c019360-c6a0-43a6-9958-b1f7aa1f3ba2 passed all planned Windows-native pytest commands (29 + 48 + 10 + 39 tests).
+- Notes: Live real five-document comparison remains in R015/M004/S05; S04 intentionally used fake providers and fake SDK clients only.
+
 ## Deferred
 
 ### R006 — Add visual page retrieval with ColQwen-style embeddings and Qdrant multivector reranking for layout-aware document search.
@@ -205,14 +205,14 @@ This file is the explicit capability and coverage contract for the project.
 | R011 | continuity | validated | M004/S01 | none | M004/S01 closeout verification passed: tests persist two SDFExtractionRecord values for the same doc_id with different run_id values, reconstruct each run independently through run-scoped repository APIs, and confirm latest-write get/list compatibility remains intact. |
 | R012 | primary-user-loop | validated | M004/S02 | M004/S01 | M004/S02 validated by repository-backed pytest coverage and fake Streamlit render tests for the Compliance dashboard run selector. Closeout verification via Windows-safe gsd_exec runtime=node ran venv\Scripts\python.exe -m pytest -q tests/test_compliance_dashboard.py tests/test_dashboard_compliance_tab.py tests/test_dashboard_ui_helpers.py tests/test_app.py tests/test_extraction_persistence.py tests/test_extraction_run_history_schema.py and reported 54 passed with exit code 0. |
 | R013 | operability | validated | M004/S03 | M004/S04,M004/S05 | M004/S03 validated by Windows-native pytest gates proving mocked Gemini usage metadata persists bounded observations and aggregates into eval_metrics without raw confidential content: gsd_exec 376a460c-b25a-4cd4-9015-fc2fd7f6303d ran all planned S03 commands and passed (10 + 36 + 26 tests). |
-| R014 | core-capability | active | M004/S04 | M004/S01,M004/S03 | Mapped to M004/S04. Validated when visual fallback fills or improves only eligible suspicious fields and records bounded failures for missing images or provider errors. |
+| R014 | core-capability | validated | M004/S04 | M004/S01,M004/S03 | M004/S04 validated by provider-free and integration pytest gates proving targeted visual fallback is requested only for eligible abstained or needs-review fields, fills eligible missing/suspicious fields from stored page images, preserves good PENDING text-derived values, records bounded visual_fallback usage observations, and exposes opt-in CLI wiring. Closeout evidence: gsd_exec 2c019360-c6a0-43a6-9958-b1f7aa1f3ba2 passed all planned Windows-native pytest commands (29 + 48 + 10 + 39 tests). |
 | R015 | quality-attribute | active | M004/S05 | M004/S01,M004/S02,M004/S03,M004/S04 | Mapped to M004/S05. Validated when a final candidate eval run is persisted and compared against real-text and packet-aware baselines in metrics and dashboard surfaces. |
 | R016 | compliance/security | active | M004/S05 | M004/S01,M004/S02,M004/S03,M004/S04 | Mapped to M004/S05. Validated by git status and ignored-file checks after real evaluation runs. |
 | R017 | constraint | active | M004/S05 | M004/S01,M004/S02,M004/S03,M004/S04 | Mapped to M004/S05. Validated when slice and milestone verification evidence uses Windows-safe commands only. |
 
 ## Coverage Summary
 
-- Active requirements: 4
-- Mapped to slices: 4
-- Validated: 12 (R001, R002, R003, R004, R005, R007, R008, R009, R010, R011, R012, R013)
+- Active requirements: 3
+- Mapped to slices: 3
+- Validated: 13 (R001, R002, R003, R004, R005, R007, R008, R009, R010, R011, R012, R013, R014)
 - Unmapped active requirements: 0

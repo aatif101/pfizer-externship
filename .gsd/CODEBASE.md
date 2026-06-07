@@ -1,7 +1,7 @@
 # Codebase Map
 
-Generated: 2026-06-05T00:16:13Z | Files: 96 | Described: 0/96
-<!-- gsd:codebase-meta {"generatedAt":"2026-06-05T00:16:13Z","fingerprint":"49bf69e382556696580ffdde4e261b0478b8c436","fileCount":96,"truncated":false} -->
+Generated: 2026-06-07T23:16:57Z | Files: 98 | Described: 0/98
+<!-- gsd:codebase-meta {"generatedAt":"2026-06-07T23:16:57Z","fingerprint":"6bd36f10f8b81c61237b8a81bffcbf693e9b42a1","fileCount":98,"truncated":false} -->
 
 ### (root)/
 - `.env.example`
@@ -82,7 +82,7 @@ Generated: 2026-06-05T00:16:13Z | Files: 96 | Described: 0/96
 - `src/retrieval/retriever.py`
 
 ### tests/
-- *(39 files: 39 .py)*
+- *(41 files: 41 .py)*
 
 ### tests/fixtures/
 - `tests/fixtures/sample.pdf`
