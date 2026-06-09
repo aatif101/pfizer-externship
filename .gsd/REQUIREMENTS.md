@@ -4,39 +4,6 @@ This file is the explicit capability and coverage contract for the project.
 
 ## Active
 
-### R015 — Compare real extraction candidates against the human-approved 5-document gold baseline and existing packet-aware candidate runs.
-- Class: quality-attribute
-- Status: active
-- Description: Compare real extraction candidates against the human-approved 5-document gold baseline and existing packet-aware candidate runs.
-- Why it matters: The project needs measured evidence, not subjective claims, to decide whether visual fallback improved real SDF extraction.
-- Source: user
-- Primary owning slice: M004/S05
-- Supporting slices: M004/S01,M004/S02,M004/S03,M004/S04
-- Validation: Mapped to M004/S05. Validated when a final candidate eval run is persisted and compared against real-text and packet-aware baselines in metrics and dashboard surfaces.
-- Notes: Comparison must include the real text baseline, packet-aware candidate, guarded candidate, and final visual-fallback candidate where available.
-
-### R016 — Keep confidential SDF PDFs, local SQLite databases, page images, snapshots, and private benchmark artifacts local and ignored during real evaluation work.
-- Class: compliance/security
-- Status: active
-- Description: Keep confidential SDF PDFs, local SQLite databases, page images, snapshots, and private benchmark artifacts local and ignored during real evaluation work.
-- Why it matters: Supplier documentation is confidential and must not be exposed through source control, logs, traces, or planning artifacts.
-- Source: user
-- Primary owning slice: M004/S05
-- Supporting slices: M004/S01,M004/S02,M004/S03,M004/S04
-- Validation: Mapped to M004/S05. Validated by git status and ignored-file checks after real evaluation runs.
-- Notes: Do not commit compliance.db, .env, local_data, private, PDFs, page images, snapshots, or provider outputs. Public artifacts must contain only bounded metadata and metrics.
-
-### R017 — Verify M004 with Windows-native commands only and never invoke /bin/bash or gsd_exec runtime=bash.
-- Class: constraint
-- Status: active
-- Description: Verify M004 with Windows-native commands only and never invoke /bin/bash or gsd_exec runtime=bash.
-- Why it matters: This Windows environment can fail falsely when tooling assumes /bin/bash or POSIX command paths.
-- Source: user
-- Primary owning slice: M004/S05
-- Supporting slices: M004/S01,M004/S02,M004/S03,M004/S04
-- Validation: Mapped to M004/S05. Validated when slice and milestone verification evidence uses Windows-safe commands only.
-- Notes: Use gsd_exec runtime=node spawning venv\\Scripts\\python.exe for verification evidence, or Windows-native venv/Scripts/python.exe commands without POSIX assumptions.
-
 ## Validated
 
 ### R001 — Ingest pharmaceutical PDF folders into a persistent document store using Docling with page text and 150 DPI page thumbnails.
@@ -174,6 +141,39 @@ This file is the explicit capability and coverage contract for the project.
 - Validation: M004/S04 validated by provider-free and integration pytest gates proving targeted visual fallback is requested only for eligible abstained or needs-review fields, fills eligible missing/suspicious fields from stored page images, preserves good PENDING text-derived values, records bounded visual_fallback usage observations, and exposes opt-in CLI wiring. Closeout evidence: gsd_exec 2c019360-c6a0-43a6-9958-b1f7aa1f3ba2 passed all planned Windows-native pytest commands (29 + 48 + 10 + 39 tests).
 - Notes: Live real five-document comparison remains in R015/M004/S05; S04 intentionally used fake providers and fake SDK clients only.
 
+### R015 — Compare real extraction candidates against the human-approved 5-document gold baseline and existing packet-aware candidate runs.
+- Class: quality-attribute
+- Status: validated
+- Description: Compare real extraction candidates against the human-approved 5-document gold baseline and existing packet-aware candidate runs.
+- Why it matters: The project needs measured evidence, not subjective claims, to decide whether visual fallback improved real SDF extraction.
+- Source: user
+- Primary owning slice: M004/S05
+- Supporting slices: M004/S01,M004/S02,M004/S03,M004/S04
+- Validation: vf-candidate-20260607 run compared against gold baseline in the Eval tab; macro F1/precision/recall delta rows visible in dashboard comparison view.
+- Notes: Comparison must include the real text baseline, packet-aware candidate, guarded candidate, and final visual-fallback candidate where available.
+
+### R016 — Keep confidential SDF PDFs, local SQLite databases, page images, snapshots, and private benchmark artifacts local and ignored during real evaluation work.
+- Class: compliance/security
+- Status: validated
+- Description: Keep confidential SDF PDFs, local SQLite databases, page images, snapshots, and private benchmark artifacts local and ignored during real evaluation work.
+- Why it matters: Supplier documentation is confidential and must not be exposed through source control, logs, traces, or planning artifacts.
+- Source: user
+- Primary owning slice: M004/S05
+- Supporting slices: M004/S01,M004/S02,M004/S03,M004/S04
+- Validation: Confidential SDFs and local DBs are covered by .gitignore; no sensitive files tracked in git history.
+- Notes: Do not commit compliance.db, .env, local_data, private, PDFs, page images, snapshots, or provider outputs. Public artifacts must contain only bounded metadata and metrics.
+
+### R017 — Verify M004 with Windows-native commands only and never invoke /bin/bash or gsd_exec runtime=bash.
+- Class: constraint
+- Status: validated
+- Description: Verify M004 with Windows-native commands only and never invoke /bin/bash or gsd_exec runtime=bash.
+- Why it matters: This Windows environment can fail falsely when tooling assumes /bin/bash or POSIX command paths.
+- Source: user
+- Primary owning slice: M004/S05
+- Supporting slices: M004/S01,M004/S02,M004/S03,M004/S04
+- Validation: All M004 verification commands used venv/Scripts/python.exe (Windows-native); no bash or Unix-style paths used.
+- Notes: Use gsd_exec runtime=node spawning venv\\Scripts\\python.exe for verification evidence, or Windows-native venv/Scripts/python.exe commands without POSIX assumptions.
+
 ## Deferred
 
 ### R006 — Add visual page retrieval with ColQwen-style embeddings and Qdrant multivector reranking for layout-aware document search.
@@ -206,13 +206,13 @@ This file is the explicit capability and coverage contract for the project.
 | R012 | primary-user-loop | validated | M004/S02 | M004/S01 | M004/S02 validated by repository-backed pytest coverage and fake Streamlit render tests for the Compliance dashboard run selector. Closeout verification via Windows-safe gsd_exec runtime=node ran venv\Scripts\python.exe -m pytest -q tests/test_compliance_dashboard.py tests/test_dashboard_compliance_tab.py tests/test_dashboard_ui_helpers.py tests/test_app.py tests/test_extraction_persistence.py tests/test_extraction_run_history_schema.py and reported 54 passed with exit code 0. |
 | R013 | operability | validated | M004/S03 | M004/S04,M004/S05 | M004/S03 validated by Windows-native pytest gates proving mocked Gemini usage metadata persists bounded observations and aggregates into eval_metrics without raw confidential content: gsd_exec 376a460c-b25a-4cd4-9015-fc2fd7f6303d ran all planned S03 commands and passed (10 + 36 + 26 tests). |
 | R014 | core-capability | validated | M004/S04 | M004/S01,M004/S03 | M004/S04 validated by provider-free and integration pytest gates proving targeted visual fallback is requested only for eligible abstained or needs-review fields, fills eligible missing/suspicious fields from stored page images, preserves good PENDING text-derived values, records bounded visual_fallback usage observations, and exposes opt-in CLI wiring. Closeout evidence: gsd_exec 2c019360-c6a0-43a6-9958-b1f7aa1f3ba2 passed all planned Windows-native pytest commands (29 + 48 + 10 + 39 tests). |
-| R015 | quality-attribute | active | M004/S05 | M004/S01,M004/S02,M004/S03,M004/S04 | Mapped to M004/S05. Validated when a final candidate eval run is persisted and compared against real-text and packet-aware baselines in metrics and dashboard surfaces. |
-| R016 | compliance/security | active | M004/S05 | M004/S01,M004/S02,M004/S03,M004/S04 | Mapped to M004/S05. Validated by git status and ignored-file checks after real evaluation runs. |
-| R017 | constraint | active | M004/S05 | M004/S01,M004/S02,M004/S03,M004/S04 | Mapped to M004/S05. Validated when slice and milestone verification evidence uses Windows-safe commands only. |
+| R015 | quality-attribute | validated | M004/S05 | M004/S01,M004/S02,M004/S03,M004/S04 | vf-candidate-20260607 run compared against gold baseline in the Eval tab; macro F1/precision/recall delta rows visible in dashboard comparison view. |
+| R016 | compliance/security | validated | M004/S05 | M004/S01,M004/S02,M004/S03,M004/S04 | Confidential SDFs and local DBs are covered by .gitignore; no sensitive files tracked in git history. |
+| R017 | constraint | validated | M004/S05 | M004/S01,M004/S02,M004/S03,M004/S04 | All M004 verification commands used venv/Scripts/python.exe (Windows-native); no bash or Unix-style paths used. |
 
 ## Coverage Summary
 
-- Active requirements: 3
-- Mapped to slices: 3
-- Validated: 13 (R001, R002, R003, R004, R005, R007, R008, R009, R010, R011, R012, R013, R014)
+- Active requirements: 0
+- Mapped to slices: 0
+- Validated: 16 (R001, R002, R003, R004, R005, R007, R008, R009, R010, R011, R012, R013, R014, R015, R016, R017)
 - Unmapped active requirements: 0

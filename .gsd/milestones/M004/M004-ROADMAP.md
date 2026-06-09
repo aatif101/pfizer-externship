@@ -26,7 +26,7 @@
 - [x] **S04: Targeted visual fallback extraction** `risk:high` `depends:[S01,S03]`
   > After this: A suspicious-field extraction can invoke visual fallback on stored page images, fill only eligible missing or suspicious fields, and preserve good grounded text values.
 
-- [ ] **S05: Real five document comparison and UAT** `risk:high` `depends:[S02,S04]`
+- [x] **S05: Real five document comparison and UAT** `risk:high` `depends:[S02,S04]`
   > After this: The local 5-SDF database has a final visual-fallback candidate eval run compared against the real text baseline and packet-aware candidates, with dashboard verification passing.
 
 ## Boundary Map
