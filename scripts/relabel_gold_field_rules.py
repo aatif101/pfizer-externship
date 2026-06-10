@@ -47,7 +47,11 @@ def _apply_rule(
     old_value: str,
     new_value: str,
 ) -> int:
-    """Apply one guarded relabel; return number of rows changed."""
+    """Apply one guarded relabel; return number of rows changed.
+
+    ``doc_id`` is matched as a prefix (doc ids are stored as full hashes) so the
+    short ids in the rulebook resolve to the stored full ids.
+    """
 
     # Update expected_value, and normalized_value too when it still holds the old
     # abbreviation. Guarded on expected_value so re-running changes 0 rows.
@@ -59,9 +63,9 @@ def _apply_rule(
                 WHEN normalized_value = ? THEN ?
                 ELSE normalized_value
             END
-        WHERE doc_id = ? AND field_name = ? AND expected_value = ?
+        WHERE doc_id LIKE ? AND field_name = ? AND expected_value = ?
         """,
-        (new_value, old_value, new_value, doc_id, field_name, old_value),
+        (new_value, old_value, new_value, f"{doc_id}%", field_name, old_value),
     )
     return cursor.rowcount
 
