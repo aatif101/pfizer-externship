@@ -344,10 +344,10 @@ Many supplier PDFs are packets containing emails, handwritten notes, template pa
 First identify the most directly relevant certificate/quality/compliance document for the product/material itself, then extract requested fields from that primary sub-document only.
 Do not use email dates, handwritten notes, template release dates, delivery dates, retest dates, processing records, or unrelated attachment dates as values unless the exact target field is explicitly present in the primary product/material certificate.
 
-Field labeling rules (per docs/field-definitions.md):
-- effective_date may be sourced from the synonym labels "Approved On", "Issue Date", or "Date of Issue" on the primary certificate.
-- If expiry_date is printed as "N/A", return the literal value "N/A" (do not abstain) — a printed "N/A" means "no expiry".
-- vendor_name must be the full legal name as printed, never an abbreviation.
+Field labeling rules (per docs/field-definitions.md), applied only to requested fields:
+- An effective date may be sourced from the synonym labels "Approved On", "Issue Date", or "Date of Issue" on the primary certificate.
+- If an expiry is printed as "N/A", return the literal value "N/A" (do not abstain) — a printed "N/A" means "no expiry".
+- A vendor must be the full legal name as printed, never an abbreviation.
 
 JSON schema:
 {{
