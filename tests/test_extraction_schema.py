@@ -166,6 +166,70 @@ def test_init_db_is_idempotent_for_phase_2_migrations(tmp_path) -> None:
         assert extraction_columns.count(column_name) == 1
 
 
+def test_fresh_db_has_evidence_type_columns(tmp_db_path: str) -> None:
+    from src.db.schema import init_db  # noqa: PLC0415
+
+    init_db(tmp_db_path)
+
+    conn = sqlite3.connect(tmp_db_path)
+    try:
+        assert "evidence_type" in table_columns(conn, "extractions")
+        assert "evidence_type" in table_columns(conn, "extraction_history")
+        assert "source_evidence_type" in table_columns(conn, "compliance_records")
+        assert "source_evidence_type" in table_columns(conn, "compliance_record_history")
+    finally:
+        conn.close()
+
+
+def test_pre_existing_db_migrates_evidence_type_and_defaults_to_text(tmp_path) -> None:
+    from src.db.schema import init_db  # noqa: PLC0415
+
+    db_path = str(tmp_path / "pre-evidence-type.sqlite")
+    # Build a db that lacks the new columns (legacy phase-1 extractions table)
+    # plus a compliance_records table without source_evidence_type.
+    conn = sqlite3.connect(db_path)
+    conn.executescript(
+        """
+        CREATE TABLE documents (
+            doc_id TEXT PRIMARY KEY, filename TEXT NOT NULL, file_path TEXT NOT NULL,
+            page_count INTEGER NOT NULL, status TEXT DEFAULT 'pending'
+        );
+        CREATE TABLE extractions (
+            extraction_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            doc_id TEXT NOT NULL, field_name TEXT NOT NULL, field_value TEXT,
+            confidence REAL, source_page INTEGER, source_bbox TEXT, verbatim_span TEXT,
+            trace_id TEXT, needs_review BOOLEAN DEFAULT 0,
+            UNIQUE (doc_id, field_name)
+        );
+        CREATE TABLE compliance_records (
+            doc_id TEXT PRIMARY KEY, vendor_name TEXT
+        );
+        INSERT INTO documents (doc_id, filename, file_path, page_count, status)
+        VALUES ('doc-old', 'old.pdf', '/tmp/old.pdf', 1, 'ingested');
+        INSERT INTO extractions (doc_id, field_name, field_value, confidence)
+        VALUES ('doc-old', 'vendor_name', 'Old Vendor', 0.9);
+        INSERT INTO compliance_records (doc_id, vendor_name)
+        VALUES ('doc-old', 'Old Vendor');
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    init_db(db_path)
+
+    conn = sqlite3.connect(db_path)
+    try:
+        assert "evidence_type" in table_columns(conn, "extractions")
+        assert "source_evidence_type" in table_columns(conn, "compliance_records")
+        # Pre-existing rows have NULL for the new column; read code coalesces to "text".
+        evidence_type = conn.execute(
+            "SELECT evidence_type FROM extractions WHERE doc_id = 'doc-old'"
+        ).fetchone()[0]
+        assert evidence_type is None  # NULL at rest; treated as 'text' on read
+    finally:
+        conn.close()
+
+
 def test_compliance_records_fk_rejects_unknown_document(tmp_db_path: str) -> None:
     from src.db.schema import init_db  # noqa: PLC0415
 

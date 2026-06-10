@@ -321,6 +321,128 @@ def test_extract_document_visual_fallback_abstains_when_candidate_is_not_stronge
     assert rows[0].error_reason == "no_fields_improved"
 
 
+def test_visual_tier_accepts_image_grounded_value_when_page_text_is_empty(tmp_path: Path) -> None:
+    """Empty stored page text -> image-grounded value accepted as evidence_type='visual', NEEDS_REVIEW."""
+    db_path = str(tmp_path / "visual-tier-empty.db")
+    init_db(db_path)
+    insert_document(
+        db_path,
+        doc_id="doc-001",
+        filename="scanned.pdf",
+        file_path="C:/confidential/scanned.pdf",
+        page_count=2,
+        docling_json=None,
+    )
+    # Page 0 has text (so the document is extractable); page 1 is a scanned page
+    # with EMPTY stored text but a page image.
+    insert_page(db_path, doc_id="doc-001", page_num=0, page_text=PAGE_TEXT, image_blob=IMAGE_BYTES)
+    insert_page(db_path, doc_id="doc-001", page_num=1, page_text="", image_blob=IMAGE_BYTES)
+
+    text_provider = TextProvider(fields=all_provider_fields(overrides={SDFFieldName.EXPIRY_DATE: None}))
+    # Visual provider cites the empty-text scanned page 1 with an image-only span.
+    visual_provider = VisualProvider(
+        fields=(
+            ProviderFieldPayload(
+                field_name=SDFFieldName.EXPIRY_DATE,
+                raw_value="2023-01-26",
+                normalized_date="2023-01-26",
+                confidence=0.99,
+                evidence=ProviderSourceEvidence(
+                    page_num=1,
+                    verbatim_span="Expiry Date: 2023-01-26",
+                    bbox={"x": 1, "y": 2},
+                ),
+            ),
+        ),
+    )
+
+    result = extract_document(
+        db_path,
+        "doc-001",
+        text_provider,
+        visual_provider=visual_provider,
+        today=date(2026, 1, 1),
+        run_id="run-visual-tier",
+    )
+
+    expiry = result.record.fields[SDFFieldName.EXPIRY_DATE]
+    assert expiry.review_state == ReviewState.NEEDS_REVIEW
+    assert expiry.evidence.evidence_type == "visual"
+    assert expiry.evidence.page_num == 1
+    assert expiry.raw_value == "2023-01-26"
+
+    stored = get_extraction_record(db_path, "doc-001")
+    assert stored is not None
+    assert stored.fields[SDFFieldName.EXPIRY_DATE].evidence.evidence_type == "visual"
+
+
+def test_visual_tier_still_abstains_on_failed_match_against_non_empty_text(tmp_path: Path) -> None:
+    """Non-empty stored page text + span that does NOT match -> still abstains (no bypass)."""
+    db_path = str(tmp_path / "visual-tier-nonempty.db")
+    init_db(db_path)
+    insert_document(
+        db_path,
+        doc_id="doc-001",
+        filename="textual.pdf",
+        file_path="C:/confidential/textual.pdf",
+        page_count=1,
+        docling_json=None,
+    )
+    insert_page(db_path, doc_id="doc-001", page_num=0, page_text=PAGE_TEXT, image_blob=IMAGE_BYTES)
+
+    text_provider = TextProvider(fields=all_provider_fields(overrides={SDFFieldName.EXPIRY_DATE: None}))
+    # Page 0 has non-empty text; visual span is NOT present in that text -> abstain.
+    visual_provider = VisualProvider(
+        fields=(
+            ProviderFieldPayload(
+                field_name=SDFFieldName.EXPIRY_DATE,
+                raw_value="2099-01-01",
+                normalized_date="2099-01-01",
+                confidence=0.99,
+                evidence=ProviderSourceEvidence(
+                    page_num=0,
+                    verbatim_span="Expiry Date: 2099-01-01 (not in page text)",
+                    bbox={"x": 1, "y": 2},
+                ),
+            ),
+        ),
+    )
+
+    result = extract_document(
+        db_path,
+        "doc-001",
+        text_provider,
+        visual_provider=visual_provider,
+        today=date(2026, 1, 1),
+        run_id="run-visual-tier-nonempty",
+    )
+
+    assert result.record.fields[SDFFieldName.EXPIRY_DATE].review_state == ReviewState.ABSTAINED
+
+
+def test_text_tier_matching_span_keeps_evidence_type_text(tmp_path: Path) -> None:
+    """Non-empty page text + matching span -> existing behavior, evidence_type='text'."""
+    db_path = str(tmp_path / "text-tier.db")
+    prepare_visual_doc(db_path, image_blob=IMAGE_BYTES)
+    text_provider = TextProvider(fields=all_provider_fields())
+
+    result = extract_document(
+        db_path,
+        "doc-001",
+        text_provider,
+        today=date(2026, 1, 1),
+        run_id="run-text-tier",
+    )
+
+    vendor = result.record.fields[SDFFieldName.VENDOR_NAME]
+    assert vendor.evidence.evidence_type == "text"
+    assert vendor.review_state == ReviewState.PENDING
+
+    stored = get_extraction_record(db_path, "doc-001")
+    assert stored is not None
+    assert stored.fields[SDFFieldName.VENDOR_NAME].evidence.evidence_type == "text"
+
+
 def document_metadata() -> DocumentMetadata:
     return DocumentMetadata(
         doc_id="doc-001",
