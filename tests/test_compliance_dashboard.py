@@ -321,14 +321,15 @@ def test_format_compliance_rows_handles_null_source_evidence_without_exceptions(
     assert row["compliance_status_label"] == "Unknown"
 
 
-def test_render_compliance_tab_empty_state_does_not_crash(monkeypatch) -> None:
+def test_render_compliance_tab_empty_state_does_not_crash(tmp_path: Path, monkeypatch) -> None:
     fake_st = FakeStreamlit()
+    db_path = str(tmp_path / "empty-dashboard.db")
     monkeypatch.setattr("src.dashboard.compliance.st", fake_st)
     monkeypatch.setattr("src.dashboard.ui.st", fake_st)
     monkeypatch.setattr("src.dashboard.compliance.render_empty_state", fake_st.render_empty_state)
     monkeypatch.setattr("src.dashboard.compliance.load_compliance_rows", lambda db_path: [])
 
-    render_compliance_tab("empty-dashboard.db")
+    render_compliance_tab(db_path)
 
     assert fake_st.info_messages == [
         "Selected extraction view: current latest-write compatibility state.",
@@ -339,14 +340,17 @@ def test_render_compliance_tab_empty_state_does_not_crash(monkeypatch) -> None:
         "View metadata: latest compatibility state reflects the current rows in `compliance_records`; "
         "select a run below to inspect persisted baseline, candidate, or historical extraction history.",
         "Ingest documents and run extraction to populate this SQLite-backed dashboard. "
-        "Looking for persisted records in `empty-dashboard.db`.",
+        f"Looking for persisted records in `{db_path}`.",
     ]
     assert fake_st.dataframes == []
     assert fake_st.selectboxes[0]["label"] == "Extraction run view"
 
 
-def test_render_compliance_tab_populated_source_detail_is_lazy_and_tolerates_missing_image(monkeypatch) -> None:
+def test_render_compliance_tab_populated_source_detail_is_lazy_and_tolerates_missing_image(
+    tmp_path: Path, monkeypatch
+) -> None:
     fake_st = FakeStreamlit()
+    db_path = str(tmp_path / "populated-dashboard.db")
     image_calls: list[tuple[str, str, int]] = []
     rows = [
         {
@@ -382,7 +386,7 @@ def test_render_compliance_tab_populated_source_detail_is_lazy_and_tolerates_mis
 
     monkeypatch.setattr("src.dashboard.compliance.get_page_image", fake_get_page_image)
 
-    render_compliance_tab("populated-dashboard.db")
+    render_compliance_tab(db_path)
 
     assert fake_st.metrics[("Total documents", 1)] == 1
     assert fake_st.metrics[("Red", 1)] == 1
@@ -404,7 +408,7 @@ def test_render_compliance_tab_populated_source_detail_is_lazy_and_tolerates_mis
         "No source preview available for the selected document/page.",
     ]
     assert fake_st.images == []
-    assert image_calls == [("populated-dashboard.db", "doc-render-001", 2)]
+    assert image_calls == [(db_path, "doc-render-001", 2)]
 
 
 def test_render_compliance_tab_selected_run_labels_and_rows_change(tmp_db_path: str, monkeypatch) -> None:
@@ -502,8 +506,11 @@ def test_render_compliance_tab_unknown_historical_empty_state_names_selected_run
     assert fake_st.dataframes == []
 
 
-def test_render_compliance_tab_source_detail_image_lookup_uses_selected_run_row(monkeypatch) -> None:
+def test_render_compliance_tab_source_detail_image_lookup_uses_selected_run_row(
+    tmp_path: Path, monkeypatch
+) -> None:
     fake_st = FakeStreamlit()
+    db_path = str(tmp_path / "visual-dashboard.db")
     fake_st.selected_options_by_label["Extraction run view"] = "run:run-candidate-visual"
     fake_st.selected_options_by_label["Select a document"] = "doc-selected"
     image_calls: list[tuple[str, str, int]] = []
@@ -560,12 +567,12 @@ def test_render_compliance_tab_source_detail_image_lookup_uses_selected_run_row(
 
     monkeypatch.setattr("src.dashboard.compliance.get_page_image", fake_get_page_image)
 
-    render_compliance_tab("visual-dashboard.db")
+    render_compliance_tab(db_path)
 
     assert fake_st.dataframes[0][0]["Vendor"] == "Unselected Vendor"
     assert fake_st.dataframes[0][1]["Vendor"] == "Selected Vendor"
     assert "**Risk reason:** Selected row." in fake_st.markdown_messages
-    assert image_calls == [("visual-dashboard.db", "doc-selected", 4)]
+    assert image_calls == [(db_path, "doc-selected", 4)]
     assert fake_st.images == [(b"image-bytes", "Page 5")]
 
 
