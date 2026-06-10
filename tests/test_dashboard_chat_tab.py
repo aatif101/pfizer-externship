@@ -5,6 +5,7 @@ We validate tab header/intro copy stays stable while preserving provider seams.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from src.dashboard.chat import render_chat_tab
@@ -45,12 +46,13 @@ class FakeStreamlit:
         return None
 
 
-def test_chat_tab_renders_consistent_header_and_tips(monkeypatch) -> None:
+def test_chat_tab_renders_consistent_header_and_tips(monkeypatch, tmp_path: Path) -> None:
+    db_path = str(tmp_path / "chat.db")
     fake_st = FakeStreamlit()
     monkeypatch.setattr("src.dashboard.chat.st", fake_st)
     monkeypatch.setattr("src.dashboard.ui.st", fake_st)
 
-    render_chat_tab("chat.db", provider_factory=lambda: object(), answer_fn=lambda *_args, **_kwargs: None)
+    render_chat_tab(db_path, provider_factory=lambda: object(), answer_fn=lambda *_args, **_kwargs: None)
 
     assert fake_st.headers == ["Chat"]
     assert any("Answers cite source pages" in caption for caption in fake_st.captions)
