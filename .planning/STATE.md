@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-16)
 Phase: 1 of 7 (Foundation & Ingestion)
 Plan: 0 of 3 in current phase
 Status: Ready to execute
-Last activity: 2026-04-27 -- Phase 1 planned (3 plans, 2 waves)
+Last activity: 2026-06-10 - Completed quick task 260610-2y6: Fix dead Langfuse v2 imports, add README, clean root junk
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -72,6 +72,12 @@ None yet.
 ### Blockers/Concerns
 
 None yet.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260610-2y6 | Fix dead Langfuse v2 imports, add README, clean root junk | 2026-06-10 | 571bab2 | [260610-2y6-fix-dead-langfuse-v2-imports-add-readme-](./quick/260610-2y6-fix-dead-langfuse-v2-imports-add-readme-/) |
 
 ## Deferred Items
 
