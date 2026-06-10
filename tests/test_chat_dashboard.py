@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
+from pathlib import Path
 from types import TracebackType
 from typing import Any
 
@@ -172,7 +173,10 @@ def _provider_error_result(secret: str) -> AnswerResult:
     )
 
 
-def test_answered_question_persists_turns_and_renders_service_owned_citation(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_answered_question_persists_turns_and_renders_service_owned_citation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    db_path = str(tmp_path / "chat.db")
     fake_st = FakeStreamlit(prompts=["Does Acme have Pfizer supplier approval?"])
     calls: list[tuple[str, str, Any]] = []
 
@@ -182,11 +186,11 @@ def test_answered_question_persists_turns_and_renders_service_owned_citation(mon
 
     monkeypatch.setattr("src.dashboard.chat.st", fake_st)
 
-    render_chat_tab("chat.db", provider_factory=FakeProvider, answer_fn=answer_fn)
+    render_chat_tab(db_path, provider_factory=FakeProvider, answer_fn=answer_fn)
 
     rendered = fake_st.all_rendered_text()
     assert len(fake_st.session_state["pfizer_chat_messages"]) == 2
-    assert calls == [("chat.db", "Does Acme have Pfizer supplier approval?", calls[0][2])]
+    assert calls == [(db_path, "Does Acme have Pfizer supplier approval?", calls[0][2])]
     assert isinstance(calls[0][2], FakeProvider)
     assert "Does Acme have Pfizer supplier approval?" in rendered
     assert "Acme Pharma has supplier compliance approval" in rendered
@@ -204,7 +208,10 @@ def test_answered_question_persists_turns_and_renders_service_owned_citation(mon
     assert "**Evidence reason:** strong_evidence" in rendered
 
 
-def test_unrelated_question_abstains_with_no_citations(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_unrelated_question_abstains_with_no_citations(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    db_path = str(tmp_path / "chat.db")
     fake_st = FakeStreamlit(prompts=["Who won the astronomy prize?"])
     calls: list[str] = []
 
@@ -214,7 +221,7 @@ def test_unrelated_question_abstains_with_no_citations(monkeypatch: pytest.Monke
 
     monkeypatch.setattr("src.dashboard.chat.st", fake_st)
 
-    render_chat_tab("chat.db", provider_factory=FakeProvider, answer_fn=answer_fn)
+    render_chat_tab(db_path, provider_factory=FakeProvider, answer_fn=answer_fn)
 
     rendered = fake_st.all_rendered_text()
     assert calls == ["Who won the astronomy prize?"]
@@ -227,7 +234,10 @@ def test_unrelated_question_abstains_with_no_citations(monkeypatch: pytest.Monke
     assert "acme-sdf.pdf" not in rendered
 
 
-def test_provider_setup_error_is_safe_and_does_not_leak_raw_details(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_provider_setup_error_is_safe_and_does_not_leak_raw_details(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    db_path = str(tmp_path / "chat.db")
     secret = "GEMINI_API_KEY=super-secret RAW_PROVIDER_PAYLOAD full_page_tail fullhash_abcdef1234567890"
     fake_st = FakeStreamlit(prompts=["Does Acme have approval?"])
 
@@ -239,7 +249,7 @@ def test_provider_setup_error_is_safe_and_does_not_leak_raw_details(monkeypatch:
 
     monkeypatch.setattr("src.dashboard.chat.st", fake_st)
 
-    render_chat_tab("chat.db", provider_factory=provider_factory, answer_fn=answer_fn)
+    render_chat_tab(db_path, provider_factory=provider_factory, answer_fn=answer_fn)
 
     rendered = fake_st.all_rendered_text()
     assert "Chat answer provider is not ready" in rendered
@@ -257,8 +267,9 @@ def test_provider_setup_error_is_safe_and_does_not_leak_raw_details(monkeypatch:
 
 
 def test_provider_error_result_is_bounded_and_rerun_without_prompt_does_not_call_answer_again(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    db_path = str(tmp_path / "chat.db")
     secret = "RAW_EXCEPTION_AND_PROVIDER_PAYLOAD_SHOULD_NOT_RENDER"
     fake_st = FakeStreamlit(prompts=["Does Acme have approval?", None])
     calls: list[str] = []
@@ -269,9 +280,9 @@ def test_provider_error_result_is_bounded_and_rerun_without_prompt_does_not_call
 
     monkeypatch.setattr("src.dashboard.chat.st", fake_st)
 
-    render_chat_tab("chat.db", provider_factory=FakeProvider, answer_fn=answer_fn)
+    render_chat_tab(db_path, provider_factory=FakeProvider, answer_fn=answer_fn)
     first_rendered = fake_st.all_rendered_text()
-    render_chat_tab("chat.db", provider_factory=FakeProvider, answer_fn=answer_fn)
+    render_chat_tab(db_path, provider_factory=FakeProvider, answer_fn=answer_fn)
     second_rendered = fake_st.all_rendered_text()
 
     assert calls == ["Does Acme have approval?"]

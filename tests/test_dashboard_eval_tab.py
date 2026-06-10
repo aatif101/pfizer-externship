@@ -30,14 +30,15 @@ def test_load_eval_runs_returns_empty_for_missing_table(tmp_db_path: str) -> Non
     assert load_eval_runs(tmp_db_path) == []
 
 
-def test_render_eval_tab_empty_state_does_not_crash(monkeypatch) -> None:
+def test_render_eval_tab_empty_state_does_not_crash(monkeypatch, tmp_path: Path) -> None:
+    db_path = str(tmp_path / "empty-eval.db")
     fake_st = FakeStreamlit()
     monkeypatch.setattr("src.dashboard.eval.st", fake_st)
     monkeypatch.setattr("src.dashboard.eval.render_empty_state", fake_st.render_empty_state)
     monkeypatch.setattr("src.dashboard.eval.render_tab_header", fake_st.render_tab_header)
     monkeypatch.setattr("src.dashboard.eval.load_eval_runs", lambda db_path: [])
 
-    render_eval_tab("empty-eval.db")
+    render_eval_tab(db_path)
 
     assert fake_st.info_messages == [
         "No evaluation runs yet. Run the evaluation CLI/tests to populate `eval_runs` and `eval_metrics` in the SQLite database."
@@ -45,7 +46,7 @@ def test_render_eval_tab_empty_state_does_not_crash(monkeypatch) -> None:
     assert fake_st.subheaders[:1] == ["Evaluation"]
     assert fake_st.caption_messages == [
         "This tab is read-only: it surfaces persisted eval run history and metrics without triggering any evaluation computation.",
-        "Looking for persisted runs in `empty-eval.db`.",
+        f"Looking for persisted runs in `{db_path}`.",
     ]
     assert fake_st.dataframes == []
 
