@@ -57,8 +57,11 @@ if '_langfuse_module' in globals() and _langfuse_module is not None:
     )
 
 try:
-    from langfuse import observe, get_client  # noqa: E402, F401
+    from langfuse import Langfuse as _Langfuse, observe, get_client  # noqa: E402, F401
+    _LANGFUSE_AVAILABLE = True
 except Exception:  # pragma: no cover - exercised only when optional Langfuse is absent/broken
+    _LANGFUSE_AVAILABLE = False
+
     def observe(*decorator_args: Any, **decorator_kwargs: Any) -> Any:  # type: ignore[no-redef]
         """No-op replacement for langfuse.observe when Langfuse is unavailable."""
         if decorator_args and callable(decorator_args[0]) and not decorator_kwargs:
@@ -143,8 +146,35 @@ def filter_trace_metadata(metadata: Mapping[str, Any] | None, allowed_keys: set[
     return safe_metadata
 
 
+def _ensure_langfuse_initialized() -> bool:
+    """Initialize the global Langfuse client from Settings if keys are present.
+
+    pydantic_settings reads .env into Python objects but does NOT set os.environ,
+    so Langfuse's default env-var lookup finds nothing. Explicitly constructing
+    Langfuse() with settings values bridges the gap without touching os.environ.
+    Idempotent: re-initializing the same keys is harmless in langfuse v3.
+    """
+    if not _LANGFUSE_AVAILABLE:
+        return False
+    settings = get_settings()
+    if not settings.langfuse_enabled:
+        return False
+    if not settings.langfuse_public_key or not settings.langfuse_secret_key:
+        return False
+    try:
+        _Langfuse(
+            public_key=settings.langfuse_public_key,
+            secret_key=settings.langfuse_secret_key,
+            host=settings.langfuse_host,
+        )
+        return True
+    except Exception:
+        return False
+
+
 def _get_langfuse_context() -> Any | None:
     """Return the live Langfuse v3 client lazily; None when the SDK is unavailable."""
+    _ensure_langfuse_initialized()
     try:
         client = get_client()
     except Exception:
@@ -217,6 +247,7 @@ def verify_langfuse_connection() -> bool:
         logger.info("Langfuse API keys not configured — tracing disabled")
         return False
 
+    _ensure_langfuse_initialized()
     try:
         client = get_client()
         result: bool = client.auth_check()
