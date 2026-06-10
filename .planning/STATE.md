@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-16)
 Phase: 1 of 7 (Foundation & Ingestion)
 Plan: 0 of 3 in current phase
 Status: Ready to execute
-Last activity: 2026-06-10 - Completed quick task 260610-3e5: Refactor dashboard tests to use tmp_path for SQLite db paths
+Last activity: 2026-06-10 - Completed quick task 260610-3kx: Refactor chat/eval dashboard tests to use tmp_path for SQLite db paths
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -79,6 +79,7 @@ None yet.
 |---|-------------|------|--------|-----------|
 | 260610-2y6 | Fix dead Langfuse v2 imports, add README, clean root junk | 2026-06-10 | 571bab2 | [260610-2y6-fix-dead-langfuse-v2-imports-add-readme-](./quick/260610-2y6-fix-dead-langfuse-v2-imports-add-readme-/) |
 | 260610-3e5 | Refactor dashboard tests to use tmp_path for SQLite db paths (no stray .db files in repo root) | 2026-06-10 | f2bf580 | [260610-3e5-refactor-dashboard-tests-to-use-tmp-path](./quick/260610-3e5-refactor-dashboard-tests-to-use-tmp-path/) |
+| 260610-3kx | Refactor chat/eval dashboard tests to use tmp_path for SQLite db paths | 2026-06-10 | 57ce32f | [260610-3kx-refactor-chat-eval-dashboard-tests-to-us](./quick/260610-3kx-refactor-chat-eval-dashboard-tests-to-us/) |
 
 ## Deferred Items
 
