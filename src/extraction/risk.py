@@ -3,6 +3,13 @@
 The policy is intentionally conservative: uncertain or malformed relevant dates do
 not raise and do not get treated as safe. Callers can persist the returned values
 onto ``SDFExtractionRecord`` before repository upsert.
+
+Per ``docs/field-definitions.md``, a printed "N/A" expiry is a real asserted value
+meaning "no expiry" (it is extracted as the literal string "N/A", not abstained).
+For risk scoring, such not-applicable markers on a date field are therefore treated
+as "no date present" rather than an ambiguous/invalid date error: a document with a
+printed-N/A expiry is not at-risk on expiry, and risk falls through to age-based
+scoring on the manufacturing/effective/revision dates.
 """
 from __future__ import annotations
 
@@ -27,6 +34,12 @@ _DATE_FIELDS_FOR_AGE: tuple[SDFFieldName, ...] = (
     SDFFieldName.MANUFACTURING_DATE,
     SDFFieldName.EFFECTIVE_DATE,
     SDFFieldName.REVISION_DATE,
+)
+
+# Printed "not-applicable" markers (per docs/field-definitions.md). On a date field
+# these are real asserted values meaning "no date / no expiry", not invalid dates.
+_NOT_APPLICABLE_DATE_MARKERS: frozenset[str] = frozenset(
+    {"n/a", "n.a.", "na", "not applicable"}
 )
 
 
@@ -121,6 +134,13 @@ def _field_date(field: ExtractedField | None) -> _ParsedDate:
     if candidate is None:
         candidate = field.raw_value
     if candidate is None:
+        return _ParsedDate(None, False, "")
+
+    # A printed "N/A" (or equivalent) marker is a real "no date present" assertion,
+    # not an ambiguous/invalid date. Treat it as absent rather than an error so the
+    # document is not parked at risk_level='unknown'. See module docstring and
+    # docs/field-definitions.md (expiry_date rules).
+    if isinstance(candidate, str) and candidate.strip().casefold() in _NOT_APPLICABLE_DATE_MARKERS:
         return _ParsedDate(None, False, "")
 
     parsed = _parse_date(candidate)

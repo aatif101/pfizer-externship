@@ -127,6 +127,60 @@ def test_malformed_date_string_needs_review_without_crashing() -> None:
     assert "manufacturing_date" in risk.risk_reason
 
 
+def test_na_expiry_with_old_effective_date_falls_through_to_age_red() -> None:
+    # Printed "N/A" expiry is a real "no expiry" assertion, not an invalid date, so
+    # risk falls through to age-based scoring on the effective date.
+    # Effective 2023-04-26 vs today 2026-06-10 is over the 3-year threshold -> red.
+    risk = compute_fields_risk(
+        make_fields(
+            manufacturing_date=None,
+            effective_date=date(2023, 4, 26),
+            revision_date=None,
+            expiry_date="N/A",
+        ),
+        today=date(2026, 6, 10),
+    )
+
+    assert risk.risk_level == "red"
+    assert risk.compliance_status == "at_risk"
+    assert risk.age_days == (date(2026, 6, 10) - date(2023, 4, 26)).days
+    assert "over the 3-year threshold" in risk.risk_reason
+
+
+def test_na_expiry_alone_with_no_age_dates_needs_review() -> None:
+    # "N/A" expiry with no manufacturing/effective/revision date leaves no usable
+    # date for age scoring, so the document needs review (unknown), not an error.
+    risk = compute_fields_risk(
+        make_fields(
+            manufacturing_date=None,
+            effective_date=None,
+            revision_date=None,
+            expiry_date="N/A",
+        ),
+        today=date(2026, 6, 10),
+    )
+
+    assert risk.risk_level == "unknown"
+    assert risk.compliance_status == "needs_review"
+    assert risk.age_days is None
+    assert "No usable" in risk.risk_reason
+
+
+def test_na_expiry_marker_variants_are_treated_as_no_date() -> None:
+    for marker in ("N/A", "n/a", "N.A.", "NA", "Not Applicable", "  N/A  "):
+        risk = compute_fields_risk(
+            make_fields(
+                manufacturing_date=None,
+                effective_date=date(2025, 1, 1),
+                revision_date=None,
+                expiry_date=marker,
+            ),
+            today=date(2026, 6, 10),
+        )
+        assert risk.risk_level == "green", marker
+        assert "ambiguous or invalid" not in risk.risk_reason, marker
+
+
 def test_record_risk_accepts_repository_style_iso_strings() -> None:
     record = SDFExtractionRecord(
         doc_id="doc-001",
