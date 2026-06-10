@@ -179,6 +179,7 @@ def test_upsert_record_round_trips_field_and_compliance_rows(tmp_db_path: str) -
             "source_page": 2,
             "source_bbox": '{"height":30,"width":100,"x":12,"y":20}',
             "source_verbatim_span": "2026-01-31",
+            "source_evidence_type": "text",
         }
     ]
 
@@ -308,6 +309,7 @@ def test_list_compliance_records_orders_expiring_docs_before_nulls(tmp_db_path: 
         "source_page",
         "source_bbox",
         "source_verbatim_span",
+        "source_evidence_type",
     }
 
 

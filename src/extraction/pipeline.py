@@ -578,15 +578,29 @@ def _normalize_field(
     span = _clean_text(payload.evidence.verbatim_span)
     if span is None:
         return _abstained_field(field_name, "Provider returned no verbatim source span for this required SDF field.", payload=payload)
-    if not _span_matches_page_text(span, page.page_text or ""):
+
+    # Tiered evidence (D027, supersedes D026):
+    # - Page has stored text + span matches  -> text-grounded (evidence_type="text").
+    # - Page has stored text + span no match -> abstain (verbatim grounding required).
+    # - Page stored text is EMPTY            -> visual-grounded: accept the
+    #   image-grounded value, evidence_type="visual", needs_review forced on.
+    page_has_text = bool((page.page_text or "").strip())
+    if page_has_text and not _span_matches_page_text(span, page.page_text or ""):
         return _abstained_field(field_name, "Provider source span was not found in the cited page text.", payload=payload)
 
+    # Trap/placeholder exclusions must hold for both tiers.
     guard_reason = _field_value_guard_reason(field_name, payload, span)
     if guard_reason is not None:
         return _abstained_field(field_name, guard_reason, payload=payload)
 
     confidence = _clamp_confidence(payload.confidence)
-    review_state = ReviewState.NEEDS_REVIEW if confidence < low_confidence_threshold else ReviewState.PENDING
+    if page_has_text:
+        evidence_type = "text"
+        review_state = ReviewState.NEEDS_REVIEW if confidence < low_confidence_threshold else ReviewState.PENDING
+    else:
+        # Visual claims are page-cited but not verbatim-verified: always flag for review.
+        evidence_type = "visual"
+        review_state = ReviewState.NEEDS_REVIEW
     return ExtractedField(
         field_name=field_name,
         raw_value=_clean_text(payload.raw_value),
@@ -597,6 +611,7 @@ def _normalize_field(
             page_num=payload.evidence.page_num,
             bbox=payload.evidence.bbox,
             verbatim_span=span,
+            evidence_type=evidence_type,
         ),
         review_state=review_state,
     )

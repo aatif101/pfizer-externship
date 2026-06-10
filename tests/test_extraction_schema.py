@@ -202,7 +202,9 @@ def test_pre_existing_db_migrates_evidence_type_and_defaults_to_text(tmp_path) -
             UNIQUE (doc_id, field_name)
         );
         CREATE TABLE compliance_records (
-            doc_id TEXT PRIMARY KEY, vendor_name TEXT
+            doc_id TEXT PRIMARY KEY, vendor_name TEXT, review_state TEXT,
+            needs_review BOOLEAN DEFAULT 0, risk_level TEXT, expiry_date TEXT,
+            trace_id TEXT, run_id TEXT
         );
         INSERT INTO documents (doc_id, filename, file_path, page_count, status)
         VALUES ('doc-old', 'old.pdf', '/tmp/old.pdf', 1, 'ingested');

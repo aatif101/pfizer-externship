@@ -38,6 +38,7 @@ _COMPLIANCE_COLUMNS: tuple[str, ...] = (
     "source_page",
     "source_bbox",
     "source_verbatim_span",
+    "source_evidence_type",
 )
 
 
@@ -118,7 +119,8 @@ def get_extraction_record(db_path: str, doc_id: str) -> SDFExtractionRecord | No
             compliance_params=(doc_id,),
             fields_sql="""
                 SELECT field_name, field_value, confidence, source_page, source_bbox,
-                       verbatim_span, review_state, abstention_reason, normalized_value
+                       verbatim_span, review_state, abstention_reason, normalized_value,
+                       evidence_type
                 FROM extractions
                 WHERE doc_id = ?
                 ORDER BY field_name
@@ -146,7 +148,8 @@ def get_extraction_record_for_run(db_path: str, run_id: str, doc_id: str) -> SDF
             compliance_params=(run_id, doc_id),
             fields_sql="""
                 SELECT field_name, field_value, confidence, source_page, source_bbox,
-                       verbatim_span, review_state, abstention_reason, normalized_value
+                       verbatim_span, review_state, abstention_reason, normalized_value,
+                       evidence_type
                 FROM extraction_history
                 WHERE run_id = ? AND doc_id = ?
                 ORDER BY field_name
@@ -318,8 +321,8 @@ def _upsert_extraction_field(
         INSERT INTO extractions (
             doc_id, field_name, field_value, confidence, source_page, source_bbox,
             verbatim_span, trace_id, needs_review, review_state, abstention_reason,
-            normalized_value, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+            normalized_value, evidence_type, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
         ON CONFLICT(doc_id, field_name) DO UPDATE SET
             field_value = excluded.field_value,
             confidence = excluded.confidence,
@@ -331,6 +334,7 @@ def _upsert_extraction_field(
             review_state = excluded.review_state,
             abstention_reason = excluded.abstention_reason,
             normalized_value = excluded.normalized_value,
+            evidence_type = excluded.evidence_type,
             updated_at = excluded.updated_at
         """,
         _field_params(doc_id=doc_id, field=field, trace_id=trace_id),
@@ -343,8 +347,8 @@ def _upsert_extraction_history_field(conn: sqlite3.Connection, record: SDFExtrac
         INSERT INTO extraction_history (
             run_id, doc_id, field_name, field_value, confidence, source_page, source_bbox,
             verbatim_span, trace_id, needs_review, review_state, abstention_reason,
-            normalized_value, extracted_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+            normalized_value, evidence_type, extracted_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
         ON CONFLICT(run_id, doc_id, field_name) DO UPDATE SET
             field_value = excluded.field_value,
             confidence = excluded.confidence,
@@ -356,6 +360,7 @@ def _upsert_extraction_history_field(conn: sqlite3.Connection, record: SDFExtrac
             review_state = excluded.review_state,
             abstention_reason = excluded.abstention_reason,
             normalized_value = excluded.normalized_value,
+            evidence_type = excluded.evidence_type,
             extracted_at = excluded.extracted_at,
             updated_at = excluded.updated_at
         """,
@@ -381,6 +386,7 @@ def _field_params(*, doc_id: str, field: ExtractedField, trace_id: str | None) -
         field.review_state.value,
         field.abstention_reason,
         _scalar_to_db(field.value_for_dashboard),
+        field.evidence.evidence_type,
     )
 
 
@@ -392,8 +398,8 @@ def _upsert_compliance_record(conn: sqlite3.Connection, record: SDFExtractionRec
             revision_date, expiry_date, aggregate_confidence, review_state,
             needs_review, trace_id, run_id, extracted_at, risk_level, risk_reason,
             compliance_status, age_days, source_page, source_bbox, source_verbatim_span,
-            updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+            source_evidence_type, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
         ON CONFLICT(doc_id) DO UPDATE SET
             doc_type = excluded.doc_type,
             vendor_name = excluded.vendor_name,
@@ -414,6 +420,7 @@ def _upsert_compliance_record(conn: sqlite3.Connection, record: SDFExtractionRec
             source_page = excluded.source_page,
             source_bbox = excluded.source_bbox,
             source_verbatim_span = excluded.source_verbatim_span,
+            source_evidence_type = excluded.source_evidence_type,
             updated_at = excluded.updated_at
         """,
         _compliance_params(record),
@@ -428,8 +435,8 @@ def _upsert_compliance_record_history(conn: sqlite3.Connection, record: SDFExtra
             revision_date, expiry_date, aggregate_confidence, review_state,
             needs_review, trace_id, extracted_at, risk_level, risk_reason,
             compliance_status, age_days, source_page, source_bbox, source_verbatim_span,
-            updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+            source_evidence_type, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
         ON CONFLICT(run_id, doc_id) DO UPDATE SET
             doc_type = excluded.doc_type,
             vendor_name = excluded.vendor_name,
@@ -449,6 +456,7 @@ def _upsert_compliance_record_history(conn: sqlite3.Connection, record: SDFExtra
             source_page = excluded.source_page,
             source_bbox = excluded.source_bbox,
             source_verbatim_span = excluded.source_verbatim_span,
+            source_evidence_type = excluded.source_evidence_type,
             updated_at = excluded.updated_at
         """,
         _compliance_history_params(record),
@@ -489,6 +497,7 @@ def _compliance_common_params(record: SDFExtractionRecord) -> tuple[Any, ...]:
         evidence_field.evidence.page_num if evidence_field else None,
         source_bbox,
         evidence_field.evidence.verbatim_span if evidence_field else None,
+        evidence_field.evidence.evidence_type if evidence_field else "text",
     )
 
 
@@ -504,6 +513,7 @@ def _field_from_row(row: sqlite3.Row) -> ExtractedField:
             page_num=row["source_page"],
             bbox=json.loads(row["source_bbox"]) if row["source_bbox"] is not None else None,
             verbatim_span=row["verbatim_span"],
+            evidence_type=row["evidence_type"] if row["evidence_type"] is not None else "text",
         ),
         review_state=review_state,
         abstention_reason=row["abstention_reason"],

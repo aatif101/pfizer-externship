@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS extractions (
     review_state      TEXT,
     abstention_reason TEXT,
     normalized_value  TEXT,
+    evidence_type     TEXT,
     updated_at        TIMESTAMP,
     UNIQUE (doc_id, field_name)
 );
@@ -71,7 +72,8 @@ CREATE TABLE IF NOT EXISTS compliance_records (
     age_days                INTEGER,
     source_page             INTEGER,
     source_bbox             TEXT,
-    source_verbatim_span    TEXT
+    source_verbatim_span    TEXT,
+    source_evidence_type    TEXT
 );
 
 CREATE TABLE IF NOT EXISTS extraction_runs (
@@ -102,6 +104,7 @@ CREATE TABLE IF NOT EXISTS extraction_history (
     review_state      TEXT,
     abstention_reason TEXT,
     normalized_value  TEXT,
+    evidence_type     TEXT,
     extracted_at      TIMESTAMP,
     updated_at        TIMESTAMP,
     UNIQUE (run_id, doc_id, field_name)
@@ -131,6 +134,7 @@ CREATE TABLE IF NOT EXISTS compliance_record_history (
     source_page             INTEGER,
     source_bbox             TEXT,
     source_verbatim_span    TEXT,
+    source_evidence_type    TEXT,
     UNIQUE (run_id, doc_id)
 );
 
@@ -308,7 +312,16 @@ _EXTRACTION_MIGRATION_COLUMNS: tuple[tuple[str, str], ...] = (
     ("review_state", "TEXT"),
     ("abstention_reason", "TEXT"),
     ("normalized_value", "TEXT"),
+    ("evidence_type", "TEXT"),
     ("updated_at", "TIMESTAMP"),
+)
+
+# Additive evidence_type columns (D027). NULL-at-rest is treated as "text" on read.
+_EVIDENCE_TYPE_MIGRATIONS: tuple[tuple[str, str, str], ...] = (
+    ("extractions", "evidence_type", "TEXT"),
+    ("extraction_history", "evidence_type", "TEXT"),
+    ("compliance_records", "source_evidence_type", "TEXT"),
+    ("compliance_record_history", "source_evidence_type", "TEXT"),
 )
 
 POST_MIGRATION_INDEX_SQL = """
@@ -330,6 +343,7 @@ def init_db(db_path: str) -> None:
     try:
         conn.executescript(SCHEMA_SQL)
         _migrate_extractions_table(conn)
+        _migrate_evidence_type_columns(conn)
         _migrate_retrieval_index_pages_table(conn)
         _init_retrieval_index_fts(conn)
         conn.executescript(POST_MIGRATION_INDEX_SQL)
@@ -372,6 +386,22 @@ def _migrate_extractions_table(conn: sqlite3.Connection) -> None:
         if column_name not in existing_columns:
             conn.execute(f"ALTER TABLE extractions ADD COLUMN {column_name} {column_type}")
             existing_columns.add(column_name)
+
+
+def _migrate_evidence_type_columns(conn: sqlite3.Connection) -> None:
+    """Add additive evidence_type columns to pre-existing databases (D027).
+
+    Idempotent: each ``ALTER TABLE ... ADD COLUMN`` runs only when the target
+    table exists and the column is missing. Pre-existing rows keep NULL, which
+    the read path coalesces to "text".
+    """
+
+    for table_name, column_name, column_type in _EVIDENCE_TYPE_MIGRATIONS:
+        existing_columns = _table_columns(conn, table_name)
+        if not existing_columns:
+            continue
+        if column_name not in existing_columns:
+            conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
 
 
 def _migrate_retrieval_index_pages_table(conn: sqlite3.Connection) -> None:
