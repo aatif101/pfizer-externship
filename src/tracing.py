@@ -4,14 +4,14 @@ CRITICAL VERSION CONSTRAINT:
     langfuse must be >=3.0,<4.0. v4 has breaking import path changes.
     This file asserts the version at import time to catch accidental upgrades.
 
-v3 import paths (DO NOT change to v4 equivalents):
-    from langfuse.decorators import langfuse_context, observe   ← v3 ✓
-    from langfuse import Langfuse                               ← v3 ✓
-    langfuse_context.auth_check()                               ← v3 ✓
+v3 import paths (DO NOT change):
+    from langfuse import observe, get_client                    ← v3 ✓
+    get_client().update_current_trace(...)                      ← v3 ✓
+    get_client().auth_check()                                   ← v3 ✓
 
-v4 would look like (DO NOT USE):
-    from langfuse.langchain import CallbackHandler              ← v4 ONLY
-    langfuse.update_current_trace(...)                          ← v4 ONLY
+Dead v2 path (DO NOT USE anywhere): the legacy "decorators" submodule
+(`from langfuse import decorators` style imports of langfuse_context/observe)
+does not exist under installed v3 and raises ModuleNotFoundError.
 
 D-04: Trace each major function: PDF ingestion, text extraction, storage, retrieval.
       Functions are decorated with @observe in their respective pipeline modules.
@@ -144,12 +144,12 @@ def filter_trace_metadata(metadata: Mapping[str, Any] | None, allowed_keys: set[
 
 
 def _get_langfuse_context() -> Any | None:
-    """Import the v3 decorator context lazily so missing Langfuse is a no-op."""
+    """Return the live Langfuse v3 client lazily; None when the SDK is unavailable."""
     try:
-        from langfuse.decorators import langfuse_context  # noqa: PLC0415
+        client = get_client()
     except Exception:
         return None
-    return langfuse_context
+    return client
 
 
 def safe_update_current_trace(

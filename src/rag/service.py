@@ -9,18 +9,6 @@ from __future__ import annotations
 from uuid import uuid4
 from typing import Any
 
-try:
-    from langfuse.decorators import langfuse_context, observe
-    _LANGFUSE_AVAILABLE = True
-except ImportError:
-    _LANGFUSE_AVAILABLE = False
-    langfuse_context = None  # type: ignore[assignment]
-
-    def observe(name=None, **kwargs):  # type: ignore[misc]
-        def decorator(fn):
-            return fn
-        return decorator
-
 from src.rag.models import (
     AnswerCitation,
     AnswerDiagnostics,
@@ -36,6 +24,27 @@ from src.rag.providers import (
     AnswerValidationError,
 )
 from src.retrieval import RetrievalEvidenceReason, RetrievalHit, retrieve_evidence
+from src.tracing import observe, safe_update_current_trace
+
+# Injectable test seams: tests monkeypatch both symbols. langfuse_context=None
+# means "resolve the live v3 client lazily inside src.tracing".
+_LANGFUSE_AVAILABLE: bool = True
+langfuse_context: Any | None = None
+
+_ANSWER_TRACE_ALLOWED_KEYS = frozenset(
+    {
+        "boundary",
+        "answer_status",
+        "reason_code",
+        "run_id",
+        "provider_name",
+        "trace_id",
+        "top_score",
+        "citation_count",
+        "evidence_reason",
+        "error_class",
+    }
+)
 
 _DEFAULT_TOP_K = 5
 _PROVIDERLESS_NAME = "unconfigured"
@@ -308,29 +317,14 @@ def _safe_update_trace_metadata(metadata: dict[str, Any]) -> None:
     provider payloads, secrets, image blobs, Docling JSON, and full corpus hashes.
     """
 
-    if not _LANGFUSE_AVAILABLE or langfuse_context is None:
+    if not _LANGFUSE_AVAILABLE:
         return
-    safe_metadata = {
-        key: value
-        for key, value in metadata.items()
-        if key
-        in {
-            "boundary",
-            "answer_status",
-            "reason_code",
-            "run_id",
-            "provider_name",
-            "trace_id",
-            "top_score",
-            "citation_count",
-            "evidence_reason",
-            "error_class",
-        }
-    }
-    try:
-        langfuse_context.update_current_trace(tags=["rag", "answer"], metadata=safe_metadata)
-    except Exception:
-        return
+    safe_update_current_trace(
+        tags=["rag", "answer"],
+        metadata=metadata,
+        allowed_metadata_keys=_ANSWER_TRACE_ALLOWED_KEYS,
+        context=langfuse_context,
+    )
 
 
 __all__ = ["answer_question"]

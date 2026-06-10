@@ -14,10 +14,9 @@ from time import perf_counter
 from typing import Any, Mapping
 from uuid import uuid4
 
-try:
-    from langfuse.decorators import langfuse_context
-except Exception:  # pragma: no cover - exercised only when optional Langfuse is absent/broken
-    langfuse_context = None  # type: ignore[assignment]
+# Injectable test seam: tests monkeypatch pipeline.langfuse_context. None means
+# "resolve the live v3 client lazily inside src.tracing" (context=None fallback).
+langfuse_context: Any | None = None
 
 from src.db.queries import DocumentMetadata, DocumentPage, LoadedDocumentPages, load_document_pages
 from src.extraction.models import ExtractedField, ReviewState, SDFExtractionRecord, SDFFieldName, SourceEvidence

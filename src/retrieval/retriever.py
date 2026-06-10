@@ -11,18 +11,6 @@ import sqlite3
 from dataclasses import dataclass
 from typing import Any
 
-try:
-    from langfuse.decorators import langfuse_context, observe
-    _LANGFUSE_AVAILABLE = True
-except ImportError:
-    _LANGFUSE_AVAILABLE = False
-    langfuse_context = None  # type: ignore[assignment]
-
-    def observe(name=None, **kwargs):  # type: ignore[misc]
-        def decorator(fn):
-            return fn
-        return decorator
-
 from src.db.schema import _connect, init_db
 from src.retrieval.indexer import get_retrieval_index_status, normalize_index_text
 from src.retrieval.models import (
@@ -33,6 +21,24 @@ from src.retrieval.models import (
     RetrievalScoreComponents,
 )
 from src.retrieval.repository import retrieval_fts_available
+from src.tracing import observe, safe_update_current_trace
+
+# Injectable test seams: tests monkeypatch both symbols. langfuse_context=None
+# means "resolve the live v3 client lazily inside src.tracing".
+_LANGFUSE_AVAILABLE: bool = True
+langfuse_context: Any | None = None
+
+_RETRIEVAL_TRACE_ALLOWED_KEYS = frozenset(
+    {
+        "boundary",
+        "run_id",
+        "evidence_reason",
+        "top_score",
+        "citation_count",
+        "is_strong",
+        "error_class",
+    }
+)
 
 _TOKEN_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
 _SNIPPET_MAX_CHARS = 220
@@ -471,23 +477,11 @@ def _proximity_bonus(lower_text: str, matched_terms: list[str]) -> float:
 def _safe_update_trace_metadata(metadata: dict[str, Any]) -> None:
     """Attach whitelisted retrieval metadata without affecting retrieval behavior."""
 
-    if not _LANGFUSE_AVAILABLE or langfuse_context is None:
+    if not _LANGFUSE_AVAILABLE:
         return
-    safe_metadata = {
-        key: value
-        for key, value in metadata.items()
-        if key
-        in {
-            "boundary",
-            "run_id",
-            "evidence_reason",
-            "top_score",
-            "citation_count",
-            "is_strong",
-            "error_class",
-        }
-    }
-    try:
-        langfuse_context.update_current_trace(tags=["retrieval", "evidence"], metadata=safe_metadata)
-    except Exception:
-        return
+    safe_update_current_trace(
+        tags=["retrieval", "evidence"],
+        metadata=metadata,
+        allowed_metadata_keys=_RETRIEVAL_TRACE_ALLOWED_KEYS,
+        context=langfuse_context,
+    )
