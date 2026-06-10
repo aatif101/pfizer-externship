@@ -43,7 +43,7 @@ On Windows, run tests with `venv\Scripts\python.exe -m pytest` (do not rely on b
 
 ```
 # 1. Ingest a folder of supplier PDFs into SQLite
-python -m src.pipeline ingest <pdf-folder> --db-path compliance.db
+python -m src.pipeline <pdf-folder> --db-path compliance.db
 
 # 2. Build and inspect the retrieval index
 python -m src.retrieval build --db-path compliance.db
