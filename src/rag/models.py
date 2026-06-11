@@ -38,7 +38,12 @@ class AnswerReasonCode(StrEnum):
 
 @dataclass(frozen=True)
 class AnswerCitation:
-    """Service-owned citation derived exclusively from retrieval hits."""
+    """Service-owned citation derived exclusively from retrieval hits.
+
+    ``snippet`` is the dashboard-rendered teaser. ``evidence_text`` is the wider
+    bounded grounding text consumed in memory by the generator and the RAGAS
+    judge; it is intentionally NOT rendered by the dashboard and never persisted.
+    """
 
     doc_id: str
     filename: str
@@ -46,6 +51,7 @@ class AnswerCitation:
     display_page_num: int
     snippet: str
     score: float
+    evidence_text: str = ""
 
 
 @dataclass(frozen=True)

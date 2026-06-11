@@ -114,7 +114,13 @@ class RetrievalScoreComponents:
 
 @dataclass(frozen=True)
 class RetrievalHit:
-    """Citation-ready page evidence without raw full page text."""
+    """Citation-ready page evidence with bounded in-memory evidence text.
+
+    ``snippet`` stays the short, dashboard-facing teaser (<=222 chars).
+    ``evidence_text`` is a wider, bounded slice of the full page text used only
+    in memory by the generator prompt and the RAGAS faithfulness judge; it is
+    never persisted nor added to any trace allowlist.
+    """
 
     doc_id: str
     filename: str
@@ -123,6 +129,7 @@ class RetrievalHit:
     score: float
     score_components: RetrievalScoreComponents
     snippet: str
+    evidence_text: str = ""
 
 
 @dataclass(frozen=True)

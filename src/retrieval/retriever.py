@@ -43,6 +43,7 @@ _RETRIEVAL_TRACE_ALLOWED_KEYS = frozenset(
 _TOKEN_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
 _SNIPPET_MAX_CHARS = 220
 _SNIPPET_MIN_CHARS = 180
+_MAX_EVIDENCE_TEXT_CHARS = 2000
 _HASH_PREFIX_CHARS = 16
 _DEFAULT_CANDIDATE_LIMIT = 50
 DEFAULT_MIN_TOP_SCORE = 0.45
@@ -331,6 +332,7 @@ class HybridTextRetriever:
             score=round(score, 4),
             score_components=components,
             snippet=make_query_snippet(text, terms),
+            evidence_text=_bounded_evidence_text(candidate.page_text, fallback=candidate.indexed_snippet),
         )
 
 
@@ -431,6 +433,28 @@ def make_query_snippet(text: str, terms: tuple[str, ...], *, max_chars: int = _S
     if end < len(normalized):
         snippet = snippet.rstrip() + "…"
     return snippet
+
+
+def _bounded_evidence_text(text: str, *, fallback: str, max_chars: int = _MAX_EVIDENCE_TEXT_CHARS) -> str:
+    """Return bounded grounding text from full page text with word-boundary truncation.
+
+    The full page text is normalized first. If it is empty/whitespace after
+    normalization, the indexed snippet is used as the (normalized) fallback so
+    scanned/empty pages still yield non-empty grounding. Text at/under the cap is
+    returned verbatim; longer text is truncated at the last whitespace boundary
+    at/under the cap (never mid-word) with a trailing ellipsis. A single token
+    longer than the cap is hard-sliced as a last resort.
+    """
+
+    normalized = normalize_index_text(text)
+    if not normalized.strip():
+        return normalize_index_text(fallback)
+    if len(normalized) <= max_chars:
+        return normalized
+    head = normalized[:max_chars]
+    if " " in head:
+        head = head.rsplit(" ", 1)[0]
+    return head.rstrip() + "…"
 
 
 def _hash_prefix(content_hash: str | None) -> str | None:

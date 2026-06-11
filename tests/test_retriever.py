@@ -7,7 +7,14 @@ from src.db.queries import insert_document, insert_page, mark_document_ingested
 from src.db.schema import init_db
 from src.retrieval.indexer import build_retrieval_index
 from src.retrieval.models import RetrievalEvidenceReason
-from src.retrieval.retriever import HybridTextRetriever, extract_search_terms, make_fts_query, retrieve_evidence
+from src.retrieval.retriever import (
+    _MAX_EVIDENCE_TEXT_CHARS,
+    HybridTextRetriever,
+    _bounded_evidence_text,
+    extract_search_terms,
+    make_fts_query,
+    retrieve_evidence,
+)
 
 
 def _seed_doc(db_path: str, *, doc_id: str, filename: str, pages: tuple[str, ...]) -> None:
@@ -15,6 +22,68 @@ def _seed_doc(db_path: str, *, doc_id: str, filename: str, pages: tuple[str, ...
     mark_document_ingested(db_path, doc_id)
     for page_num, text in enumerate(pages):
         insert_page(db_path, doc_id, page_num, text, image_blob=None)
+
+
+def test_bounded_evidence_text_returns_short_text_verbatim() -> None:
+    text = "Vendor Name: Acme Pharma Ltd. Expiry Date: 2027-01-31."
+    assert _bounded_evidence_text(text, fallback="snippet") == text
+    assert "…" not in _bounded_evidence_text(text, fallback="snippet")
+
+
+def test_bounded_evidence_text_truncates_at_word_boundary_with_ellipsis() -> None:
+    # 500 distinct words; rendered text far exceeds the 2000-char cap.
+    words = [f"word{index:04d}" for index in range(500)]
+    text = " ".join(words)
+    assert len(text) > _MAX_EVIDENCE_TEXT_CHARS
+
+    result = _bounded_evidence_text(text, fallback="snippet")
+
+    assert result.endswith("…")
+    body = result[:-1].rstrip()
+    # Never split mid-word: the truncated body is a prefix ending on a full word.
+    assert text.startswith(body)
+    assert not body.endswith(" ")
+    # The last retained token is a complete word from the source.
+    assert body.split(" ")[-1] in words
+    # The body (without the ellipsis) stays at/under the cap.
+    assert len(body) <= _MAX_EVIDENCE_TEXT_CHARS
+
+
+def test_bounded_evidence_text_falls_back_to_snippet_when_page_text_empty() -> None:
+    assert _bounded_evidence_text("   ", fallback="Indexed snippet fallback") == "Indexed snippet fallback"
+    assert _bounded_evidence_text("", fallback="Indexed snippet fallback") == "Indexed snippet fallback"
+
+
+def test_strong_hit_evidence_text_is_wider_than_snippet_while_snippet_unchanged(tmp_db_path: str) -> None:
+    init_db(tmp_db_path)
+    long_body = " ".join(
+        f"Acme supplier compliance clause {index} covering Pfizer quality unit approval controls."
+        for index in range(60)
+    )
+    _seed_doc(
+        tmp_db_path,
+        doc_id="doc-long",
+        filename="long-sdf.pdf",
+        pages=(f"Supplier Declaration Form. Vendor Name: Acme Pharma Ltd. {long_body}",),
+    )
+    build_retrieval_index(tmp_db_path)
+
+    result = HybridTextRetriever(tmp_db_path).retrieve("Acme supplier compliance approval", top_k=1)
+
+    assert result.is_strong is True
+    top = result.hits[0]
+    # Snippet remains the short dashboard teaser bound.
+    assert len(top.snippet) <= 222
+    # Evidence text is materially wider than the snippet bound.
+    assert len(top.evidence_text) > 222
+    assert len(top.evidence_text) <= _MAX_EVIDENCE_TEXT_CHARS + 1  # +1 for trailing ellipsis
+    assert "Acme supplier compliance clause" in top.evidence_text
+
+
+def test_evidence_text_never_appears_in_retrieval_trace_allowlist() -> None:
+    from src.retrieval.retriever import _RETRIEVAL_TRACE_ALLOWED_KEYS
+
+    assert "evidence_text" not in _RETRIEVAL_TRACE_ALLOWED_KEYS
 
 
 def test_hybrid_retriever_ranks_expected_supplier_page_first(tmp_db_path: str) -> None:
@@ -222,19 +291,32 @@ def test_evidence_gate_returns_below_threshold_without_hits_for_weak_partial_ove
     assert result.query_terms == ("zeta", "astronomy", "telescope", "nebula")
 
 
-def test_hybrid_retriever_diagnostics_do_not_expose_full_page_text(tmp_db_path: str) -> None:
+def test_hybrid_retriever_snippet_stays_short_and_evidence_text_is_bounded(tmp_db_path: str) -> None:
     init_db(tmp_db_path)
-    secret_tail = " SECRET_FULL_TEXT_TAIL_SHOULD_NOT_APPEAR"
-    long_text = "Omega supplier compliance evidence appears near the beginning. " + ("filler words " * 50) + secret_tail
+    # Page text well over the 2000-char evidence cap so truncation is exercised.
+    secret_tail = " SECRET_FULL_TEXT_TAIL_BEYOND_CAP"
+    long_text = (
+        "Omega supplier compliance evidence appears near the beginning. " + ("filler words " * 400) + secret_tail
+    )
+    assert len(long_text) > _MAX_EVIDENCE_TEXT_CHARS
     _seed_doc(tmp_db_path, doc_id="doc-omega", filename="omega-sdf.pdf", pages=(long_text,))
     build_retrieval_index(tmp_db_path)
 
     result = HybridTextRetriever(tmp_db_path).retrieve("Omega supplier compliance", top_k=1)
 
     assert result.reason is RetrievalEvidenceReason.STRONG_EVIDENCE
-    assert secret_tail not in repr(result)
-    assert secret_tail not in result.hits[0].snippet
-    assert len(result.hits[0].snippet) <= 222
+    top = result.hits[0]
+    # The short display snippet stays the narrow teaser and never carries the tail.
+    assert secret_tail not in top.snippet
+    assert len(top.snippet) <= 222
+    # evidence_text is bounded; the far tail beyond the cap is dropped by truncation.
+    assert secret_tail not in top.evidence_text
+    assert len(top.evidence_text) <= _MAX_EVIDENCE_TEXT_CHARS + 1
+    assert top.evidence_text.endswith("…")
+    # Privacy contract: evidence_text key is never in the trace allowlist.
+    from src.retrieval.retriever import _RETRIEVAL_TRACE_ALLOWED_KEYS
+
+    assert "evidence_text" not in _RETRIEVAL_TRACE_ALLOWED_KEYS
 
 
 def test_hybrid_retriever_reports_no_match_for_unrelated_query(tmp_db_path: str) -> None:
@@ -375,10 +457,14 @@ def test_hybrid_retriever_normalizes_non_positive_top_k_and_bounds_hits(tmp_db_p
     assert negative_result.hits[0].display_page_num == 1
 
 
-def test_evidence_gate_repr_exposes_only_bounded_snippets_and_hash_prefix(tmp_db_path: str) -> None:
+def test_evidence_gate_repr_exposes_only_bounded_evidence_and_hash_prefix(tmp_db_path: str) -> None:
     init_db(tmp_db_path)
-    secret_tail = " API_KEY_SHOULD_NOT_APPEAR_IN_REPR"
-    long_text = "Sigma supplier compliance approval evidence is near the beginning. " + ("middle filler " * 80) + secret_tail
+    # Page text over the 2000-char evidence cap; the tail sits beyond the cap.
+    secret_tail = " API_KEY_BEYOND_CAP_SHOULD_NOT_APPEAR_IN_REPR"
+    long_text = (
+        "Sigma supplier compliance approval evidence is near the beginning. " + ("middle filler " * 200) + secret_tail
+    )
+    assert len(long_text) > _MAX_EVIDENCE_TEXT_CHARS
     _seed_doc(tmp_db_path, doc_id="doc-sigma", filename="sigma-sdf.pdf", pages=(long_text,))
     built = build_retrieval_index(tmp_db_path)
 
@@ -387,10 +473,15 @@ def test_evidence_gate_repr_exposes_only_bounded_snippets_and_hash_prefix(tmp_db
     hit_repr = repr(result.hits[0])
 
     assert result.reason_code is RetrievalEvidenceReason.STRONG_EVIDENCE
+    # Full corpus hash never leaks; only the public prefix does.
     assert built.run.content_hash not in result_repr
     assert built.run.content_hash[:16] in result_repr
+    # The far tail beyond the evidence cap is dropped by word-boundary truncation.
     assert secret_tail not in result_repr
     assert secret_tail not in hit_repr
+    # The full untruncated page text never appears anywhere in the DTO repr.
     assert long_text not in result_repr
     assert long_text not in hit_repr
+    # Display snippet stays the narrow teaser; evidence_text is bounded.
     assert len(result.hits[0].snippet) <= 222
+    assert len(result.hits[0].evidence_text) <= _MAX_EVIDENCE_TEXT_CHARS + 1

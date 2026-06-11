@@ -87,6 +87,33 @@ def test_answer_question_returns_provider_answer_with_service_owned_citations(tm
     assert result.diagnostics.evidence_reason == "strong_evidence"
 
 
+def test_answer_question_citation_carries_evidence_text_from_hit(tmp_db_path: str) -> None:
+    init_db(tmp_db_path)
+    long_body = " ".join(
+        f"Acme supplier compliance clause {index} covering Pfizer quality unit approval controls."
+        for index in range(60)
+    )
+    _seed_doc(
+        tmp_db_path,
+        doc_id="doc-acme",
+        filename="acme-sdf.pdf",
+        pages=(f"Supplier Declaration Form. Vendor Name: Acme Pharma Ltd. {long_body}",),
+    )
+    build_retrieval_index(tmp_db_path)
+    provider = FakeAnswerProvider()
+
+    result = answer_question(tmp_db_path, "Acme supplier compliance approval", provider=provider, top_k=1)
+
+    assert result.status is AnswerStatus.ANSWERED
+    citation = result.citations[0]
+    hit = provider.calls[0].evidence[0]
+    # Citation carries the originating hit's evidence_text verbatim.
+    assert citation.evidence_text == hit.evidence_text
+    # Evidence text is wider than the short display snippet.
+    assert len(citation.evidence_text) > 222
+    assert citation.snippet == hit.snippet
+
+
 def test_answer_question_abstains_for_weak_evidence_without_provider_call(tmp_db_path: str) -> None:
     init_db(tmp_db_path)
     _seed_doc(tmp_db_path, doc_id="doc-zeta", filename="zeta-sdf.pdf", pages=("Zeta supplier compliance page",))
@@ -214,8 +241,11 @@ def test_answer_question_bounds_citations_to_top_k_and_owns_order(tmp_db_path: s
 
 def test_answer_question_redacts_full_page_tail_and_full_hash_from_public_repr(tmp_db_path: str) -> None:
     init_db(tmp_db_path)
-    secret_tail = " API_KEY_SHOULD_NOT_APPEAR_IN_ANSWER_REPR"
-    long_text = "Sigma supplier compliance approval evidence is near the beginning. " + ("middle filler " * 80) + secret_tail
+    # Page text over the 2000-char evidence cap; the tail sits beyond the cap.
+    secret_tail = " API_KEY_BEYOND_CAP_SHOULD_NOT_APPEAR_IN_ANSWER_REPR"
+    long_text = (
+        "Sigma supplier compliance approval evidence is near the beginning. " + ("middle filler " * 200) + secret_tail
+    )
     _seed_doc(tmp_db_path, doc_id="doc-sigma", filename="sigma-sdf.pdf", pages=(long_text,))
     built = build_retrieval_index(tmp_db_path)
     provider = FakeAnswerProvider(answer_text="Sigma has supplier compliance approval evidence on the cited page.")
@@ -224,10 +254,14 @@ def test_answer_question_redacts_full_page_tail_and_full_hash_from_public_repr(t
     result_repr = repr(result)
 
     assert result.status is AnswerStatus.ANSWERED
+    # The far tail beyond the evidence cap and the full untruncated page text never appear.
     assert secret_tail not in result_repr
     assert long_text not in result_repr
+    # Full corpus hash never leaks into the public answer repr.
     assert built.run.content_hash not in result_repr
+    # Display snippet stays the narrow teaser; bounded evidence_text is the wider grounding.
     assert len(result.citations[0].snippet) <= 222
+    assert len(result.citations[0].evidence_text) > 222
 
 
 def test_answer_question_turns_retrieval_exceptions_into_abstention(monkeypatch: Any, tmp_db_path: str) -> None:

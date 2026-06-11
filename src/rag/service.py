@@ -211,6 +211,7 @@ def _citations_from_hits(hits: tuple[RetrievalHit, ...]) -> tuple[AnswerCitation
             display_page_num=hit.display_page_num,
             snippet=hit.snippet,
             score=hit.score,
+            evidence_text=hit.evidence_text,
         )
         for hit in hits
     )
