@@ -124,11 +124,17 @@ def build_ragas_scorer(
     if not resolved_key:
         raise AnswerConfigurationError("Gemini API key is required for RAGAS scoring")
 
-    from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+    # IMPORTANT: import ragas BEFORE langchain_google_genai. On Windows the grpc
+    # native libs pulled by langchain_google_genai conflict with the grpc loaded
+    # via ragas.llms' langchain_community.chat_models.vertexai import path, and the
+    # reverse order segfaults the interpreter at import time (native access
+    # violation). Importing ragas first loads its grpc symbols cleanly.
     from ragas.dataset_schema import SingleTurnSample
     from ragas.embeddings import LangchainEmbeddingsWrapper
     from ragas.llms import LangchainLLMWrapper
     from ragas.metrics import Faithfulness, ResponseRelevancy
+
+    from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 
     judge = ChatGoogleGenerativeAI(model=judge_model, temperature=0.0, api_key=resolved_key)
     evaluator_llm = LangchainLLMWrapper(judge)
