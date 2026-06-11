@@ -21,8 +21,14 @@ dependencies = [
     "python-dateutil",
     "psutil",
     "Pillow",
+    # ragas 0.4.3 requires the langchain 0.3.x stack (langchain 1.x removed the
+    # ChatVertexAI / ContextOverflowError symbols ragas imports at load time).
     "ragas==0.4.3",
-    "langchain-google-genai>=4.0,<5",
+    "langchain>=0.3,<1",
+    "langchain-core>=0.3,<1",
+    "langchain-community>=0.3,<0.4",
+    "langchain-openai>=0.3,<1",
+    "langchain-google-genai>=2,<3",
 ]
 
 [project.optional-dependencies]

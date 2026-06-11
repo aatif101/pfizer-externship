@@ -1,2 +1,9 @@
+# ragas 0.4.3 imports langchain-community/openai modules that the langchain 1.x
+# line removed (ChatVertexAI, ContextOverflowError). It must run on the langchain
+# 0.3.x stack; langchain-google-genai 2.x is the matching adapter line.
 ragas==0.4.3
-langchain-google-genai>=4.0,<5
+langchain>=0.3,<1
+langchain-core>=0.3,<1
+langchain-community>=0.3,<0.4
+langchain-openai>=0.3,<1
+langchain-google-genai>=2,<3
