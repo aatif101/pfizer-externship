@@ -60,7 +60,11 @@ class NonRetryableProviderError(RuntimeError):
     status_code = 400
 
 
-def _request(*, snippet: str = "Acme Pharma Ltd. expiry date is 2027-01-31.") -> Any:
+def _request(
+    *,
+    snippet: str = "Acme Pharma Ltd. expiry date is 2027-01-31.",
+    evidence_text: str = "",
+) -> Any:
     from src.rag.providers import AnswerProviderRequest
     from src.retrieval.models import RetrievalHit, RetrievalScoreComponents
 
@@ -76,6 +80,7 @@ def _request(*, snippet: str = "Acme Pharma Ltd. expiry date is 2027-01-31.") ->
                 score=0.91,
                 score_components=RetrievalScoreComponents(lexical_score=0.91),
                 snippet=snippet,
+                evidence_text=evidence_text,
             ),
         ),
     )
@@ -193,20 +198,53 @@ def test_blank_response_raises_typed_validation_error_without_raw_response() -> 
     assert "Acme Pharma Ltd." not in str(exc_info.value)
 
 
-def test_prompt_bounds_evidence_snippets_before_provider_call() -> None:
-    from src.rag.gemini import GeminiAnswerProvider
+def test_prompt_bounds_evidence_text_before_provider_call() -> None:
+    from src.rag.gemini import _MAX_EVIDENCE_CHARS, GeminiAnswerProvider
 
     long_secret_tail = " SECRET_TAIL_SHOULD_NOT_BE_SENT"
-    long_snippet = "Supplier compliance evidence. " + ("filler " * 200) + long_secret_tail
+    # Evidence text well over the 2000-char cap; the tail sits beyond the cap.
+    long_evidence = "Supplier compliance evidence. " + ("filler " * 400) + long_secret_tail
+    assert len(long_evidence) > _MAX_EVIDENCE_CHARS
     client = FakeGeminiClient([FakeGeminiResponse("Bounded answer.")])
     provider = GeminiAnswerProvider(api_key="test-key", client=client, max_attempts=1)
 
-    provider.answer(_request(snippet=long_snippet))
+    provider.answer(_request(snippet="short teaser", evidence_text=long_evidence))
 
     contents = client.models.calls[0]["contents"]
     assert "Supplier compliance evidence." in contents
     assert long_secret_tail not in contents
-    assert len(contents) < len(long_snippet) + 600
+    assert len(contents) < len(long_evidence) + 600
+
+
+def test_prompt_embeds_evidence_text_not_short_snippet() -> None:
+    from src.rag.gemini import GeminiAnswerProvider
+
+    client = FakeGeminiClient([FakeGeminiResponse("Grounded answer.")])
+    provider = GeminiAnswerProvider(api_key="test-key", client=client, max_attempts=1)
+
+    provider.answer(
+        _request(
+            snippet="SHORT_TEASER_ONLY",
+            evidence_text="WIDE_EVIDENCE_BODY with full grounding sentences the judge must also see.",
+        )
+    )
+
+    contents = client.models.calls[0]["contents"]
+    # The wide evidence_text is what the generator sees, not the short teaser.
+    assert "WIDE_EVIDENCE_BODY with full grounding sentences" in contents
+    assert "SHORT_TEASER_ONLY" not in contents
+
+
+def test_prompt_falls_back_to_snippet_when_evidence_text_empty() -> None:
+    from src.rag.gemini import GeminiAnswerProvider
+
+    client = FakeGeminiClient([FakeGeminiResponse("Fallback answer.")])
+    provider = GeminiAnswerProvider(api_key="test-key", client=client, max_attempts=1)
+
+    provider.answer(_request(snippet="FALLBACK_SNIPPET_TEXT", evidence_text=""))
+
+    contents = client.models.calls[0]["contents"]
+    assert "FALLBACK_SNIPPET_TEXT" in contents
 
 
 def test_build_answer_provider_lazily_exposes_gemini_and_preserves_injected_providers() -> None:

@@ -25,7 +25,7 @@ from src.rag.providers import (
 
 DEFAULT_GEMINI_ANSWER_MODEL = "gemini-2.5-flash"
 _PROVIDER_NAME = "gemini"
-_MAX_SNIPPET_CHARS = 600
+_MAX_EVIDENCE_CHARS = 2000
 _MAX_EVIDENCE_ITEMS = 5
 
 
@@ -135,7 +135,7 @@ def _build_contents(request: AnswerProviderRequest) -> str:
         (
             f"<evidence index=\"{idx}\" doc_id=\"{hit.doc_id}\" "
             f"filename=\"{hit.filename}\" page=\"{hit.display_page_num}\" score=\"{hit.score:.4f}\">\n"
-            f"{_bounded_snippet(hit.snippet)}\n</evidence>"
+            f"{_bounded_evidence(hit.evidence_text or hit.snippet)}\n</evidence>"
         )
         for idx, hit in enumerate(request.evidence[:_MAX_EVIDENCE_ITEMS], start=1)
     )
@@ -153,11 +153,11 @@ Evidence snippets:
 """
 
 
-def _bounded_snippet(snippet: str) -> str:
-    stripped = snippet.strip()
-    if len(stripped) <= _MAX_SNIPPET_CHARS:
+def _bounded_evidence(evidence: str) -> str:
+    stripped = evidence.strip()
+    if len(stripped) <= _MAX_EVIDENCE_CHARS:
         return stripped
-    return stripped[: _MAX_SNIPPET_CHARS - 1].rstrip() + "…"
+    return stripped[: _MAX_EVIDENCE_CHARS - 1].rstrip() + "…"
 
 
 def _response_text(response: Any) -> str:

@@ -45,7 +45,12 @@ def _seed_gold_queries(db_path: str, queries: list[tuple[str, str]]) -> None:
         conn.close()
 
 
-def _answered_result(answer_text: str, snippets: list[str]) -> AnswerResult:
+def _answered_result(
+    answer_text: str,
+    snippets: list[str],
+    evidence_texts: list[str] | None = None,
+) -> AnswerResult:
+    bodies = evidence_texts if evidence_texts is not None else snippets
     citations = tuple(
         AnswerCitation(
             doc_id="d1",
@@ -54,6 +59,7 @@ def _answered_result(answer_text: str, snippets: list[str]) -> AnswerResult:
             display_page_num=idx + 1,
             snippet=snippet,
             score=0.9,
+            evidence_text=bodies[idx],
         )
         for idx, snippet in enumerate(snippets)
     )
@@ -137,6 +143,52 @@ def test_scores_persist_keyed_by_query_id(tmp_path) -> None:
     assert rows[0].answer_relevancy == pytest.approx(0.8)
     assert rows[0].source_run_id == "src-run"
     assert rows[0].status == "observed"
+
+
+def test_judge_contexts_equal_citation_evidence_text(tmp_path) -> None:
+    """The faithfulness contract: RagasSample.contexts == the answered citations'
+    evidence_text strings, in order — the exact contexts the generator saw."""
+
+    db_path = str(tmp_path / "eval.sqlite")
+    init_db(db_path)
+    _seed_gold_queries(db_path, [("q1", "what is the assay result?")])
+
+    evidence_texts = [
+        "WIDE_EVIDENCE_A: full grounding sentence the judge must score against.",
+        "WIDE_EVIDENCE_B: a second wider grounding context distinct from the teaser.",
+    ]
+    answers = {
+        "what is the assay result?": _answered_result(
+            "Assay is 99.2%",
+            snippets=["short teaser a", "short teaser b"],
+            evidence_texts=evidence_texts,
+        )
+    }
+
+    captured: dict[str, tuple[str, ...]] = {}
+
+    def capturing_scorer(sample: RagasSample):
+        captured["contexts"] = sample.contexts
+        return (0.5, 0.5)
+
+    compute_ragas_quality(
+        db_path,
+        source_run_id="src-run",
+        scorer=capturing_scorer,
+        answer_fn=_make_answer_fn(answers),
+        provider=object(),
+    )
+
+    # The judge's contexts are exactly the evidence_text strings, not the teasers.
+    assert captured["contexts"] == tuple(evidence_texts)
+    assert "short teaser a" not in captured["contexts"]
+
+    # Privacy: no evidence_text string is persisted to rag_eval_observations.
+    rows = list_rag_eval_observations(db_path, source_run_id="src-run")
+    assert len(rows) == 1
+    persisted_repr = repr(rows[0])
+    for body in evidence_texts:
+        assert body not in persisted_repr
 
 
 def test_null_preserved_for_unanswered(tmp_path) -> None:

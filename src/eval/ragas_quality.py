@@ -220,7 +220,7 @@ def compute_ragas_quality(
         sample = RagasSample(
             query_id=query_id,
             question=query_text,
-            contexts=tuple(citation.snippet for citation in result.citations),
+            contexts=tuple(citation.evidence_text for citation in result.citations),
             answer=result.answer_text,
         )
         try:

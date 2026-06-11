@@ -34,7 +34,7 @@ EXPECTED_PUBLIC_EXPORTS = {
 FORBIDDEN_INTERNAL_EXPORTS = {
     "DEFAULT_GEMINI_ANSWER_MODEL",
     "_build_contents",
-    "_bounded_snippet",
+    "_bounded_evidence",
     "_response_text",
     "_response_trace_id",
     "_strip_simple_fences",
