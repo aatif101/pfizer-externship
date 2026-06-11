@@ -450,7 +450,12 @@ def _seed_m002_supplier_pages(db_path: str) -> None:
             "Expiry Date: 2027-01-31.",
             "Lot coverage: ACME-2026-001.",
             "Routine filler text keeps the public answer snippet bounded away from the planted tail.",
-            "more filler " * 40,
+            # Filler exceeds the 2000-char evidence_text cap so the planted forbidden
+            # tail markers below sit beyond the cap and are dropped by word-boundary
+            # truncation. This proves the FULL page tail never reaches the bounded
+            # evidence_text the generator/judge see, even though bounded page text now
+            # legitimately flows into evidence_text.
+            "more filler " * 200,
             FORBIDDEN_PUBLIC_VALUES[0],
             FORBIDDEN_PUBLIC_VALUES[1],
             FORBIDDEN_PUBLIC_VALUES[2],
