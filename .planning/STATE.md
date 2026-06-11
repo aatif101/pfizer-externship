@@ -81,15 +81,16 @@ None yet.
 | 260610-3e5 | Refactor dashboard tests to use tmp_path for SQLite db paths (no stray .db files in repo root) | 2026-06-10 | f2bf580 | [260610-3e5-refactor-dashboard-tests-to-use-tmp-path](./quick/260610-3e5-refactor-dashboard-tests-to-use-tmp-path/) |
 | 260610-3kx | Refactor chat/eval dashboard tests to use tmp_path for SQLite db paths | 2026-06-10 | 57ce32f | [260610-3kx-refactor-chat-eval-dashboard-tests-to-us](./quick/260610-3kx-refactor-chat-eval-dashboard-tests-to-us/) |
 | 260610-o8z | Compliance verdict fix: shared field rulebook + visual evidence tier (supersedes D026 via D027) | 2026-06-10 | f2ef4e4 | [260610-o8z-compliance-verdict-fix-shared-field-rule](./quick/260610-o8z-compliance-verdict-fix-shared-field-rule/) |
+| 260611-mw5 | Wire real RAGAS faithfulness + answer_relevancy (Gemini judge) into the eval harness; lazy-import seam, `eval run --with-ragas` CLI, real per-query scores keyed by query_id | 2026-06-11 | cc4556d | [260611-mw5-wire-real-ragas-faithfulness-and-answer-](./quick/260611-mw5-wire-real-ragas-faithfulness-and-answer-/) |
 
 ## Deferred Items
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| *(none)* | | | |
+| Eval coverage | Full 17-query live RAGAS run blocked by free-tier GEMINI_API_KEY quota (5 RPM / 20 RPD); only 2 queries fully scored. Re-run with a paid key for complete faithfulness/answer_relevancy coverage. Code wiring proven end-to-end. | Open | 2026-06-11 (mw5) |
 
 ## Session Continuity
 
-Last session: 2026-04-27T17:53:06.451Z
-Stopped at: context exhaustion at 90% (2026-04-27)
+Last session: 2026-06-11T21:29:04Z
+Stopped at: Completed quick task 260611-mw5 (real RAGAS faithfulness + answer_relevancy wired into eval harness)
 Resume file: None
