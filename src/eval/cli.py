@@ -46,6 +46,17 @@ def run_command(
         typer.echo("status=error run_id=none with_ragas=false reason=db_missing", err=True)
         raise typer.Exit(2)
 
+    # Initialize the Langfuse client from Settings BEFORE the @observe-decorated
+    # run executes. pydantic-settings loads keys into Python objects but not into
+    # os.environ, so langfuse's default env lookup at @observe time would create a
+    # disabled trace; bridging here ensures the run emits a real trace.
+    try:
+        from src.tracing import _ensure_langfuse_initialized
+
+        _ensure_langfuse_initialized()
+    except Exception:  # noqa: BLE001 - tracing is best-effort; never block the eval.
+        pass
+
     k_values = tuple(k) if k else (5, 10)
     try:
         run_id = run_retrieval_eval(
