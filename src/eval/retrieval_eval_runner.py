@@ -18,6 +18,10 @@ import re
 import sqlite3
 import uuid
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.eval.ragas_quality import RagasScorer
 
 from src.eval.operational_metrics import (
     aggregate_cost_metrics,
@@ -72,6 +76,7 @@ def run_retrieval_eval(
     k_values: list[int] | tuple[int, ...] = (5, 10),
     include_latency_cost: bool = False,
     include_ragas: bool = False,
+    ragas_scorer: "RagasScorer | None" = None,
 ) -> str:
     """Run retrieval evaluation and persist an eval_run + metrics.
 
@@ -191,6 +196,13 @@ def run_retrieval_eval(
                 )
                 metric_count += 1
 
+        if include_ragas:
+            _maybe_produce_ragas_observations(
+                db_path,
+                source_run_id=retrieval_run_id,
+                ragas_scorer=ragas_scorer,
+            )
+
         if include_latency_cost or include_ragas:
             metric_count += _maybe_persist_optional_rag_metrics(
                 db_path,
@@ -226,6 +238,43 @@ def run_retrieval_eval(
             error_class=exc.__class__.__name__,
         )
         raise
+
+
+def _maybe_produce_ragas_observations(
+    db_path: str,
+    *,
+    source_run_id: str,
+    ragas_scorer: "RagasScorer | None",
+) -> None:
+    """Produce real RAGAS observation rows before optional aggregation.
+
+    The ``ragas_quality`` import stays inside this branch so the runner module is
+    offline-safe when ragas is absent and ``include_ragas`` is False (the default
+    for the offline test suite). An injected ``ragas_scorer`` lets tests exercise
+    the producer without installing ragas; otherwise the live Gemini-judged scorer
+    is built lazily.
+
+    Prerequisite absence degrades gracefully: when no scorer is injected and the
+    live scorer cannot be built because ragas/langchain are not installed
+    (``ImportError``) or no GEMINI_API_KEY is configured
+    (``AnswerConfigurationError``), RAGAS production is skipped and the run still
+    persists core retrieval metrics. Per-sample judge failures are already
+    isolated inside ``compute_ragas_quality``.
+    """
+
+    from src.eval.ragas_quality import build_ragas_scorer, compute_ragas_quality
+    from src.rag.providers import AnswerConfigurationError
+
+    scorer = ragas_scorer
+    if scorer is None:
+        try:
+            scorer = build_ragas_scorer()
+        except (AnswerConfigurationError, ImportError):
+            # Prerequisites absent (no API key / ragas not installed): degrade
+            # gracefully — skip RAGAS production, keep core metrics.
+            return
+
+    compute_ragas_quality(db_path, source_run_id=source_run_id, scorer=scorer)
 
 
 def _maybe_persist_optional_rag_metrics(

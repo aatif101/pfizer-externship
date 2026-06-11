@@ -372,3 +372,86 @@ def test_retrieval_eval_runner_malformed_observation_marks_sanitized_error(tmp_p
     assert "slow" not in error_metadata_repr
     assert "raw prompt" not in error_metadata_repr
     assert "secret" not in error_metadata_repr
+
+
+def test_run_retrieval_eval_wires_injected_ragas_scorer(tmp_path, monkeypatch):
+    """An injected ragas_scorer flows through include_ragas and lights up aggregates.
+
+    This proves the producer wiring without installing ragas: a fake scorer and a
+    fake answer_fn keep everything offline while the real run_retrieval_eval path
+    produces observation rows that the existing aggregation averages.
+    """
+
+    from src.eval import ragas_quality
+    from src.rag.models import (
+        AnswerCitation,
+        AnswerDiagnostics,
+        AnswerReasonCode,
+        AnswerResult,
+        AnswerStatus,
+    )
+
+    db_path = str(tmp_path / "eval.sqlite")
+    init_db(db_path)
+
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA foreign_keys = ON")
+    try:
+        _insert_document(conn, "d1", "doc1.pdf", ["alpha beta", "gamma delta"])
+        _insert_gold_query(conn, "q1", "alpha")
+        _insert_gold_target(conn, "q1", "d1", 0)
+        conn.commit()
+    finally:
+        conn.close()
+
+    build_retrieval_index(db_path)
+
+    def fake_answer_fn(db, question, *, provider=None, **kwargs):
+        citation = AnswerCitation(
+            doc_id="d1",
+            filename="doc1.pdf",
+            page_num=0,
+            display_page_num=1,
+            snippet="alpha beta",
+            score=0.9,
+        )
+        return AnswerResult(
+            status=AnswerStatus.ANSWERED,
+            answer_text="alpha is present",
+            citations=(citation,),
+            diagnostics=AnswerDiagnostics(
+                status=AnswerStatus.ANSWERED,
+                reason_code=AnswerReasonCode.ANSWERED,
+                run_id="run-1",
+                provider_name="fake",
+                trace_id=None,
+                top_score=0.9,
+                citation_count=1,
+                evidence_reason="ok",
+            ),
+        )
+
+    # Patch the producer's default answer_fn resolution so no live RAG call runs.
+    original_compute = ragas_quality.compute_ragas_quality
+
+    def patched_compute(db, *, source_run_id, scorer, answer_fn=None, provider=None):
+        return original_compute(
+            db,
+            source_run_id=source_run_id,
+            scorer=scorer,
+            answer_fn=fake_answer_fn,
+            provider=object(),
+        )
+
+    monkeypatch.setattr("src.eval.ragas_quality.compute_ragas_quality", patched_compute)
+
+    def fake_scorer(sample):
+        return (0.75, 0.65)
+
+    run_id = run_retrieval_eval(db_path, k_values=(5,), include_ragas=True, ragas_scorer=fake_scorer)
+
+    metric_index = {
+        (m.metric_name, m.scope_type, m.scope_id): m.metric_value for m in list_eval_metrics(db_path, run_id)
+    }
+    assert metric_index[(FAITHFULNESS_AVG, None, None)] == pytest.approx(0.75)
+    assert metric_index[(ANSWER_RELEVANCY_AVG, None, None)] == pytest.approx(0.65)

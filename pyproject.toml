@@ -21,6 +21,8 @@ dependencies = [
     "python-dateutil",
     "psutil",
     "Pillow",
+    "ragas==0.4.3",
+    "langchain-google-genai>=4.0,<5",
 ]
 
 [project.optional-dependencies]
