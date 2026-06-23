@@ -34,6 +34,16 @@ class Settings(BaseSettings):
 
     max_pdf_mb: int = Field(default=100, description="Max PDF file size in MB before rejection")
 
+    retrieval_mode: str = Field(
+        default="text-only",
+        description=(
+            "Retrieval mode: 'text-only' (Phase 1 SQLite-FTS baseline) or "
+            "'visual-fused' (ColQwen2.5 visual tier fused with text via RRF). "
+            "Default 'text-only' keeps existing behavior; 'visual-fused' is the "
+            "Phase 7 benchmark mode and requires a built sdf_page_images index + GPU."
+        ),
+    )
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

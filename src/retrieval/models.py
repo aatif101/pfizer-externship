@@ -102,7 +102,18 @@ class RetrievalIndexStatusReport:
 
 @dataclass(frozen=True)
 class RetrievalScoreComponents:
-    """Compact inspectable scoring factors for one retrieval hit."""
+    """Compact inspectable scoring factors for one retrieval hit.
+
+    ``source`` records which retrieval tier produced the hit and is one of
+    ``{"lexical", "fts", "visual", "fused"}``:
+
+    - ``"lexical"`` / ``"fts"`` — text tier (lexical fallback or FTS5 BM25).
+    - ``"visual"`` — page came only from the ColQwen2.5 visual tier.
+    - ``"fused"`` — page appeared in both tiers and was RRF-fused.
+
+    The field stays a free ``str`` (no enum); the set above is documentation
+    only, so existing text-tier construction is unaffected.
+    """
 
     fts_score: float = 0.0
     lexical_score: float = 0.0

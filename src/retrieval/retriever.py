@@ -37,6 +37,10 @@ _RETRIEVAL_TRACE_ALLOWED_KEYS = frozenset(
         "citation_count",
         "is_strong",
         "error_class",
+        # Numeric / identifier-only keys for the visual-fused tier. NEVER add
+        # image bytes or page-text keys here (privacy boundary, T-05-11).
+        "retrieval_mode",
+        "visual_hit_count",
     }
 )
 
@@ -340,6 +344,87 @@ class EvidenceGate(HybridTextRetriever):
     """Named evidence-gate API for callers that should not use raw retrieval directly."""
 
 
+def _default_visual_query_fn(db_path: str, question: str, *, top_k: int) -> Any:
+    """Local default for the visual seam: refuse to fabricate a score.
+
+    No visual backend (built ``sdf_page_images`` Qdrant collection + GPU query)
+    is wired into the local text-only path. Rather than return a synthetic
+    ranking, this raises a clear error so the metric-integrity rule holds: a real
+    visual ranking only comes from the Colab notebook run. (T-05-13)
+    """
+
+    raise RuntimeError(
+        "visual-fused mode requires a built sdf_page_images index + GPU query — "
+        "run via the Colab notebook"
+    )
+
+
+def _fused_evidence(
+    db_path: str,
+    question: str,
+    *,
+    top_k: int,
+    candidate_limit: int,
+    min_top_score: float,
+    min_query_term_coverage: float,
+    min_hit_count: int,
+    visual_query_fn: Any,
+) -> RetrievalResult:
+    """Visual-fused retrieval seam: text tier + visual tier fused via RRF.
+
+    Obtains the text-tier ranked hits exactly as the text-only path does, then
+    obtains visual ranked hits via ``visual_query_fn`` (which raises locally —
+    the real ranking comes from the notebook), then fuses with ``rrf_fuse`` /
+    ``to_retrieval_hits`` (Plan 02) into the SAME ``RetrievalResult`` the eval
+    harness consumes. No synthetic visual scores ever enter this path.
+    """
+
+    from src.retrieval.visual.fusion import TextLookupRecord, rrf_fuse, to_retrieval_hits
+
+    text_result = EvidenceGate(
+        db_path,
+        candidate_limit=candidate_limit,
+        min_score=min_top_score,
+        min_query_term_coverage=min_query_term_coverage,
+        min_hit_count=min_hit_count,
+    ).retrieve(question, top_k=top_k)
+
+    # Visual ranking — local default raises (no fabricated score). The notebook
+    # supplies a real callable returning ranked (doc_id, page_num) page keys.
+    visual_ranked = list(visual_query_fn(db_path, question, top_k=top_k))
+
+    text_ranked = [(hit.doc_id, hit.page_num) for hit in text_result.hits]
+    lookup = {
+        (hit.doc_id, hit.page_num): TextLookupRecord(
+            filename=hit.filename,
+            snippet=hit.snippet,
+            evidence_text=hit.evidence_text,
+        )
+        for hit in text_result.hits
+    }
+    text_keys = frozenset(text_ranked)
+    visual_only_ids = frozenset(key for key in visual_ranked if key not in text_keys)
+
+    fused = rrf_fuse(visual_ranked, text_ranked)
+    hits = to_retrieval_hits(fused, lookup, visual_only_ids=visual_only_ids)[:top_k]
+    top_score = hits[0].score if hits else 0.0
+    is_strong = bool(hits)
+    reason = (
+        RetrievalEvidenceReason.STRONG_EVIDENCE
+        if is_strong
+        else RetrievalEvidenceReason.NO_MATCH
+    )
+    return RetrievalResult(
+        is_strong=is_strong,
+        reason_code=reason,
+        hits=hits,
+        query_terms=text_result.query_terms,
+        top_score=top_score,
+        run_id=text_result.run_id,
+        content_hash_prefix=text_result.content_hash_prefix,
+    )
+
+
 @observe(name="retrieval_evidence_gate")
 def retrieve_evidence(
     db_path: str,
@@ -350,22 +435,49 @@ def retrieve_evidence(
     min_top_score: float = DEFAULT_MIN_TOP_SCORE,
     min_query_term_coverage: float = DEFAULT_MIN_QUERY_TERM_COVERAGE,
     min_hit_count: int = DEFAULT_MIN_HIT_COUNT,
+    retrieval_mode: str | None = None,
+    visual_query_fn: Any | None = None,
 ) -> RetrievalResult:
     """Return a deterministic strong/weak evidence decision over the index.
 
     The gate checks index status before scoring and returns citation-ready hits
     only for ``strong_evidence`` outcomes. Weak outcomes expose diagnostics but
     never fabricate or leak page evidence.
+
+    ``retrieval_mode`` selects the tier: ``"text-only"`` (default, resolved from
+    ``get_settings().retrieval_mode`` when ``None``) preserves the existing text
+    behavior; ``"visual-fused"`` routes through the RRF fusion seam. The kwarg is
+    optional so existing callers (e.g. the eval runner's
+    ``retrieve_evidence(db_path, query_text, top_k=...)`` call) stay valid.
     """
 
+    if retrieval_mode is None:
+        from src.config import get_settings
+
+        # Defensive getattr: a caller/test may stub get_settings with a partial
+        # Settings object that predates retrieval_mode — fall back to text-only.
+        retrieval_mode = getattr(get_settings(), "retrieval_mode", "text-only")
+
     try:
-        result = EvidenceGate(
-            db_path,
-            candidate_limit=candidate_limit,
-            min_score=min_top_score,
-            min_query_term_coverage=min_query_term_coverage,
-            min_hit_count=min_hit_count,
-        ).retrieve(question, top_k=top_k)
+        if retrieval_mode == "visual-fused":
+            result = _fused_evidence(
+                db_path,
+                question,
+                top_k=top_k,
+                candidate_limit=candidate_limit,
+                min_top_score=min_top_score,
+                min_query_term_coverage=min_query_term_coverage,
+                min_hit_count=min_hit_count,
+                visual_query_fn=visual_query_fn or _default_visual_query_fn,
+            )
+        else:
+            result = EvidenceGate(
+                db_path,
+                candidate_limit=candidate_limit,
+                min_score=min_top_score,
+                min_query_term_coverage=min_query_term_coverage,
+                min_hit_count=min_hit_count,
+            ).retrieve(question, top_k=top_k)
     except Exception as exc:
         _safe_update_trace_metadata(
             {
@@ -374,9 +486,13 @@ def retrieve_evidence(
                 "top_score": 0.0,
                 "citation_count": 0,
                 "error_class": exc.__class__.__name__,
+                "retrieval_mode": retrieval_mode,
             }
         )
         raise
+    visual_hit_count = sum(
+        1 for hit in result.hits if hit.score_components.source in ("visual", "fused")
+    )
     _safe_update_trace_metadata(
         {
             "boundary": "retrieval_evidence",
@@ -385,6 +501,8 @@ def retrieve_evidence(
             "top_score": result.top_score,
             "citation_count": len(result.hits),
             "is_strong": result.is_strong,
+            "retrieval_mode": retrieval_mode,
+            "visual_hit_count": visual_hit_count,
         }
     )
     return result
