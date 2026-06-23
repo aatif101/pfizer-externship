@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: context exhaustion at 90% (2026-04-27)
-last_updated: "2026-04-27T17:53:06.457Z"
-last_activity: 2026-04-27 -- Phase 1 planned (3 plans, 2 waves)
+stopped_at: Completed 05-01-PLAN.md (visual retrieval plumbing foundation — schema, pure builders, gpu marker)
+last_updated: "2026-06-23T21:30:00.000Z"
+last_activity: 2026-06-23 -- Completed Phase 5 Plan 1 (visual tier offline plumbing)
 progress:
   total_phases: 7
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
-  percent: 100
+  total_plans: 11
+  completed_plans: 4
+  percent: 36
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-16)
 
 **Core value:** A pharmaceutical compliance officer can upload supplier documents and immediately see which are expired or at risk, ask natural language questions across the corpus, and trust every answer is grounded in a cited source page.
-**Current focus:** Phase 1: Foundation & Ingestion
+**Current focus:** Phase 5 — Visual Retrieval & Critic Extraction
 
 ## Current Position
 
-Phase: 1 of 7 (Foundation & Ingestion)
-Plan: 0 of 3 in current phase
-Status: Ready to execute
-Last activity: 2026-06-10 - Completed quick task 260610-o8z: Compliance verdict fix — shared field rulebook + visual evidence tier; dashboard now shows 3 green / 1 red / 1 unknown on the real corpus
+Phase: 5 (Visual Retrieval & Critic Extraction) — EXECUTING
+Plan: 2 of 4
+Status: Executing Phase 5
+Last activity: 2026-06-23 -- Completed Phase 5 Plan 1 (visual tier offline plumbing)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██░░░░░░░░] 25%
 
 ## Performance Metrics
 
@@ -91,6 +91,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-11T21:29:04Z
-Stopped at: Completed quick task 260611-mw5 (real RAGAS faithfulness + answer_relevancy wired into eval harness)
+Last session: 2026-06-23T21:30:00Z
+Stopped at: Completed 05-01-PLAN.md (visual retrieval plumbing foundation)
 Resume file: None
