@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 05-01-PLAN.md (visual retrieval plumbing foundation — schema, pure builders, gpu marker)
-last_updated: "2026-06-23T21:30:00.000Z"
-last_activity: 2026-06-23 -- Completed Phase 5 Plan 1 (visual tier offline plumbing)
+stopped_at: Completed 05-02-PLAN.md (visual query payload, RRF fusion, run versioning)
+last_updated: "2026-06-23T21:17:49.556Z"
+last_activity: 2026-06-23
 progress:
   total_phases: 7
   completed_phases: 1
-  total_plans: 11
-  completed_plans: 4
-  percent: 36
+  total_plans: 7
+  completed_plans: 5
+  percent: 71
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-04-16)
 ## Current Position
 
 Phase: 5 (Visual Retrieval & Critic Extraction) — EXECUTING
-Plan: 2 of 4
-Status: Executing Phase 5
-Last activity: 2026-06-23 -- Completed Phase 5 Plan 1 (visual tier offline plumbing)
+Plan: 3 of 4
+Status: Ready to execute
+Last activity: 2026-06-23
 
-Progress: [██░░░░░░░░] 25%
+Progress: [███████░░░] 71%
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Progress: [██░░░░░░░░] 25%
 - Trend: -
 
 *Updated after each plan completion*
+| Phase 05 P02 | 8 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -64,6 +65,7 @@ Recent decisions affecting current work:
 - Docling over PyMuPDF+Tesseract for layout-aware extraction
 - Gemini 2.5 Flash for bulk extraction; Claude Sonnet for critic/final answer
 - Ingestion is offline CLI, not Streamlit-embedded
+- [Phase ?]: RRF stable tie-break on (doc_id,page_num) makes visual+text fused order fully deterministic; offline tests assert RRF math + DTO mapping only (metric-integrity)
 
 ### Pending Todos
 
@@ -91,6 +93,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-23T21:30:00Z
+Last session: 2026-06-23T21:17:28.341Z
 Stopped at: Completed 05-01-PLAN.md (visual retrieval plumbing foundation)
 Resume file: None

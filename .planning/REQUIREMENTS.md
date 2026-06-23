@@ -46,7 +46,7 @@
 ## v2 Requirements (Phase 2 — Differentiated Upgrade)
 
 - [ ] **VISUAL-01**: System indexes each page image with ColQwen2.5-v0.2 embeddings (three named Qdrant vectors: full multivector with HNSW disabled, mean-pooled rows, mean-pooled columns) in a versioned `sdf_page_images` collection
-- [ ] **VISUAL-02**: Retriever uses a two-stage ColQwen2 strategy: mean-pooled HNSW prefetch → full multivector MaxSim reranking — fused with Phase 1 text retrieval candidates
+- [x] **VISUAL-02**: Retriever uses a two-stage ColQwen2 strategy: mean-pooled HNSW prefetch → full multivector MaxSim reranking — fused with Phase 1 text retrieval candidates
 - [ ] **EXTRACT-03**: Extraction uses a critic/reflection loop — extractor proposes fields, critic re-reads the source page image and challenges each claim, disagreements trigger a reconciliation pass (hard cap: 2 iterations)
 - [ ] **EXTRACT-04**: System computes a per-field confidence ensemble score: `0.4 × logprob + 0.4 × self-consistency(k=3) + 0.2 × critic_agreement`; fields below threshold (default 0.75) are routed to the HITL review queue
 - [ ] **HITL-01**: Dashboard HITL tab surfaces low-confidence extractions for human review and correction; corrections update the Compliance DB
