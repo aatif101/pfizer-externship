@@ -246,6 +246,22 @@ CREATE TABLE IF NOT EXISTS retrieval_index_runs (
     error_reason            TEXT
 );
 
+CREATE TABLE IF NOT EXISTS visual_index_runs (
+    run_id                  TEXT PRIMARY KEY,
+    status                  TEXT NOT NULL,
+    built_at                TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    source_document_count   INTEGER NOT NULL DEFAULT 0,
+    source_page_count       INTEGER NOT NULL DEFAULT 0,
+    indexed_page_count      INTEGER NOT NULL DEFAULT 0,
+    content_hash            TEXT,
+    previous_content_hash   TEXT,
+    model_version           TEXT NOT NULL DEFAULT '',
+    collection_name         TEXT NOT NULL DEFAULT '',
+    is_stale                BOOLEAN NOT NULL DEFAULT 0,
+    stale_reason            TEXT,
+    error_reason            TEXT
+);
+
 CREATE TABLE IF NOT EXISTS retrieval_index_pages (
     doc_id             TEXT NOT NULL,
     page_num           INTEGER NOT NULL,
@@ -297,6 +313,8 @@ CREATE INDEX IF NOT EXISTS idx_extraction_usage_status       ON extraction_usage
 CREATE INDEX IF NOT EXISTS idx_extraction_usage_run_doc_stage ON extraction_usage_observations(run_id, doc_id, stage);
 CREATE INDEX IF NOT EXISTS idx_gold_extraction_doc_id        ON gold_extraction_labels(doc_id);
 CREATE INDEX IF NOT EXISTS idx_gold_retrieval_query_text     ON gold_retrieval_queries(query_text);
+CREATE INDEX IF NOT EXISTS idx_visual_runs_built_at         ON visual_index_runs(built_at);
+CREATE INDEX IF NOT EXISTS idx_visual_runs_status           ON visual_index_runs(status);
 CREATE INDEX IF NOT EXISTS idx_retrieval_runs_built_at      ON retrieval_index_runs(built_at);
 CREATE INDEX IF NOT EXISTS idx_retrieval_runs_status        ON retrieval_index_runs(status);
 CREATE INDEX IF NOT EXISTS idx_retrieval_pages_run_id       ON retrieval_index_pages(run_id);
@@ -345,6 +363,7 @@ def init_db(db_path: str) -> None:
         _migrate_extractions_table(conn)
         _migrate_evidence_type_columns(conn)
         _migrate_retrieval_index_pages_table(conn)
+        _migrate_visual_index_runs_table(conn)
         _init_retrieval_index_fts(conn)
         conn.executescript(POST_MIGRATION_INDEX_SQL)
         conn.commit()
@@ -413,6 +432,31 @@ def _migrate_retrieval_index_pages_table(conn: sqlite3.Connection) -> None:
 
     if "snippet" not in existing_columns:
         conn.execute("ALTER TABLE retrieval_index_pages ADD COLUMN snippet TEXT NOT NULL DEFAULT ''")
+
+
+_VISUAL_INDEX_RUNS_MIGRATION_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("model_version", "TEXT NOT NULL DEFAULT ''"),
+    ("collection_name", "TEXT NOT NULL DEFAULT ''"),
+)
+
+
+def _migrate_visual_index_runs_table(conn: sqlite3.Connection) -> None:
+    """Add additive visual-run columns to pre-existing local databases.
+
+    Idempotent: ``CREATE TABLE IF NOT EXISTS`` never alters an existing table, so
+    a database created before ``model_version`` / ``collection_name`` existed gets
+    the columns via guarded ``ALTER TABLE``. Each ALTER runs only when the table
+    exists and the column is missing (mirrors ``_migrate_retrieval_index_pages_table``).
+    """
+
+    existing_columns = _table_columns(conn, "visual_index_runs")
+    if not existing_columns:
+        return
+
+    for column_name, column_def in _VISUAL_INDEX_RUNS_MIGRATION_COLUMNS:
+        if column_name not in existing_columns:
+            conn.execute(f"ALTER TABLE visual_index_runs ADD COLUMN {column_name} {column_def}")
+            existing_columns.add(column_name)
 
 
 def _table_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:

@@ -44,3 +44,6 @@ include = ["src*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-x --tb=short"
+markers = [
+    "gpu: requires a CUDA GPU + the pinned ColQwen/torch/qdrant stack; skipped offline",
+]
