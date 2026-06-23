@@ -84,7 +84,7 @@ Plans:
 Plans:
 - [x] 05-01-PLAN.md — Visual tier foundation: visual_index_runs schema, pure Qdrant collection-config + row/col pooling + blob decode + upsert-payload builders, gpu marker (offline-testable)
 - [x] 05-02-PLAN.md — Two-stage query payload builder, RRF (k=60) fusion → RetrievalHit, versioned visual run persistence (offline-testable)
-- [ ] 05-03-PLAN.md — Integration: retrieval_mode config (text-only|visual-fused), retriever fusion seam, source-tag extension, rq_ex3 gold mojibake repair, privacy allowlist proof
+- [x] 05-03-PLAN.md — Integration: retrieval_mode config (text-only|visual-fused), retriever fusion seam, source-tag extension, rq_ex3 gold mojibake repair, privacy allowlist proof
 - [ ] 05-04-PLAN.md — GPU embedder lazy seam + committed Colab L4 notebook deliverable (real VISUAL-01/02 numbers; Example-3 proof) — autonomous: false (Manual-Only Colab run)
 
 ### Phase 6: Agentic RAG & Observability

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 05-02-PLAN.md (visual query payload, RRF fusion, run versioning)
-last_updated: "2026-06-23T21:17:49.556Z"
+stopped_at: Completed 05-01-PLAN.md (visual retrieval plumbing foundation)
+last_updated: "2026-06-23T21:29:41.552Z"
 last_activity: 2026-06-23
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 7
-  completed_plans: 5
-  percent: 71
+  completed_plans: 6
+  percent: 86
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-04-16)
 ## Current Position
 
 Phase: 5 (Visual Retrieval & Critic Extraction) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-06-23
 
-Progress: [███████░░░] 71%
+Progress: [█████████░] 86%
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Progress: [███████░░░] 71%
 
 *Updated after each plan completion*
 | Phase 05 P02 | 8 min | 3 tasks | 8 files |
+| Phase 05 P03 | 12 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -66,6 +67,8 @@ Recent decisions affecting current work:
 - Gemini 2.5 Flash for bulk extraction; Claude Sonnet for critic/final answer
 - Ingestion is offline CLI, not Streamlit-embedded
 - [Phase ?]: RRF stable tie-break on (doc_id,page_num) makes visual+text fused order fully deterministic; offline tests assert RRF math + DTO mapping only (metric-integrity)
+- [Phase 5 P03]: retrieval_mode config (text-only default | visual-fused) routes retrieve_evidence; visual-fused without a wired backend raises a clear RuntimeError (no fabricated score) — the real ranking comes from the Colab notebook (Plan 04)
+- [Phase 5 P03]: rq_ex3 gold mojibake repaired via guarded idempotent UPDATE (U+FFFD -> Ä); compliance.db never staged; trace allowlist gains numeric/id-only visual keys (retrieval_mode, visual_hit_count)
 
 ### Pending Todos
 
@@ -93,6 +96,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-23T21:17:28.341Z
+Last session: 2026-06-23T21:29:41.530Z
 Stopped at: Completed 05-01-PLAN.md (visual retrieval plumbing foundation)
 Resume file: None
