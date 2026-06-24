@@ -64,10 +64,17 @@ def test_notebook_is_valid_nbformat_v4() -> None:
 
 
 def test_install_cell_pins_the_locked_stack() -> None:
-    """An install cell pins colpali-engine, transformers, and qdrant-client per RESEARCH."""
+    """An install cell pins colpali-engine 0.3.17's actual requirements.
+
+    colpali-engine 0.3.17 requires transformers>=5.3,<6, torch>=2.2,<2.12, and
+    peft>=0.18,<0.20 (verified from its PyPI requires_dist). The earlier
+    transformers>=4.45,<4.50 pin was stale and fails the pip resolver.
+    """
     source = _concatenated_source(_load_notebook())
-    assert "colpali-engine>=0.3.11,<0.4" in source
-    assert "transformers>=4.45,<4.50" in source
+    assert "colpali-engine==0.3.17" in source
+    assert "transformers>=5.3,<6" in source
+    assert "torch>=2.2,<2.12" in source
+    assert "peft>=0.18,<0.20" in source
     assert "qdrant-client>=1.17,<2.0" in source
 
 
