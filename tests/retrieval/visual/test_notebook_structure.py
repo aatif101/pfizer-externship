@@ -147,3 +147,30 @@ def test_notebook_carries_no_secrets() -> None:
     for pattern in secret_patterns:
         match = re.search(pattern, source)
         assert match is None, f"notebook leaks a secret-shaped string: {pattern!r}"
+
+
+def test_notebook_cell_types_are_consistent() -> None:
+    """Guard against scrambled cell types / leftover duplicate cells.
+
+    A prior round of in-place cell edits swapped markdown/code types and left
+    stale duplicate code cells (the old ``colpali_engine.__version__`` print that
+    raises AttributeError). This test makes that class of corruption fail loudly
+    instead of slipping through the grep-only checks above.
+    """
+    nb = _load_notebook()
+    for cell in nb["cells"]:
+        body = _cell_source(cell).lstrip()
+        if cell.get("cell_type") == "markdown":
+            assert not body.startswith(("!pip", "import ", "from ")), (
+                f"markdown cell contains code: {body[:60]!r}"
+            )
+        if cell.get("cell_type") == "code":
+            assert not body.startswith("## "), (
+                f"code cell contains a markdown heading: {body[:60]!r}"
+            )
+    # The pip install must live in a CODE cell (else it never runs).
+    install_cells = [c for c in nb["cells"] if "!pip install" in _cell_source(c)]
+    assert install_cells, "no install cell found"
+    assert all(c.get("cell_type") == "code" for c in install_cells)
+    # colpali_engine exposes no __version__ — that stale pattern must be gone.
+    assert "colpali_engine.__version__" not in _concatenated_source(nb)
