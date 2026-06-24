@@ -121,9 +121,11 @@ def pooled_vectors_for_image(
     from src.retrieval.visual.pooling import mean_pool_rows_cols
 
     # Per-image dynamic grid (handles ColQwen2.5's dynamic resolution).
+    # colpali-engine 0.3.17 signature: get_n_patches(image_size, spatial_merge_size).
+    # It reads patch_size internally from self.image_processor.patch_size, so there is
+    # NO patch_size kwarg (passing one raises TypeError on 0.3.17).
     n_patches_x, n_patches_y = processor.get_n_patches(
-        image_size=image_size,
-        patch_size=model.patch_size,
+        image_size,
         spatial_merge_size=model.spatial_merge_size,
     )
     image_mask = processor.get_image_mask(batch_images)
