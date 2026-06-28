@@ -94,21 +94,32 @@ Task 3 is a `checkpoint:human-verify` (autonomous: false) and was NOT executed h
 - The **Example-3 proof** outcome (the four `rq_ex3_*` gold pages HIT in visual/fused top-k where text missed).
 - The exact loadable **`(colpali-engine, transformers, torch)` version triple** the notebook printed.
 
-### Real Colab L4 numbers (to be filled in after the run)
+### Real Colab L4 numbers (run 2026-06-28) — NEGATIVE RESULT
+
+The notebook ran end-to-end on Colab L4 (all cells green; manifest + `qdrant_storage_artifact.zip` produced, 78 points indexed). **The retrieval numbers DID NOT meet the phase goal — visual-fused is WORSE than text-only on every metric, and the Example-3 proof FAILED.** Recorded verbatim; not massaged.
 
 | Metric | text-only | visual-fused | delta |
 |--------|-----------|--------------|-------|
-| recall@5  | _pending Colab L4 run_ | _pending_ | _pending_ |
-| recall@10 | _pending Colab L4 run_ | _pending_ | _pending_ |
-| citation_acc@5  | _pending_ | _pending_ | _pending_ |
-| citation_acc@10 | _pending_ | _pending_ | _pending_ |
+| recall@5  | 0.647 | 0.529 | **-0.118** |
+| recall@10 | 0.706 | 0.647 | **-0.059** |
+| citation_acc@5  | 0.647 | 0.529 | **-0.118** |
+| citation_acc@10 | 0.706 | 0.647 | **-0.059** |
 
-**rq_ex3 proof:** _pending Colab L4 run_ (expect text miss -> visual/fused HIT for doc `5543408c4dacc48b` page 2 + the other rq_ex3 targets).
+**rq_ex3 proof: FAILED.** All four `rq_ex3_*` queries show `text@5=miss visual@5=miss fused@5=miss` for the gold page `('5543408c4dacc48b', 2)`. The visual tier did NOT make the image-only page retrievable — the opposite of the phase thesis.
 
-**Loadable version triple:** colpali-engine `_pending_`, transformers `_pending_`, torch `_pending_`.
+**Loadable version triple:** colpali-engine `0.3.17`, transformers `5.12.0`, torch `2.11.0+cu128`.
+
+### Analysis (what is and isn't ruled out)
+
+- **NOT a data/label artifact (verified locally).** Doc `5543408c4dacc48b` page 2 is a clean, fully legible "Certificate of Quality" image (1275×1651 RGB, 271 KB, `page_text=0` so text-tier correctly misses it). It plainly contains every queried value — "Certificate of Quality", "ÄKTA™ ready Gradient Flow Section", "Date of Manufacture: 20210126", "Expiration Date: 20230126", "Cytiva". The gold label is correct. This is a genuine visual-retrieval-quality failure on ColQwen's home turf (a crisp text-rich page).
+- **NOT an obvious code bug.** `embedder.embed_queries` uses `processor.process_queries` and `embed_images` uses `process_images` (canonical ColPali); the Qdrant two-stage payload matches the documented mean-pool prefetch + `using="original"` rerank pattern. With 78 pages and `prefetch_limit=200`, all pages are reranked by full-multivector MaxSim, so pooling quality cannot be filtering out the right page.
+- **Leading hypothesis — version regression.** The run loaded **transformers 5.12.0**, far above the `>=4.45,<4.50` ceiling CLAUDE.md pins *specifically to avoid ColQwen2.5 quality/init regressions*. colpali-engine 0.3.17 forced transformers ≥5.3, breaking that constraint. A systemic embedding-quality regression on this newer pair fits the symptom (uniform mediocrity, not a single bad page). UNCONFIRMED — proving it needs GPU experiments (embedding-norm probes, a known-good version pair, retrieval with/without pooling).
+- **Minor, unlikely-to-be-causal:** the `rq_ex3` query text still carries `�KTA` mojibake in the DB, but non-`rq_ex3` queries also underperform, so it is not the systemic cause.
+
+**Status:** VISUAL-01 / VISUAL-02 remain **NOT MET / unclosed**. The notebook is reproducible and the boundary held (no fabricated numbers), but the visual tier does not yet beat text or solve the image-only case. Decision (2026-06-28): record as a negative result and stop; a follow-up debugging effort (version-regression first) is required before the visual tier can be claimed.
 
 ## Self-Check: PASSED
 
 - Files: `src/retrieval/visual/embedder.py`, `tests/retrieval/visual/test_embedder_offline.py`, `notebooks/visual_retrieval_colab.ipynb`, `tests/retrieval/visual/test_notebook_structure.py`, `.planning/phases/05-visual-retrieval-critic-extraction/05-04-SUMMARY.md` — all FOUND.
 - Commits: `28664e3` (Task 1 embedder seam), `3226fc0` (Task 2 notebook + structural test) — both FOUND.
-- Autonomous tasks (1-2) complete and committed; Task 3 is a pending human-verify Colab L4 checkpoint (no numbers fabricated).
+- Autonomous tasks (1-2) complete and committed; Task 3 (human-verify Colab L4 run) EXECUTED 2026-06-28 — real numbers recorded above as a **negative result** (visual-fused < text-only; rq_ex3 proof failed). VISUAL-01/02 remain unclosed pending a version-regression debug. No numbers fabricated.
