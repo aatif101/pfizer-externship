@@ -9,6 +9,7 @@ never image bytes or page text (RESEARCH Pitfall 6/7, T-05-02).
 from __future__ import annotations
 
 import hashlib
+import uuid
 
 COLLECTION_BASENAME = "sdf_page_images"
 
@@ -46,11 +47,14 @@ def build_vectors_config() -> dict:
 def deterministic_point_id(doc_id: str, page_num: int) -> str:
     """Return a stable point id from ``(doc_id, page_num)`` for idempotent re-upsert.
 
-    Mirrors the deterministic-run-id style (``indexer._deterministic_run_id``);
-    a SHA-256 hexdigest so the same page always maps to the same point
+    Qdrant point ids must be an unsigned int or a UUID string — a raw SHA-256
+    hexdigest (64 chars) is rejected by the local client's ``uuid.UUID()`` check.
+    We derive a canonical UUID from the first 16 bytes of the SHA-256 digest of
+    ``doc_id:page_num`` so the same page always maps to the same valid point id
     (RESEARCH Pitfall 8 — resumable build).
     """
-    return hashlib.sha256(f"{doc_id}:{page_num}".encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(f"{doc_id}:{page_num}".encode("utf-8")).digest()
+    return str(uuid.UUID(bytes=digest[:16]))
 
 
 def build_upsert_point(
