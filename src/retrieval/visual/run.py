@@ -87,7 +87,15 @@ def build_visual_index_run(
     Records run metadata only (the GPU embed/Qdrant-upsert step is the notebook's
     job — Plan 04). Persistence is idempotent via ``save_visual_index_run``'s
     ON CONFLICT update.
+
+    Ensures the DB conforms to the current schema first: the visual tier may run
+    against a ``compliance.db`` built before ``visual_index_runs`` existed, and
+    ``init_db`` is idempotent (``CREATE TABLE IF NOT EXISTS`` only — no
+    destructive DDL), so existing rows are never touched.
     """
+    from src.db.schema import init_db
+
+    init_db(db_path)
     run = plan_visual_run(
         pages_meta,
         model_version=model_version,
