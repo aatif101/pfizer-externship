@@ -66,7 +66,7 @@ def build_query_payload(
         "prefetch": prefetch,
         "limit": search_limit,
         "with_payload": True,
-        "with_vector": False,
+        "with_vectors": False,
         "using": "original",
     }
 

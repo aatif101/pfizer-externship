@@ -34,7 +34,7 @@ def test_build_query_payload_two_stage_shape() -> None:
     assert payload["using"] == "original"
     assert payload["limit"] == 20
     assert payload["with_payload"] is True
-    assert payload["with_vector"] is False
+    assert payload["with_vectors"] is False
 
     prefetch = payload["prefetch"]
     assert len(prefetch) == 2
