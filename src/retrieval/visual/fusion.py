@@ -14,7 +14,7 @@ keep ``snippet``/``evidence_text`` empty — no fabricated grounding, mirroring 
 """
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from src.retrieval.models import RetrievalHit, RetrievalScoreComponents
@@ -44,19 +44,92 @@ def rrf_fuse(
     text_ranked: Sequence[PageKey],
     *,
     k: int = 60,
+    text_weight: float = 4.0,
+    visual_weight: float = 1.0,
+    page_text_lengths: Mapping[PageKey, int] | None = None,
+    empty_text_boost: float = 3.0,
+    empty_text_threshold: int = 0,
 ) -> list[tuple[PageKey, float]]:
-    """Fuse two ranked page lists by Reciprocal Rank Fusion (k=60).
+    """Fuse ranked page lists with a deterministic text-first guardrail.
 
-    ``score(page) = Σ_tiers 1 / (k + rank + 1)`` with ``rank`` 0-based, keyed on
-    ``(doc_id, page_num)`` (RESEARCH Pattern 5). Returns ``[(page_key, score)]``
-    sorted by descending fused score with a stable tie-break on the page key
-    ascending, so the fused order is fully deterministic (T-05-09).
+    Scores use weighted RRF with ``text_weight > visual_weight``. Ordering is
+    intentionally gated: text hits keep their original order, visual-only hits
+    append after text hits, and visual-only pages whose original ``page_text`` is
+    empty are ordered before other visual-only pages.
     """
     scores: dict[PageKey, float] = {}
-    for ranked in (visual_ranked, text_ranked):
-        for rank, page_key in enumerate(ranked):
-            scores[page_key] = scores.get(page_key, 0.0) + 1.0 / (k + rank + 1)
-    return sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))
+    for rank, page_key in enumerate(text_ranked):
+        scores[page_key] = scores.get(page_key, 0.0) + text_weight / (k + rank + 1)
+    for rank, page_key in enumerate(visual_ranked):
+        score = visual_weight / (k + rank + 1)
+        if _is_empty_text_page(page_key, page_text_lengths, empty_text_threshold):
+            score += empty_text_boost / (k + rank + 1)
+        scores[page_key] = scores.get(page_key, 0.0) + score
+
+    seen_text: set[PageKey] = set()
+    fused: list[tuple[PageKey, float]] = []
+    for page_key in text_ranked:
+        if page_key in seen_text:
+            continue
+        fused.append((page_key, scores[page_key]))
+        seen_text.add(page_key)
+
+    visual_only = list(dict.fromkeys(page_key for page_key in visual_ranked if page_key not in seen_text))
+    visual_only.sort(
+        key=lambda page_key: (
+            not _is_empty_text_page(page_key, page_text_lengths, empty_text_threshold),
+            -scores[page_key],
+            page_key,
+        )
+    )
+    fused.extend((page_key, scores[page_key]) for page_key in visual_only)
+    return fused
+
+
+def assert_fused_recall_not_below_text(
+    gold_targets_by_query: Mapping[str, Sequence[PageKey]],
+    text_ranked_by_query: Mapping[str, Sequence[PageKey]],
+    fused_ranked_by_query: Mapping[str, Sequence[PageKey]],
+    *,
+    k_values: Sequence[int] = (5, 10),
+) -> None:
+    """Raise if fused page recall drops below text-only for any requested k."""
+
+    for k in k_values:
+        text_recall = _macro_recall_at_k(gold_targets_by_query, text_ranked_by_query, k)
+        fused_recall = _macro_recall_at_k(gold_targets_by_query, fused_ranked_by_query, k)
+        if fused_recall < text_recall:
+            raise AssertionError(
+                f"fused recall@{k}={fused_recall:.6f} is below text-only recall@{k}={text_recall:.6f}"
+            )
+
+
+def _macro_recall_at_k(
+    gold_targets_by_query: Mapping[str, Sequence[PageKey]],
+    ranked_by_query: Mapping[str, Sequence[PageKey]],
+    k: int,
+) -> float:
+    if k <= 0:
+        raise ValueError("k must be >= 1")
+    recalls: list[float] = []
+    for query_id, targets in gold_targets_by_query.items():
+        gold = set(targets)
+        if not gold:
+            recalls.append(0.0)
+            continue
+        retrieved = set((ranked_by_query.get(query_id) or [])[:k])
+        recalls.append(len(gold.intersection(retrieved)) / len(gold))
+    return sum(recalls) / len(recalls) if recalls else 0.0
+
+
+def _is_empty_text_page(
+    page_key: PageKey,
+    page_text_lengths: Mapping[PageKey, int] | None,
+    empty_text_threshold: int,
+) -> bool:
+    if page_text_lengths is None:
+        return False
+    return int(page_text_lengths.get(page_key, empty_text_threshold + 1)) <= empty_text_threshold
 
 
 def to_retrieval_hits(

@@ -415,7 +415,8 @@ def _fused_evidence(
     text_keys = frozenset(text_ranked)
     visual_only_ids = frozenset(key for key in visual_ranked if key not in text_keys)
 
-    fused = rrf_fuse(visual_ranked, text_ranked)
+    page_text_lengths = _load_page_text_lengths(db_path, set(visual_ranked).union(text_ranked))
+    fused = rrf_fuse(visual_ranked, text_ranked, page_text_lengths=page_text_lengths)
     hits = to_retrieval_hits(fused, lookup, visual_only_ids=visual_only_ids)[:top_k]
     top_score = hits[0].score if hits else 0.0
     is_strong = bool(hits)
@@ -433,6 +434,28 @@ def _fused_evidence(
         run_id=text_result.run_id,
         content_hash_prefix=text_result.content_hash_prefix,
     )
+
+
+def _load_page_text_lengths(db_path: str, page_keys: set[tuple[str, int]]) -> dict[tuple[str, int], int]:
+    if not page_keys:
+        return {}
+    conn = _connect(db_path)
+    try:
+        lengths: dict[tuple[str, int], int] = {}
+        for doc_id, page_num in page_keys:
+            row = conn.execute(
+                """
+                SELECT LENGTH(TRIM(COALESCE(page_text, '')))
+                FROM pages
+                WHERE doc_id = ? AND page_num = ?
+                """,
+                (doc_id, page_num),
+            ).fetchone()
+            if row is not None:
+                lengths[(doc_id, page_num)] = int(row[0])
+        return lengths
+    finally:
+        conn.close()
 
 
 @observe(name="retrieval_evidence_gate")
