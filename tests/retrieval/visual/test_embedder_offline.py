@@ -68,6 +68,72 @@ def test_load_colqwen_raises_importerror_when_deps_absent() -> None:
         load_colqwen()
 
 
+def test_load_report_marks_colqwen_base_and_lora_keys_critical() -> None:
+    """Critical missing/unexpected keys are detected without loading a model."""
+
+    from src.retrieval.visual.embedder import (
+        assert_colqwen_load_report_clean,
+        is_critical_colqwen_load_key,
+        summarize_load_report,
+    )
+
+    assert is_critical_colqwen_load_key("language_model.embed_tokens.weight")
+    assert is_critical_colqwen_load_key("language_model.layers.3.mlp.down_proj.lora_A.default.weight")
+    assert is_critical_colqwen_load_key("model.layers.3.mlp.down_proj.lora_B.default.weight")
+    assert not is_critical_colqwen_load_key("lm_head.weight")
+
+    report = summarize_load_report(
+        {
+            "missing_keys": [
+                "language_model.embed_tokens.weight",
+                "language_model.layers.3.mlp.down_proj.lora_A.default.weight",
+            ],
+            "unexpected_keys": ["model.layers.3.mlp.down_proj.lora_A.default.weight"],
+            "mismatched_keys": [],
+        }
+    )
+    assert report["critical_missing_count"] == 2
+    assert report["critical_unexpected_count"] == 1
+    with pytest.raises(RuntimeError, match="critical missing/unexpected/mismatched keys"):
+        assert_colqwen_load_report_clean(report)
+
+
+def test_clean_load_report_passes() -> None:
+    """A clean load report does not raise the ColQwen acceptance guard."""
+
+    from src.retrieval.visual.embedder import assert_colqwen_load_report_clean, summarize_load_report
+
+    report = summarize_load_report({"missing_keys": [], "unexpected_keys": [], "mismatched_keys": []})
+    assert report["critical_missing_count"] == 0
+    assert_colqwen_load_report_clean(report)
+
+
+def test_get_n_patches_compat_supports_old_and_new_colpali_signatures() -> None:
+    """The pooling seam supports 0.3.9 and 0.3.17+ processor signatures."""
+
+    from src.retrieval.visual import embedder
+
+    class Model:
+        patch_size = 14
+        spatial_merge_size = 2
+
+    class NewProcessor:
+        def get_n_patches(self, image_size, *, spatial_merge_size):  # noqa: ANN001
+            assert image_size == (768, 1024)
+            assert spatial_merge_size == 2
+            return (12, 18)
+
+    class OldProcessor:
+        def get_n_patches(self, image_size, *, patch_size, spatial_merge_size):  # noqa: ANN001
+            assert image_size == (768, 1024)
+            assert patch_size == 14
+            assert spatial_merge_size == 2
+            return (11, 17)
+
+    assert embedder._get_n_patches_compat(NewProcessor(), Model(), (768, 1024)) == (12, 18)
+    assert embedder._get_n_patches_compat(OldProcessor(), Model(), (768, 1024)) == (11, 17)
+
+
 @pytest.mark.gpu
 def test_embed_one_image_shape_smoke() -> None:
     """GPU smoke: load the real model and confirm the per-token embedding dim.

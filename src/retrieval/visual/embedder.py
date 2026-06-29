@@ -19,6 +19,7 @@ or page text.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any
 
 # The locked model checkpoint (CLAUDE.md / 05-CONTEXT.md): Qwen2.5-VL-3B backbone,
 # dynamic resolution up to 768 patches, ColBERT-style multivector output.
@@ -30,7 +31,8 @@ def load_colqwen(
     *,
     dtype: str = "bfloat16",
     device: str = "cuda:0",
-) -> tuple["object", "object"]:
+    return_load_report: bool = False,
+) -> tuple["object", "object"] | tuple["object", "object", dict[str, Any]]:
     """Load the REAL ColQwen2.5 model + processor (GPU/notebook execution only).
 
     ``torch`` and ``colpali_engine`` are imported lazily INSIDE this function body,
@@ -39,19 +41,102 @@ def load_colqwen(
     heavy deps are never required just to import the module).
 
     Returns ``(model, processor)`` where ``model`` is loaded in ``dtype`` (bf16 on
-    L4) on ``device`` and set to ``.eval()``. Never fabricates a model — the real
-    weights are downloaded from Hugging Face on first call (vidore/colqwen2.5-v0.2).
+    L4) on ``device`` and set to ``.eval()``. When ``return_load_report=True``,
+    returns ``(model, processor, report)`` where ``report`` is a JSON-safe summary
+    of Hugging Face's ``output_loading_info`` keys. Never fabricates a model — the
+    real weights are downloaded from Hugging Face on first call
+    (vidore/colqwen2.5-v0.2).
     """
     import torch
     from colpali_engine.models import ColQwen2_5, ColQwen2_5_Processor
 
-    model = ColQwen2_5.from_pretrained(
+    loaded = ColQwen2_5.from_pretrained(
         model_id,
         torch_dtype=getattr(torch, dtype),
         device_map=device,
-    ).eval()
+        output_loading_info=return_load_report,
+    )
+    loading_info: dict[str, Any] = {}
+    if return_load_report and isinstance(loaded, tuple):
+        model, loading_info = loaded
+    else:
+        model = loaded
+
+    model = model.eval()
     processor = ColQwen2_5_Processor.from_pretrained(model_id)
+    if return_load_report:
+        return model, processor, summarize_load_report(loading_info)
     return model, processor
+
+
+def summarize_load_report(loading_info: dict[str, Any] | None) -> dict[str, Any]:
+    """Return a JSON-safe critical-key summary from HF loading diagnostics.
+
+    The Colab acceptance cell uses this to catch the exact failure seen in the
+    2026-06-28 L4 run: dropped/reinitialized ``embed_tokens``/``norm`` tensors
+    and unapplied LoRA adapter keys. Key names are metadata only; no weights,
+    text, image bytes, or secrets are included.
+    """
+
+    info = loading_info or {}
+    missing = _string_list(info.get("missing_keys"))
+    unexpected = _string_list(info.get("unexpected_keys"))
+    mismatched = _string_list(info.get("mismatched_keys"))
+    critical_missing = [key for key in missing if is_critical_colqwen_load_key(key)]
+    critical_unexpected = [key for key in unexpected if is_critical_colqwen_load_key(key)]
+    critical_mismatched = [key for key in mismatched if is_critical_colqwen_load_key(key)]
+    return {
+        "missing_count": len(missing),
+        "unexpected_count": len(unexpected),
+        "mismatched_count": len(mismatched),
+        "critical_missing_count": len(critical_missing),
+        "critical_unexpected_count": len(critical_unexpected),
+        "critical_mismatched_count": len(critical_mismatched),
+        "missing_keys": missing,
+        "unexpected_keys": unexpected,
+        "mismatched_keys": mismatched,
+        "critical_missing_keys": critical_missing,
+        "critical_unexpected_keys": critical_unexpected,
+        "critical_mismatched_keys": critical_mismatched,
+    }
+
+
+def assert_colqwen_load_report_clean(report: dict[str, Any]) -> None:
+    """Raise when ColQwen2.5 loading dropped critical base or LoRA weights."""
+
+    critical = (
+        list(report.get("critical_missing_keys") or [])
+        + list(report.get("critical_unexpected_keys") or [])
+        + list(report.get("critical_mismatched_keys") or [])
+    )
+    if critical:
+        preview = ", ".join(str(key) for key in critical[:20])
+        if len(critical) > 20:
+            preview += f", ... (+{len(critical) - 20} more)"
+        raise RuntimeError(f"ColQwen2.5 load report has critical missing/unexpected/mismatched keys: {preview}")
+
+
+def is_critical_colqwen_load_key(key: str) -> bool:
+    """Return whether a load-report key proves the ColQwen retriever is broken."""
+
+    normalized = str(key)
+    return (
+        "embed_tokens" in normalized
+        or normalized.endswith(".norm.weight")
+        or ".lora_" in normalized
+        or normalized.startswith("model.norm")
+        or normalized.startswith("model.embed_tokens")
+        or normalized.startswith("language_model.norm")
+        or normalized.startswith("language_model.embed_tokens")
+    )
+
+
+def _string_list(value: object) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        return [str(item) for item in value]
+    return [str(value)]
 
 
 def embed_images(model: "object", processor: "object", images: Sequence["object"]) -> "object":
@@ -121,13 +206,7 @@ def pooled_vectors_for_image(
     from src.retrieval.visual.pooling import mean_pool_rows_cols
 
     # Per-image dynamic grid (handles ColQwen2.5's dynamic resolution).
-    # colpali-engine 0.3.17 signature: get_n_patches(image_size, spatial_merge_size).
-    # It reads patch_size internally from self.image_processor.patch_size, so there is
-    # NO patch_size kwarg (passing one raises TypeError on 0.3.17).
-    n_patches_x, n_patches_y = processor.get_n_patches(
-        image_size,
-        spatial_merge_size=model.spatial_merge_size,
-    )
+    n_patches_x, n_patches_y = _get_n_patches_compat(processor, model, image_size)
     image_mask = processor.get_image_mask(batch_images)
 
     emb = image_embeddings[i]
@@ -136,11 +215,35 @@ def pooled_vectors_for_image(
     return mean_pool_rows_cols(emb, mask, n_patches_x, n_patches_y, dim)
 
 
+def _get_n_patches_compat(processor: "object", model: "object", image_size: tuple[int, int]) -> tuple[int, int]:
+    """Call ``get_n_patches`` across colpali-engine 0.3.9 and 0.3.17+.
+
+    0.3.9 requires ``patch_size`` explicitly; 0.3.17+ reads it from the image
+    processor and rejects the kwarg. Supporting both lets the notebook default to
+    the pre-Transformers-5 fallback while preserving the current-main experiment.
+    """
+
+    try:
+        return processor.get_n_patches(
+            image_size,
+            spatial_merge_size=model.spatial_merge_size,
+        )
+    except TypeError:
+        return processor.get_n_patches(
+            image_size,
+            patch_size=model.patch_size,
+            spatial_merge_size=model.spatial_merge_size,
+        )
+
+
 __all__ = [
     "DEFAULT_MODEL_ID",
+    "assert_colqwen_load_report_clean",
     "load_colqwen",
     "embed_images",
     "embed_queries",
+    "is_critical_colqwen_load_key",
     "process_image_batch",
     "pooled_vectors_for_image",
+    "summarize_load_report",
 ]

@@ -15,6 +15,7 @@ VISUAL-01/VISUAL-02 numbers come only from the manual Colab L4 run
 from __future__ import annotations
 
 import importlib.util
+import ast
 import json
 import re
 from pathlib import Path
@@ -63,19 +64,18 @@ def test_notebook_is_valid_nbformat_v4() -> None:
         nbformat.validate(nbformat.read(str(NOTEBOOK_PATH), as_version=4))
 
 
-def test_install_cell_pins_the_locked_stack() -> None:
-    """An install cell pins colpali-engine 0.3.17's actual requirements.
-
-    colpali-engine 0.3.17 requires transformers>=5.3,<6, torch>=2.2,<2.12, and
-    peft>=0.18,<0.20 (verified from its PyPI requires_dist). The earlier
-    transformers>=4.45,<4.50 pin was stale and fails the pip resolver.
-    """
+def test_install_cell_pins_the_primary_fixed_stack() -> None:
+    """An install cell pins the primary pre-Transformers-5 ColQwen2.5 stack."""
     source = _concatenated_source(_load_notebook())
-    assert "colpali-engine==0.3.17" in source
-    assert "transformers>=5.3,<6" in source
-    assert "torch>=2.2,<2.12" in source
-    assert "peft>=0.18,<0.20" in source
+    assert "colpali-engine==0.3.9" in source
+    assert "transformers>=4.50,<4.51" in source
+    assert "torch==2.6.0" in source
+    assert "torchvision==0.21.0" in source
+    assert "peft>=0.14,<0.15" in source
+    assert "accelerate>=0.34,<1.4" in source
     assert "qdrant-client>=1.17,<2.0" in source
+    # Fallback Option A is documented but not the default install path.
+    assert "c23838d920a7c426ee297034211cff2f55da65dc" in source
 
 
 def test_notebook_loads_the_locked_model() -> None:
@@ -83,6 +83,17 @@ def test_notebook_loads_the_locked_model() -> None:
     source = _concatenated_source(_load_notebook())
     assert "vidore/colqwen2.5-v0.2" in source
     assert "load_colqwen" in source
+
+
+def test_notebook_has_load_report_acceptance_gate() -> None:
+    """The notebook fails loudly on missing/unexpected ColQwen base or LoRA keys."""
+    source = _concatenated_source(_load_notebook())
+    assert "return_load_report=True" in source
+    assert "LOAD_REPORT" in source
+    assert "assert_colqwen_load_report_clean" in source
+    assert "STRICT_ZERO_LOAD_MISSING" in source
+    for token in ("missing_count", "unexpected_count", "mismatched_count"):
+        assert token in source
 
 
 def test_notebook_imports_shared_pure_builders() -> None:
@@ -131,6 +142,19 @@ def test_notebook_runs_text_only_vs_visual_fused_eval() -> None:
     assert "text-only" in source and "visual-fused" in source
 
 
+def test_notebook_records_full_rank_report_and_rq_ex3_acceptance() -> None:
+    """The notebook exports the diagnostic artifact and enforces the rq_ex3 gate."""
+    source = _concatenated_source(_load_notebook())
+    assert "VISUAL_SEARCH_LIMIT = len(pages)" in source
+    assert "visual_hits_by_query" in source
+    assert "per_query_target_ranks" in source
+    assert "top10_visual_hits" in source
+    assert "visual_retrieval_run_report.json" in source
+    assert "visual_retrieval_run_report.md" in source
+    assert "RQ_EX3_VISUAL_RANK_THRESHOLD = 10" in source
+    assert "rq_ex3_rank_failures" in source
+
+
 def test_notebook_carries_no_secrets() -> None:
     """The committed notebook contains NO secret-shaped strings (threat T-05-16).
 
@@ -174,3 +198,24 @@ def test_notebook_cell_types_are_consistent() -> None:
     assert all(c.get("cell_type") == "code" for c in install_cells)
     # colpali_engine exposes no __version__ — that stale pattern must be gone.
     assert "colpali_engine.__version__" not in _concatenated_source(nb)
+
+
+def test_notebook_code_cells_parse_as_python_after_shell_lines_removed() -> None:
+    """Catch broken code-cell strings that grep tests cannot see.
+
+    Colab allows ``!pip`` shell escapes, so those lines are replaced with
+    ``pass`` before parsing. The rest of each code cell must be valid Python.
+    """
+    nb = _load_notebook()
+    for cell in nb["cells"]:
+        if cell.get("cell_type") != "code":
+            continue
+        source = _cell_source(cell)
+        parseable_lines = [
+            "pass" if line.lstrip().startswith(("!", "%")) else line
+            for line in source.splitlines()
+        ]
+        try:
+            ast.parse("\n".join(parseable_lines))
+        except SyntaxError as exc:  # pragma: no cover - assertion path
+            raise AssertionError(f"code cell {cell.get('id')} is not parseable: {exc}") from exc
