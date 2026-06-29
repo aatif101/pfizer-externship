@@ -206,13 +206,42 @@ def pooled_vectors_for_image(
     from src.retrieval.visual.pooling import mean_pool_rows_cols
 
     # Per-image dynamic grid (handles ColQwen2.5's dynamic resolution).
-    n_patches_x, n_patches_y = _get_n_patches_compat(processor, model, image_size)
+    n_patches_x, n_patches_y = _n_patches_for_image(
+        processor, model, batch_images, i, image_size
+    )
     image_mask = processor.get_image_mask(batch_images)
 
     emb = image_embeddings[i]
     mask = image_mask[i]
     dim = emb.shape[-1]  # A2: derive dim from the embedding, do not assume 128
     return mean_pool_rows_cols(emb, mask, n_patches_x, n_patches_y, dim)
+
+
+def _n_patches_for_image(
+    processor: "object",
+    model: "object",
+    batch_images: "object",
+    i: int,
+    image_size: tuple[int, int],
+) -> tuple[int, int]:
+    """Return ``(n_patches_x, n_patches_y)`` for the i-th image, version-robustly.
+
+    Primary path derives the token grid from the processor-computed
+    ``image_grid_thw`` (patch units, pre spatial-merge): ``n_patches_x = w //
+    merge`` (cols/width), ``n_patches_y = h // merge`` (rows/height). This avoids
+    ``get_n_patches`` entirely, whose signature AND internals diverge across
+    colpali-engine versions — 0.3.9 requires ``patch_size`` and then references a
+    missing ``processor.factor`` attribute, while 0.3.17+ rejects the kwarg.
+    Falls back to ``_get_n_patches_compat`` only when the grid is unavailable.
+    """
+    merge = int(getattr(model, "spatial_merge_size", 2)) or 1
+    try:
+        grid = batch_images["image_grid_thw"][i]
+        h = int(grid[1])
+        w = int(grid[2])
+        return w // merge, h // merge
+    except (KeyError, TypeError, IndexError):
+        return _get_n_patches_compat(processor, model, image_size)
 
 
 def _get_n_patches_compat(processor: "object", model: "object", image_size: tuple[int, int]) -> tuple[int, int]:
