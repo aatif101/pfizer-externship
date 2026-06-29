@@ -634,7 +634,7 @@ def get_latest_retrieval_index_run_id(db_path: str) -> str | None:
             """
             SELECT run_id
             FROM retrieval_index_runs
-            ORDER BY built_at DESC, run_id DESC
+            ORDER BY built_at DESC, rowid DESC
             LIMIT 1
             """
         ).fetchone()

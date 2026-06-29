@@ -56,6 +56,9 @@ class IndexablePage:
     page_num: int
     normalized_text: str
     snippet: str
+    text_source: str
+    has_ocr_text: bool
+    ocr_text_sha256: str | None
 
 
 @dataclass(frozen=True)
@@ -96,7 +99,18 @@ def build_retrieval_index(db_path: str) -> RetrievalIndexBuildResult:
             stale_reason=None,
             error_reason=None,
         )
-        page_inputs = [PageIndexInput(page.doc_id, page.page_num, page.filename, page.normalized_text) for page in pages]
+        page_inputs = [
+            PageIndexInput(
+                page.doc_id,
+                page.page_num,
+                page.filename,
+                page.normalized_text,
+                text_source=page.text_source,
+                has_ocr_text=page.has_ocr_text,
+                ocr_text_sha256=page.ocr_text_sha256,
+            )
+            for page in pages
+        ]
         snippets = {(page.doc_id, page.page_num): page.snippet for page in pages}
         records = save_index_run_with_pages(db_path, run, page_inputs, snippets=snippets)
         _safe_update_trace_metadata(
@@ -179,17 +193,39 @@ def get_retrieval_index_status(db_path: str) -> RetrievalIndexStatusReport:
 
 
 def load_indexable_pages(db_path: str) -> tuple[IndexablePage, ...]:
-    """Load ingested pages with nonblank text in deterministic index order."""
+    """Load ingested pages with original and OCR-derived text in index order."""
 
     conn = _connect(db_path)
     try:
         rows = conn.execute(
             """
-            SELECT d.doc_id, d.filename, d.page_count, d.status, p.page_num, p.page_text
+            WITH ocr AS (
+                SELECT
+                    doc_id,
+                    page_num,
+                    GROUP_CONCAT(generated_text, char(10)) AS ocr_text,
+                    GROUP_CONCAT(text_sha256, ',') AS ocr_text_sha256
+                FROM page_ocr_texts
+                WHERE TRIM(COALESCE(generated_text, '')) <> ''
+                GROUP BY doc_id, page_num
+            )
+            SELECT
+                d.doc_id,
+                d.filename,
+                d.page_count,
+                d.status,
+                p.page_num,
+                p.page_text,
+                COALESCE(ocr.ocr_text, '') AS ocr_text,
+                ocr.ocr_text_sha256
             FROM documents d
             JOIN pages p ON p.doc_id = d.doc_id
+            LEFT JOIN ocr ON ocr.doc_id = p.doc_id AND ocr.page_num = p.page_num
             WHERE d.status = ?
-              AND TRIM(COALESCE(p.page_text, '')) <> ''
+              AND (
+                TRIM(COALESCE(p.page_text, '')) <> ''
+                OR TRIM(COALESCE(ocr.ocr_text, '')) <> ''
+              )
             ORDER BY d.doc_id ASC, p.page_num ASC
             """,
             ("ingested",),
@@ -197,18 +233,36 @@ def load_indexable_pages(db_path: str) -> tuple[IndexablePage, ...]:
     finally:
         conn.close()
 
-    return tuple(
-        IndexablePage(
-            doc_id=row[0],
-            filename=row[1],
-            page_count=row[2],
-            status=row[3],
-            page_num=row[4],
-            normalized_text=normalize_index_text(row[5]),
-            snippet=make_page_snippet(row[5]),
+    pages: list[IndexablePage] = []
+    for row in rows:
+        original_text = row[5] or ""
+        ocr_text = row[6] or ""
+        has_original = bool(normalize_index_text(original_text))
+        has_ocr = bool(normalize_index_text(ocr_text))
+        if has_original and has_ocr:
+            text_source = "original+ocr"
+            combined_text = f"{original_text}\n{ocr_text}"
+        elif has_ocr:
+            text_source = "ocr"
+            combined_text = ocr_text
+        else:
+            text_source = "original"
+            combined_text = original_text
+        pages.append(
+            IndexablePage(
+                doc_id=row[0],
+                filename=row[1],
+                page_count=row[2],
+                status=row[3],
+                page_num=row[4],
+                normalized_text=normalize_index_text(combined_text),
+                snippet=make_page_snippet(combined_text),
+                text_source=text_source,
+                has_ocr_text=has_ocr,
+                ocr_text_sha256=row[7],
+            )
         )
-        for row in rows
-    )
+    return tuple(pages)
 
 
 def compute_indexable_corpus_fingerprint(pages: tuple[IndexablePage, ...]) -> CorpusFingerprint:
@@ -224,6 +278,9 @@ def compute_indexable_corpus_fingerprint(pages: tuple[IndexablePage, ...]) -> Co
             page.page_count,
             page.status,
             page.page_num,
+            page.text_source,
+            page.has_ocr_text,
+            page.ocr_text_sha256 or "",
             page.normalized_text,
         ):
             digest.update(str(value).encode("utf-8"))

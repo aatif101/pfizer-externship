@@ -117,6 +117,8 @@ class _Candidate:
     filename: str
     indexed_snippet: str
     page_text: str
+    text_source: str
+    has_ocr_text: bool
     fts_rank: float | None = None
 
 
@@ -263,7 +265,9 @@ class HybridTextRetriever:
                     COALESCE(rp.display_page_num, f.page_num + 1) AS display_page_num,
                     rp.filename,
                     rp.snippet,
-                    COALESCE(p.page_text, '') AS page_text,
+                    COALESCE(NULLIF(p.page_text, ''), f.page_text, '') AS page_text,
+                    COALESCE(rp.text_source, 'original') AS text_source,
+                    COALESCE(rp.has_ocr_text, 0) AS has_ocr_text,
                     bm25(retrieval_index_page_fts) AS fts_rank
                 FROM retrieval_index_page_fts f
                 JOIN retrieval_index_pages rp
@@ -294,7 +298,9 @@ class HybridTextRetriever:
                     rp.display_page_num,
                     rp.filename,
                     rp.snippet,
-                    COALESCE(p.page_text, '') AS page_text,
+                    COALESCE(NULLIF(p.page_text, ''), rp.snippet, '') AS page_text,
+                    COALESCE(rp.text_source, 'original') AS text_source,
+                    COALESCE(rp.has_ocr_text, 0) AS has_ocr_text,
                     NULL AS fts_rank
                 FROM retrieval_index_pages rp
                 LEFT JOIN pages p
@@ -337,6 +343,8 @@ class HybridTextRetriever:
             score_components=components,
             snippet=make_query_snippet(text, terms),
             evidence_text=_bounded_evidence_text(candidate.page_text, fallback=candidate.indexed_snippet),
+            text_source=candidate.text_source,
+            has_ocr_text=candidate.has_ocr_text,
         )
 
 
@@ -399,6 +407,8 @@ def _fused_evidence(
             filename=hit.filename,
             snippet=hit.snippet,
             evidence_text=hit.evidence_text,
+            text_source=hit.text_source,
+            has_ocr_text=hit.has_ocr_text,
         )
         for hit in text_result.hits
     }
@@ -589,6 +599,8 @@ def _candidate_from_row(row: sqlite3.Row) -> _Candidate:
         filename=row["filename"],
         indexed_snippet=row["snippet"] or "",
         page_text=row["page_text"] or "",
+        text_source=row["text_source"] or "original",
+        has_ocr_text=bool(row["has_ocr_text"]),
         fts_rank=float(row["fts_rank"]) if row["fts_rank"] is not None else None,
     )
 

@@ -30,6 +30,19 @@ CREATE TABLE IF NOT EXISTS pages (
     UNIQUE (doc_id, page_num)
 );
 
+CREATE TABLE IF NOT EXISTS page_ocr_texts (
+    doc_id             TEXT NOT NULL,
+    page_num           INTEGER NOT NULL,
+    source             TEXT NOT NULL,
+    generated_text     TEXT NOT NULL,
+    text_sha256        TEXT NOT NULL,
+    page_image_sha256  TEXT NOT NULL,
+    created_at         TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    updated_at         TIMESTAMP,
+    PRIMARY KEY (doc_id, page_num, source),
+    FOREIGN KEY (doc_id, page_num) REFERENCES pages(doc_id, page_num) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS extractions (
     extraction_id     INTEGER PRIMARY KEY AUTOINCREMENT,
     doc_id            TEXT NOT NULL REFERENCES documents(doc_id) ON DELETE CASCADE,
@@ -270,6 +283,9 @@ CREATE TABLE IF NOT EXISTS retrieval_index_pages (
     text_sha256        TEXT NOT NULL,
     text_length        INTEGER NOT NULL,
     snippet            TEXT NOT NULL DEFAULT '',
+    text_source        TEXT NOT NULL DEFAULT 'original',
+    has_ocr_text       BOOLEAN NOT NULL DEFAULT 0,
+    ocr_text_sha256    TEXT,
     run_id             TEXT NOT NULL REFERENCES retrieval_index_runs(run_id) ON DELETE CASCADE,
     indexed_at         TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
     PRIMARY KEY (doc_id, page_num),
@@ -277,6 +293,8 @@ CREATE TABLE IF NOT EXISTS retrieval_index_pages (
 );
 
 CREATE INDEX IF NOT EXISTS idx_pages_doc_id                 ON pages(doc_id);
+CREATE INDEX IF NOT EXISTS idx_page_ocr_texts_source        ON page_ocr_texts(source);
+CREATE INDEX IF NOT EXISTS idx_page_ocr_texts_updated       ON page_ocr_texts(updated_at);
 CREATE INDEX IF NOT EXISTS idx_extractions_doc_id           ON extractions(doc_id);
 CREATE INDEX IF NOT EXISTS idx_extractions_trace_id         ON extractions(trace_id);
 CREATE INDEX IF NOT EXISTS idx_compliance_review_state      ON compliance_records(review_state);
@@ -345,6 +363,7 @@ _EVIDENCE_TYPE_MIGRATIONS: tuple[tuple[str, str, str], ...] = (
 POST_MIGRATION_INDEX_SQL = """
 CREATE INDEX IF NOT EXISTS idx_extractions_review_state ON extractions(review_state);
 CREATE INDEX IF NOT EXISTS idx_extractions_needs_review ON extractions(needs_review);
+CREATE INDEX IF NOT EXISTS idx_retrieval_pages_text_source ON retrieval_index_pages(text_source);
 """
 
 
@@ -430,8 +449,16 @@ def _migrate_retrieval_index_pages_table(conn: sqlite3.Connection) -> None:
     if not existing_columns:
         return
 
-    if "snippet" not in existing_columns:
-        conn.execute("ALTER TABLE retrieval_index_pages ADD COLUMN snippet TEXT NOT NULL DEFAULT ''")
+    migrations = (
+        ("snippet", "TEXT NOT NULL DEFAULT ''"),
+        ("text_source", "TEXT NOT NULL DEFAULT 'original'"),
+        ("has_ocr_text", "BOOLEAN NOT NULL DEFAULT 0"),
+        ("ocr_text_sha256", "TEXT"),
+    )
+    for column_name, column_def in migrations:
+        if column_name not in existing_columns:
+            conn.execute(f"ALTER TABLE retrieval_index_pages ADD COLUMN {column_name} {column_def}")
+            existing_columns.add(column_name)
 
 
 _VISUAL_INDEX_RUNS_MIGRATION_COLUMNS: tuple[tuple[str, str], ...] = (

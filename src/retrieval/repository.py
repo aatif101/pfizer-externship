@@ -42,6 +42,9 @@ _SAFE_PAGE_COLUMNS = (
     "text_sha256",
     "text_length",
     "snippet",
+    "text_source",
+    "has_ocr_text",
+    "ocr_text_sha256",
     "run_id",
     "indexed_at",
 )
@@ -176,7 +179,7 @@ def load_latest_index_run(db_path: str) -> RetrievalIndexRun | None:
             f"""
             SELECT {', '.join(_SAFE_RUN_COLUMNS)}
             FROM retrieval_index_runs
-            ORDER BY built_at DESC, run_id DESC
+            ORDER BY built_at DESC, rowid DESC
             LIMIT 1
             """
         ).fetchone()
@@ -209,14 +212,18 @@ def upsert_page_index_records(
                 """
                 INSERT INTO retrieval_index_pages (
                     doc_id, page_num, display_page_num, filename, text_sha256,
-                    text_length, snippet, run_id, indexed_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+                    text_length, snippet, text_source, has_ocr_text, ocr_text_sha256,
+                    run_id, indexed_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
                 ON CONFLICT(doc_id, page_num) DO UPDATE SET
                     display_page_num = excluded.display_page_num,
                     filename = excluded.filename,
                     text_sha256 = excluded.text_sha256,
                     text_length = excluded.text_length,
                     snippet = excluded.snippet,
+                    text_source = excluded.text_source,
+                    has_ocr_text = excluded.has_ocr_text,
+                    ocr_text_sha256 = excluded.ocr_text_sha256,
                     run_id = excluded.run_id,
                     indexed_at = excluded.indexed_at
                 """,
@@ -228,6 +235,9 @@ def upsert_page_index_records(
                     text_hash,
                     len(safe_text),
                     snippets.get((page.doc_id, page.page_num), ""),
+                    page.text_source,
+                    int(page.has_ocr_text),
+                    page.ocr_text_sha256,
                     run_id,
                 ),
             )
@@ -345,14 +355,18 @@ def _upsert_page_index_record(
         """
         INSERT INTO retrieval_index_pages (
             doc_id, page_num, display_page_num, filename, text_sha256,
-            text_length, snippet, run_id, indexed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+            text_length, snippet, text_source, has_ocr_text, ocr_text_sha256,
+            run_id, indexed_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
         ON CONFLICT(doc_id, page_num) DO UPDATE SET
             display_page_num = excluded.display_page_num,
             filename = excluded.filename,
             text_sha256 = excluded.text_sha256,
             text_length = excluded.text_length,
             snippet = excluded.snippet,
+            text_source = excluded.text_source,
+            has_ocr_text = excluded.has_ocr_text,
+            ocr_text_sha256 = excluded.ocr_text_sha256,
             run_id = excluded.run_id,
             indexed_at = excluded.indexed_at
         """,
@@ -364,6 +378,9 @@ def _upsert_page_index_record(
             text_hash,
             len(safe_text),
             snippet,
+            page.text_source,
+            int(page.has_ocr_text),
+            page.ocr_text_sha256,
             run_id,
         ),
     )
@@ -433,6 +450,9 @@ def _page_from_row(row: sqlite3.Row) -> RetrievalIndexPageRecord:
         text_sha256=row["text_sha256"],
         text_length=row["text_length"],
         snippet=row["snippet"],
+        text_source=row["text_source"],
+        has_ocr_text=bool(row["has_ocr_text"]),
+        ocr_text_sha256=row["ocr_text_sha256"],
         run_id=row["run_id"],
         indexed_at=row["indexed_at"],
     )

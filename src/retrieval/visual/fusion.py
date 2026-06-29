@@ -35,6 +35,8 @@ class TextLookupRecord:
     filename: str = ""
     snippet: str = ""
     evidence_text: str = ""
+    text_source: str = "original"
+    has_ocr_text: bool = False
 
 
 def rrf_fuse(
@@ -90,6 +92,8 @@ def to_retrieval_hits(
                 score_components=components,
                 snippet=record.snippet,
                 evidence_text=record.evidence_text,
+                text_source=record.text_source,
+                has_ocr_text=record.has_ocr_text,
             )
         )
     return tuple(hits)

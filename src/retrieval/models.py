@@ -67,6 +67,9 @@ class PageIndexInput:
     page_num: int
     filename: str
     page_text: str | None
+    text_source: str = "original"
+    has_ocr_text: bool = False
+    ocr_text_sha256: str | None = None
 
 
 @dataclass(frozen=True)
@@ -80,6 +83,9 @@ class RetrievalIndexPageRecord:
     text_sha256: str
     text_length: int
     snippet: str
+    text_source: str
+    has_ocr_text: bool
+    ocr_text_sha256: str | None
     run_id: str
     indexed_at: str | None
 
@@ -141,6 +147,8 @@ class RetrievalHit:
     score_components: RetrievalScoreComponents
     snippet: str
     evidence_text: str = ""
+    text_source: str = "original"
+    has_ocr_text: bool = False
 
 
 @dataclass(frozen=True)
