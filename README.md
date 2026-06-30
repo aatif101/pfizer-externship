@@ -10,7 +10,7 @@ An AI-powered pharmaceutical supplier-document (SDF) compliance intelligence sys
 |-------|--------------|
 | **Ingestion** | Docling (Granite-Docling VLM pipeline) parses PDFs — including scanned and stamped pages — into per-page text persisted in SQLite (`compliance.db`). |
 | **Extraction** | Gemini 2.5 Flash extracts six SDF compliance fields with verbatim-span grounding: every extracted value must cite an exact text span on a source page, or the field abstains. An opt-in visual fallback re-runs low-yield documents with page images. |
-| **Retrieval (Tier 1)** | Deterministic SQLite FTS5 + lexical scoring over indexed page text. No embeddings, no network — fully auditable and reproducible. |
+| **Retrieval** | Tier 1: deterministic SQLite FTS5 plus lexical scoring over page text, including OCR-backfilled text for scanned pages. Tier 2: Qdrant plus ColQwen2.5 visual retrieval over page images, fused with the text tier by confidence-aware RRF. Both sit behind the same evidence gate. |
 | **Answer service (RAG)** | Evidence-gated: the LLM provider is never called when retrieval evidence is weak; the service abstains instead. Citations are derived only from retrieval hits, never from model output. |
 | **Dashboard** | Streamlit 3-tab app: compliance table with risk flagging, document/chat views, and eval history. |
 | **Evaluation** | Run-scoped extraction/retrieval eval history persisted in `compliance.db`. |
@@ -62,8 +62,10 @@ streamlit run src/app.py
 
 ## Retrieval tiers
 
-- **Tier 1 (current):** deterministic SQLite FTS5 + lexical scoring. Chosen for auditability, fully-offline operation, and zero infrastructure — every retrieval decision is reproducible and explainable, which matters for compliance review. Strong/weak evidence is decided by explicit score and coverage thresholds before any LLM is involved.
-- **Tier 2 (designed, deferred):** Qdrant + ColQwen2.5 visual retrieval over rasterized page images, sitting behind the same evidence gate. Adds robustness on scanned/stamped layouts without changing the no-hallucination contract.
+- **Tier 1 (text):** deterministic SQLite FTS5 plus lexical scoring over indexed page text, including OCR-backfilled text for scanned pages that have no extractable text. Fully offline and reproducible. Strong/weak evidence is decided by explicit score and coverage thresholds before any LLM is involved.
+- **Tier 2 (visual):** Qdrant plus ColQwen2.5 (`vidore/colqwen2.5-v0.2`) late-interaction retrieval over rasterized page images, fused with the text tier by confidence-aware RRF behind the same evidence gate. It retrieves pages the text tier misses or ranks weakly, such as scanned certificate pages.
+
+On the 17-query gold set: text-only recall@5 0.882, recall@10 0.941; visual-fused recall@5 1.000, recall@10 1.000. The visual tier runs on Colab L4 (`notebooks/visual_retrieval_colab.ipynb`); it needs a GPU for the ColQwen2.5 weights.
 
 ## Testing
 
@@ -71,7 +73,7 @@ streamlit run src/app.py
 venv\Scripts\python.exe -m pytest
 ```
 
-303 tests, all fully offline — no API keys required. Tracing, providers, and network boundaries are faked at module seams.
+394 tests, all fully offline. No API keys required; tracing, providers, and network boundaries are faked at module seams.
 
 ## Data hygiene
 

@@ -94,7 +94,9 @@ Task 3 is a `checkpoint:human-verify` (autonomous: false) and was NOT executed h
 - The **Example-3 proof** outcome (the four `rq_ex3_*` gold pages HIT in visual/fused top-k where text missed).
 - The exact loadable **`(colpali-engine, transformers, torch)` version triple** the notebook printed.
 
-### Real Colab L4 numbers (run 2026-06-28) — NEGATIVE RESULT
+### Real Colab L4 numbers (run 2026-06-28) — NEGATIVE RESULT [RESOLVED in Plan 05-05]
+
+> **RESOLVED 2026-06-29 (see `05-05-SUMMARY.md`).** This negative result was caused by a silent ColQwen2.5 model-loading bug under the transformers-5 stack. After fixing the loader (Option B pre-transformers-5 pin), adding an OCR backbone for the 6 empty-text pages, and replacing the fusion with confidence-aware RRF, the final numbers are **text-only 0.882/0.941, visual-fused 1.000/1.000 (recall@5/@10)**, with all `rq_ex3` pages at visual rank 1. The table below is the original negative run, kept for the record.
 
 The notebook ran end-to-end on Colab L4 (all cells green; manifest + `qdrant_storage_artifact.zip` produced, 78 points indexed). **The retrieval numbers DID NOT meet the phase goal — visual-fused is WORSE than text-only on every metric, and the Example-3 proof FAILED.** Recorded verbatim; not massaged.
 
