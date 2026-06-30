@@ -141,10 +141,9 @@ def test_notebook_runs_text_only_vs_visual_fused_eval() -> None:
     assert "compute_retrieval_recall_at_k" in source
     assert "compute_page_level_citation_accuracy" in source
     assert "text-only" in source and "visual-fused" in source
-    assert "page_text_lengths=PAGE_TEXT_LENGTHS" in source
     assert "text_weight=4.0" in source
     assert "visual_weight=1.0" in source
-    assert "empty_text_boost=3.0" in source
+    assert "rescue_weight=3.5" in source
     assert "Acceptance passed: fused recall@5/@10 is not below text-only" in source
 
 

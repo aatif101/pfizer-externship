@@ -46,44 +46,36 @@ def rrf_fuse(
     k: int = 60,
     text_weight: float = 4.0,
     visual_weight: float = 1.0,
-    page_text_lengths: Mapping[PageKey, int] | None = None,
-    empty_text_boost: float = 3.0,
-    empty_text_threshold: int = 0,
+    rescue_weight: float = 3.5,
 ) -> list[tuple[PageKey, float]]:
-    """Fuse ranked page lists with a deterministic text-first guardrail.
+    """Fuse ranked page lists with confidence-aware weighted RRF.
 
-    Scores use weighted RRF with ``text_weight > visual_weight``. Ordering is
-    intentionally gated: text hits keep their original order, visual-only hits
-    append after text hits, and visual-only pages whose original ``page_text`` is
-    empty are ordered before other visual-only pages.
+    Score = ``text_weight/(k+text_rank)`` (when the page is a text hit) +
+    ``visual_weight/(k+visual_rank)`` (when it is a visual hit), PLUS a
+    ``rescue_weight/(k+visual_rank)`` term whenever the **visual tier is more
+    confident than the text tier** for that page — i.e. the page is a text-miss,
+    or its visual rank is better than its text rank. Pages are then ordered purely
+    by fused score (stable tie-break on the page key).
+
+    The rescue term is the fix for the failure where a page the text tier misses
+    or ranks weakly, but the visual tier ranks #1, was buried by an earlier
+    text-first hard gate. It lets the visual tier surface exactly the pages text
+    retrieval is worst at, while ``text_weight > visual_weight`` keeps the text
+    ordering authoritative for the common case. The ``assert_fused_recall_not_below_text``
+    guard remains the runtime safety net against fused recall dropping below text.
     """
+    text_rank_of = {page_key: rank for rank, page_key in enumerate(text_ranked)}
     scores: dict[PageKey, float] = {}
     for rank, page_key in enumerate(text_ranked):
         scores[page_key] = scores.get(page_key, 0.0) + text_weight / (k + rank + 1)
     for rank, page_key in enumerate(visual_ranked):
         score = visual_weight / (k + rank + 1)
-        if _is_empty_text_page(page_key, page_text_lengths, empty_text_threshold):
-            score += empty_text_boost / (k + rank + 1)
+        text_rank = text_rank_of.get(page_key)
+        if text_rank is None or rank < text_rank:  # visual more confident than text
+            score += rescue_weight / (k + rank + 1)
         scores[page_key] = scores.get(page_key, 0.0) + score
 
-    seen_text: set[PageKey] = set()
-    fused: list[tuple[PageKey, float]] = []
-    for page_key in text_ranked:
-        if page_key in seen_text:
-            continue
-        fused.append((page_key, scores[page_key]))
-        seen_text.add(page_key)
-
-    visual_only = list(dict.fromkeys(page_key for page_key in visual_ranked if page_key not in seen_text))
-    visual_only.sort(
-        key=lambda page_key: (
-            not _is_empty_text_page(page_key, page_text_lengths, empty_text_threshold),
-            -scores[page_key],
-            page_key,
-        )
-    )
-    fused.extend((page_key, scores[page_key]) for page_key in visual_only)
-    return fused
+    return sorted(scores.items(), key=lambda item: (-item[1], item[0]))
 
 
 def assert_fused_recall_not_below_text(
@@ -120,16 +112,6 @@ def _macro_recall_at_k(
         retrieved = set((ranked_by_query.get(query_id) or [])[:k])
         recalls.append(len(gold.intersection(retrieved)) / len(gold))
     return sum(recalls) / len(recalls) if recalls else 0.0
-
-
-def _is_empty_text_page(
-    page_key: PageKey,
-    page_text_lengths: Mapping[PageKey, int] | None,
-    empty_text_threshold: int,
-) -> bool:
-    if page_text_lengths is None:
-        return False
-    return int(page_text_lengths.get(page_key, empty_text_threshold + 1)) <= empty_text_threshold
 
 
 def to_retrieval_hits(
