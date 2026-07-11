@@ -1,13 +1,16 @@
 """Tests for src/tracing.py — Langfuse v3 wiring."""
 from __future__ import annotations
 
+import ast
 import importlib
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import langfuse  # noqa: PLC0415
 from importlib.metadata import version
 import pytest
+import src.tracing as tracing
 from src.tracing import safe_update_current_trace, verify_langfuse_connection  # noqa: PLC0415
 
 
@@ -31,6 +34,103 @@ def test_langfuse_import_paths() -> None:
 def test_tracing_module_imports() -> None:
     """src/tracing.py must be importable without error."""
     import src.tracing  # noqa: PLC0415,F401
+
+
+def test_project_observe_wrapper_forces_automatic_io_capture_off(monkeypatch: Any) -> None:
+    """All supported decorator forms forward both fail-closed capture flags."""
+
+    calls: list[dict[str, Any]] = []
+
+    def fake_sdk_observe(*decorator_args: Any, **decorator_kwargs: Any) -> Any:
+        calls.append(dict(decorator_kwargs))
+        if decorator_args and callable(decorator_args[0]):
+            return decorator_args[0]
+
+        def decorator(func: Any) -> Any:
+            return func
+
+        return decorator
+
+    monkeypatch.setattr(tracing, "_langfuse_observe", fake_sdk_observe)
+
+    @tracing.observe
+    def direct(value: str) -> str:
+        return value
+
+    @tracing.observe(name="configured")
+    def configured(value: str) -> str:
+        return value
+
+    @tracing.observe(name="override-attempt", capture_input=True, capture_output=True)
+    def override_attempt(value: str) -> str:
+        return value
+
+    assert direct("direct") == "direct"
+    assert configured("configured") == "configured"
+    assert override_attempt("override") == "override"
+    assert len(calls) == 3
+    for forwarded_kwargs in calls:
+        assert forwarded_kwargs["capture_input"] is False
+        assert forwarded_kwargs["capture_output"] is False
+
+
+def test_project_observe_wrapper_preserves_offline_noop_forms(monkeypatch: Any) -> None:
+    """The unavailable-SDK decorator remains transparent with forced flags."""
+
+    monkeypatch.setattr(tracing, "_langfuse_observe", tracing._noop_observe)
+
+    @tracing.observe
+    def direct(value: str) -> str:
+        return value
+
+    @tracing.observe(name="offline")
+    def configured(value: str) -> str:
+        return value
+
+    assert direct("direct") == "direct"
+    assert configured("configured") == "configured"
+
+
+def test_all_observe_consumers_import_the_project_wrapper() -> None:
+    """Every source module using ``@observe`` must use ``src.tracing.observe``."""
+
+    src_root = Path(__file__).resolve().parents[1] / "src"
+    consumers: list[str] = []
+    offenders: list[str] = []
+
+    for path in sorted(src_root.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        if not _tree_uses_project_observe_name(tree):
+            continue
+
+        relative_path = path.relative_to(src_root.parent).as_posix()
+        consumers.append(relative_path)
+        imports_project_observe = False
+        imports_sdk_observe = False
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            imported_names = {alias.name for alias in node.names}
+            if node.module == "src.tracing" and "observe" in imported_names:
+                imports_project_observe = True
+            if node.module == "langfuse" and "observe" in imported_names:
+                imports_sdk_observe = True
+        if not imports_project_observe or imports_sdk_observe:
+            offenders.append(relative_path)
+
+    assert consumers, "expected at least one source module using @observe"
+    assert offenders == [], f"unsafe @observe imports in modules: {offenders}"
+
+
+def _tree_uses_project_observe_name(tree: ast.AST) -> bool:
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for decorator in node.decorator_list:
+            target = decorator.func if isinstance(decorator, ast.Call) else decorator
+            if isinstance(target, ast.Name) and target.id == "observe":
+                return True
+    return False
 
 
 def test_verify_langfuse_connection_callable() -> None:

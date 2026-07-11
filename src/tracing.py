@@ -5,7 +5,7 @@ CRITICAL VERSION CONSTRAINT:
     This file asserts the version at import time to catch accidental upgrades.
 
 v3 import paths (DO NOT change):
-    from langfuse import observe, get_client                    ← v3 ✓
+    from langfuse import observe as _langfuse_observe, get_client ← v3 ✓
     get_client().update_current_trace(...)                      ← v3 ✓
     get_client().auth_check()                                   ← v3 ✓
 
@@ -24,6 +24,18 @@ import re
 import sys
 from collections.abc import Iterable, Mapping
 from typing import Any
+
+
+def _noop_observe(*decorator_args: Any, **decorator_kwargs: Any) -> Any:
+    """Transparent replacement for ``langfuse.observe`` when the SDK is absent."""
+
+    if decorator_args and callable(decorator_args[0]):
+        return decorator_args[0]
+
+    def _decorator(func: Any) -> Any:
+        return func
+
+    return _decorator
 
 # Handle pydantic v1 compatibility issue with Python 3.14+
 # This is a known issue with langfuse v3 on newer Python versions
@@ -57,23 +69,29 @@ if '_langfuse_module' in globals() and _langfuse_module is not None:
     )
 
 try:
-    from langfuse import Langfuse as _Langfuse, observe, get_client  # noqa: E402, F401
+    from langfuse import Langfuse as _Langfuse, get_client, observe as _langfuse_observe  # noqa: E402, F401
     _LANGFUSE_AVAILABLE = True
 except Exception:  # pragma: no cover - exercised only when optional Langfuse is absent/broken
     _LANGFUSE_AVAILABLE = False
-
-    def observe(*decorator_args: Any, **decorator_kwargs: Any) -> Any:  # type: ignore[no-redef]
-        """No-op replacement for langfuse.observe when Langfuse is unavailable."""
-        if decorator_args and callable(decorator_args[0]) and not decorator_kwargs:
-            return decorator_args[0]
-
-        def _decorator(func: Any) -> Any:
-            return func
-
-        return _decorator
+    _langfuse_observe = _noop_observe
 
     def get_client() -> Any:  # type: ignore[no-redef]
         raise RuntimeError("Langfuse is unavailable")
+
+
+def observe(*decorator_args: Any, **decorator_kwargs: Any) -> Any:
+    """Decorate a boundary without automatically capturing its inputs or outputs.
+
+    Supplier documents, questions, answers, images, and provider payloads may pass
+    through observed functions.  Force Langfuse IO capture off centrally, even if
+    a caller explicitly requests either capture flag, while preserving direct
+    ``@observe`` and configured ``@observe(...)`` decorator forms.
+    """
+
+    safe_kwargs = dict(decorator_kwargs)
+    safe_kwargs["capture_input"] = False
+    safe_kwargs["capture_output"] = False
+    return _langfuse_observe(*decorator_args, **safe_kwargs)
 
 from loguru import logger  # noqa: E402
 
