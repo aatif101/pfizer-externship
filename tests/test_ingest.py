@@ -217,21 +217,37 @@ def test_ingest_validation_failure_trace_omits_path_and_raw_exception(monkeypatc
     assert "Not a PDF file" not in repr(metadata)
     assert str(tmp_path) not in repr(metadata)
 
+
 def test_memory_no_leak(tmp_db_path: str, sample_pdf_path: str) -> None:
-    """INGEST-01 / C3 pitfall: memory must not grow unboundedly across 3 sequential ingests."""
-    import psutil, os  # noqa: E401
+    """INGEST-01 / C3: cold VLM allocation is one-time; steady-state RSS stays bounded."""
+    import gc
+    import os
+
+    import psutil
+
     from src.db.schema import init_db  # noqa: PLC0415
     from src.pipeline.ingest import ingest_document  # noqa: PLC0415
 
     init_db(tmp_db_path)
     process = psutil.Process(os.getpid())
 
-    rss_before = process.memory_info().rss
+    gc.collect()
+    rss_before_cold_start = process.memory_info().rss
+    ingest_document(pdf_path=sample_pdf_path, db_path=tmp_db_path)
+    gc.collect()
+    rss_after_cold_start = process.memory_info().rss
+
     for _ in range(3):
         ingest_document(pdf_path=sample_pdf_path, db_path=tmp_db_path)
-    rss_after = process.memory_info().rss
+    gc.collect()
+    rss_after_steady_state = process.memory_info().rss
 
-    growth_mb = (rss_after - rss_before) / (1024 ** 2)
-    # Allow up to 200 MB growth for 3 sequential ingests (model load is expected);
-    # unbounded growth would be 500 MB+ per run
-    assert growth_mb < 500, f"Memory grew {growth_mb:.1f} MB across 3 ingests (C3 leak?)"
+    cold_start_growth_mb = (rss_after_cold_start - rss_before_cold_start) / (1024 ** 2)
+    steady_state_growth_mb = (rss_after_steady_state - rss_after_cold_start) / (1024 ** 2)
+
+    # The model's process-scoped cold allocation is intentionally excluded. Re-loading
+    # that allocation per document produces multi-gigabyte steady-state growth.
+    assert steady_state_growth_mb < 200, (
+        f"Cold start grew {cold_start_growth_mb:.1f} MB; three steady-state ingests "
+        f"grew {steady_state_growth_mb:.1f} MB (VLM model likely reloaded per document)"
+    )

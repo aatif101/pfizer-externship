@@ -1,25 +1,26 @@
 """Docling VlmPipeline wrapper.
 
 CRITICAL RULES:
-- Recreate DocumentConverter per document (Pitfall C3 — memory leak mitigation).
+- Lazily reuse one DocumentConverter per process so Docling initializes VLM weights once.
 - Do NOT use generate_page_images option (Pitfall C2 — broken in VlmPipeline, GitHub #2416).
 - Page images are handled by rasterizer.py (pypdfium2).
-- Call del converter + gc.collect() + torch.cuda.empty_cache() after each conversion.
+- Collect transient objects and release unused CUDA cache after each conversion.
 """
 from __future__ import annotations
 
 import gc
+from functools import cache
 from typing import TYPE_CHECKING
 
 from loguru import logger
 
 if TYPE_CHECKING:
-    from docling.document_converter import ConversionResult
+    from docling.document_converter import ConversionResult, DocumentConverter
 
 
-def convert_pdf(pdf_path: str) -> "ConversionResult":
-    """Run Docling VlmPipeline on a single PDF. Recreates converter per call (C3 mitigation)."""
-    import torch  # noqa: PLC0415 — deferred import; heavy dep
+@cache
+def _get_converter() -> "DocumentConverter":
+    """Build the process-scoped Docling converter on first use."""
     from docling.datamodel.base_models import InputFormat  # noqa: PLC0415
     from docling.datamodel import vlm_model_specs  # noqa: PLC0415
     from docling.datamodel.pipeline_options import VlmPipelineOptions  # noqa: PLC0415
@@ -31,7 +32,7 @@ def convert_pdf(pdf_path: str) -> "ConversionResult":
         # NOTE: generate_page_images intentionally omitted — broken in VlmPipeline (issue #2416)
         # Page rasterization is handled by rasterizer.py using pypdfium2
     )
-    converter = DocumentConverter(
+    return DocumentConverter(
         format_options={
             InputFormat.PDF: PdfFormatOption(
                 pipeline_cls=VlmPipeline,
@@ -39,16 +40,21 @@ def convert_pdf(pdf_path: str) -> "ConversionResult":
             ),
         }
     )
+
+
+def convert_pdf(pdf_path: str) -> "ConversionResult":
+    """Run Docling VlmPipeline, reusing its heavyweight model across calls."""
+    converter = _get_converter()
     try:
         logger.debug(f"Starting Docling conversion: {pdf_path}")
         result = converter.convert(source=pdf_path)
         logger.debug(f"Docling conversion complete: {pdf_path}")
         return result
     finally:
-        del converter
         gc.collect()
         try:
             import torch  # noqa: PLC0415
+
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
         except ImportError:

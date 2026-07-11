@@ -113,7 +113,7 @@ def ingest_document(pdf_path: str, db_path: str) -> dict:
             }
         )
 
-        # Step 1: Docling text extraction (new converter per call — C3 mitigation)
+        # Step 1: Docling text extraction (process-scoped converter avoids repeated VLM loads)
         logger.info(f"Converting {resolved.name} with Docling VlmPipeline...")
         conv_result = convert_pdf(str(resolved))
         doc = conv_result.document
