@@ -32,11 +32,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Scanned, stamped, and complex-table PDFs are ingested without errors (Docling handles them)
   4. SQLite compliance database schema exists with tables for documents, extractions, and evaluations
   5. Streamlit app launches with skeleton tabs (Compliance, Chat, Eval) and Langfuse connection is verified
-**Plans**: 3 plans
+**Plans**: 4 plans
 Plans:
 - [ ] 01-01-PLAN.md — Project scaffold, pyproject.toml, config, Wave 0 test stubs
 - [ ] 01-02-PLAN.md — Core ingestion pipeline (DB schema, converter, rasterizer, CLI)
 - [ ] 01-03-PLAN.md — Streamlit skeleton and Langfuse v3 tracing
+- [ ] 01-04-PLAN.md — Ingestion integrity hardening: content identity, atomic page writes, exact page mapping, and current Docling preset API
 
 ### Phase 2: Extraction & Compliance
 **Goal**: Every ingested document has structured metadata extracted and validated, with compliance risk levels computed and stored
