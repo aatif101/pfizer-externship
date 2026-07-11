@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: 05-04 autonomous tasks 1-2 committed; awaiting human Colab L4 checkpoint (Task 3) for the real VISUAL-01/VISUAL-02 numbers
-last_updated: "2026-06-23T21:56:05.207Z"
-last_activity: 2026-06-23
+last_updated: "2026-07-11T08:45:00Z"
+last_activity: 2026-07-11
 progress:
   total_phases: 7
   completed_phases: 2
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-16)
 Phase: 5 (Visual Retrieval & Critic Extraction) — EXECUTING
 Plan: 4 of 4
 Status: 05-04 autonomous tasks committed — AWAITING human Colab L4 checkpoint (Task 3)
-Last activity: 2026-06-23
+Last activity: 2026-07-11 - Completed quick task 260711-6ip: disabled Langfuse automatic input/output capture at all pipeline boundaries
 
 Progress: [██████████] 100%
 
@@ -90,6 +90,7 @@ yet.
 | 260610-3kx | Refactor chat/eval dashboard tests to use tmp_path for SQLite db paths | 2026-06-10 | 57ce32f | [260610-3kx-refactor-chat-eval-dashboard-tests-to-us](./quick/260610-3kx-refactor-chat-eval-dashboard-tests-to-us/) |
 | 260610-o8z | Compliance verdict fix: shared field rulebook + visual evidence tier (supersedes D026 via D027) | 2026-06-10 | f2ef4e4 | [260610-o8z-compliance-verdict-fix-shared-field-rule](./quick/260610-o8z-compliance-verdict-fix-shared-field-rule/) |
 | 260611-mw5 | Wire real RAGAS faithfulness + answer_relevancy (Gemini judge) into the eval harness; lazy-import seam, `eval run --with-ragas` CLI, real per-query scores keyed by query_id | 2026-06-11 | cc4556d | [260611-mw5-wire-real-ragas-faithfulness-and-answer-](./quick/260611-mw5-wire-real-ragas-faithfulness-and-answer-/) |
+| 260711-6ip | Disable Langfuse automatic input/output capture at all sensitive pipeline boundaries | 2026-07-11 | 7475fab | [260711-6ip-disable-langfuse-automatic-input-and-out](./quick/260711-6ip-disable-langfuse-automatic-input-and-out/) |
 
 ## Deferred Items
 
