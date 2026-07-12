@@ -166,6 +166,14 @@ def prepare_doc(db_path: str, *, page_text: str | None = PAGE_TEXT, include_page
     )
     if include_page:
         insert_page(db_path, doc_id="doc-001", page_num=0, page_text=page_text, image_blob=None)
+    else:
+        conn = sqlite3.connect(db_path)
+        try:
+            conn.execute("PRAGMA foreign_keys = ON")
+            conn.execute("DELETE FROM pages WHERE doc_id = ?", ("doc-001",))
+            conn.commit()
+        finally:
+            conn.close()
 
 
 def extraction_count(db_path: str) -> int:

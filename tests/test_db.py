@@ -60,3 +60,47 @@ def test_parameterized_queries_only(tmp_db_path: str) -> None:
     conn.close()
     assert row is not None, "Document not inserted"
     assert row[0] == malicious_filename, "Filename was corrupted or injection succeeded"
+
+
+def test_init_db_migrates_legacy_documents_content_hash_idempotently(tmp_db_path: str) -> None:
+    """Legacy path IDs survive the additive content_sha256 migration unchanged."""
+    from src.db.schema import init_db
+
+    legacy_id = "0123456789abcdef"
+    conn = sqlite3.connect(tmp_db_path)
+    conn.execute(
+        """
+        CREATE TABLE documents (
+            doc_id TEXT PRIMARY KEY,
+            filename TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            page_count INTEGER NOT NULL,
+            ingested_at TIMESTAMP,
+            docling_json TEXT,
+            status TEXT DEFAULT 'pending'
+        )
+        """
+    )
+    conn.execute(
+        "INSERT INTO documents (doc_id, filename, file_path, page_count, status) VALUES (?, ?, ?, ?, ?)",
+        (legacy_id, "legacy.pdf", "C:/legacy.pdf", 1, "ingested"),
+    )
+    conn.commit()
+    conn.close()
+
+    init_db(tmp_db_path)
+    init_db(tmp_db_path)
+
+    conn = sqlite3.connect(tmp_db_path)
+    try:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(documents)")}
+        stored = conn.execute(
+            "SELECT doc_id, content_sha256 FROM documents WHERE doc_id = ?", (legacy_id,)
+        ).fetchone()
+        indexes = {row[1]: row[2] for row in conn.execute("PRAGMA index_list(documents)")}
+    finally:
+        conn.close()
+
+    assert "content_sha256" in columns
+    assert stored == (legacy_id, None)
+    assert indexes["idx_documents_content_sha256"] == 1

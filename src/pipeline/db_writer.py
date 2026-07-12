@@ -9,10 +9,15 @@ from typing import Optional
 from loguru import logger
 
 from src.tracing import observe, safe_update_current_trace
-from src.db.queries import insert_document, insert_page, mark_document_ingested
+from src.db.queries import (
+    _mark_document_ingested,
+    _upsert_document,
+    _upsert_page,
+)
+from src.db.schema import _connect
 
 _STORAGE_TRACE_METADATA_KEYS = frozenset(
-    {"boundary", "status", "doc_id", "filename", "page_count", "image_count", "error_class"}
+    {"boundary", "status", "filename", "page_count", "image_count", "error_class"}
 )
 
 
@@ -35,47 +40,58 @@ def write_document_to_db(
     docling_json: Optional[str],
     page_texts: dict[int, str],
     png_blobs: list[bytes],
+    *,
+    content_sha256: str | None = None,
 ) -> None:
-    """Write document header and all page rows to SQLite (D-02: BLOBs in DB)."""
+    """Atomically replace one complete document snapshot in SQLite."""
     image_count = len(png_blobs)
+    if page_count < 0:
+        raise ValueError("page count must be non-negative")
+    if image_count != page_count:
+        raise ValueError("page image count mismatch")
+
     _trace_storage(
         {
             "boundary": "storage",
             "status": "started",
-            "doc_id": doc_id,
             "filename": filename,
             "page_count": page_count,
             "image_count": image_count,
         }
     )
 
+    conn = _connect(db_path)
     try:
-        insert_document(
-            db_path=db_path,
-            doc_id=doc_id,
-            filename=filename,
-            file_path=file_path,
-            page_count=page_count,
-            docling_json=docling_json,
+        conn.execute("BEGIN")
+        _upsert_document(
+            conn,
+            doc_id,
+            filename,
+            file_path,
+            page_count,
+            docling_json,
+            content_sha256=content_sha256,
         )
 
+        # OCR is derived from the page image/text snapshot.  Invalidate it in
+        # this transaction so rollback restores the previous derived state.
+        conn.execute("DELETE FROM page_ocr_texts WHERE doc_id = ?", (doc_id,))
         for page_num in range(page_count):
-            blob = png_blobs[page_num] if page_num < len(png_blobs) else None
-            text = page_texts.get(page_num, page_texts.get(page_num + 1, ""))
-            insert_page(
-                db_path=db_path,
-                doc_id=doc_id,
-                page_num=page_num,
-                page_text=text,
-                image_blob=blob,
+            _upsert_page(
+                conn,
+                doc_id,
+                page_num,
+                page_texts.get(page_num, ""),
+                png_blobs[page_num],
             )
 
-        mark_document_ingested(db_path=db_path, doc_id=doc_id)
+        conn.execute("DELETE FROM pages WHERE doc_id = ? AND page_num >= ?", (doc_id, page_count))
+        _mark_document_ingested(conn, doc_id)
+        conn.commit()
         _trace_storage(
             {
                 "boundary": "storage",
                 "status": "completed",
-                "doc_id": doc_id,
                 "filename": filename,
                 "page_count": page_count,
                 "image_count": image_count,
@@ -83,11 +99,11 @@ def write_document_to_db(
         )
         logger.info(f"DB write complete: {filename} ({page_count} pages, {image_count} images)")
     except Exception as exc:
+        conn.rollback()
         _trace_storage(
             {
                 "boundary": "storage",
                 "status": "failed",
-                "doc_id": doc_id,
                 "filename": filename,
                 "page_count": page_count,
                 "image_count": image_count,
@@ -95,3 +111,5 @@ def write_document_to_db(
             }
         )
         raise
+    finally:
+        conn.close()

@@ -12,13 +12,14 @@ SCHEMA_SQL = """
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS documents (
-    doc_id       TEXT PRIMARY KEY,
-    filename     TEXT NOT NULL,
-    file_path    TEXT NOT NULL,
-    page_count   INTEGER NOT NULL,
-    ingested_at  TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-    docling_json TEXT,
-    status       TEXT DEFAULT 'pending'
+    doc_id         TEXT PRIMARY KEY,
+    filename       TEXT NOT NULL,
+    file_path      TEXT NOT NULL,
+    page_count     INTEGER NOT NULL,
+    ingested_at    TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    docling_json   TEXT,
+    status         TEXT DEFAULT 'pending',
+    content_sha256 TEXT
 );
 
 CREATE TABLE IF NOT EXISTS pages (
@@ -361,6 +362,8 @@ _EVIDENCE_TYPE_MIGRATIONS: tuple[tuple[str, str, str], ...] = (
 )
 
 POST_MIGRATION_INDEX_SQL = """
+CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_content_sha256
+    ON documents(content_sha256) WHERE content_sha256 IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_extractions_review_state ON extractions(review_state);
 CREATE INDEX IF NOT EXISTS idx_extractions_needs_review ON extractions(needs_review);
 CREATE INDEX IF NOT EXISTS idx_retrieval_pages_text_source ON retrieval_index_pages(text_source);
@@ -379,6 +382,7 @@ def init_db(db_path: str) -> None:
     conn = _connect(db_path)
     try:
         conn.executescript(SCHEMA_SQL)
+        _migrate_documents_table(conn)
         _migrate_extractions_table(conn)
         _migrate_evidence_type_columns(conn)
         _migrate_retrieval_index_pages_table(conn)
@@ -391,6 +395,18 @@ def init_db(db_path: str) -> None:
         raise
     finally:
         conn.close()
+
+
+def _migrate_documents_table(conn: sqlite3.Connection) -> None:
+    """Add content identity to pre-existing ingestion databases.
+
+    Existing path-derived document IDs remain untouched.  A missing hash stays
+    NULL until a successful re-ingestion can establish the PDF byte identity.
+    """
+
+    existing_columns = _table_columns(conn, "documents")
+    if existing_columns and "content_sha256" not in existing_columns:
+        conn.execute("ALTER TABLE documents ADD COLUMN content_sha256 TEXT")
 
 
 def _init_retrieval_index_fts(conn: sqlite3.Connection) -> None:

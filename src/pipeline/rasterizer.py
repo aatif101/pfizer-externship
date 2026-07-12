@@ -9,6 +9,7 @@ because VlmPipeline's generate_page_images is broken (Pitfall C2).
 from __future__ import annotations
 
 import io
+from pathlib import Path
 
 import pypdfium2 as pdfium
 from loguru import logger
@@ -25,7 +26,9 @@ def rasterize_pages(pdf_path: str) -> list[bytes]:
     png_blobs: list[bytes] = []
     with pdfium.PdfDocument(pdf_path) as pdf:
         n_pages = len(pdf)
-        logger.debug(f"Rasterizing {n_pages} pages from {pdf_path} at {DPI_TARGET} DPI")
+        logger.debug(
+            f"Rasterizing {n_pages} pages from {Path(pdf_path).name} at {DPI_TARGET} DPI"
+        )
         for page_idx in range(n_pages):
             page = pdf.get_page(page_idx)
             bitmap = page.render(scale=SCALE, rev_byteorder=True)

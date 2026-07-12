@@ -6,6 +6,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+from loguru import logger
+
 
 def test_converter_module_import_remains_offline_safe() -> None:
     """Importing the boundary must not eagerly import Docling or Torch."""
@@ -78,6 +81,12 @@ class VlmPipelineOptions:
         self.kwargs = kwargs
 
 
+class VlmConvertOptions:
+    @classmethod
+    def from_preset(cls, preset):
+        return {"preset": preset}
+
+
 class PdfFormatOption:
     def __init__(self, **kwargs):
         self.kwargs = kwargs
@@ -90,9 +99,11 @@ class VlmPipeline:
 class DocumentConverter:
     constructions = 0
     sources = []
+    last_kwargs = None
 
     def __init__(self, **kwargs):
         type(self).constructions += 1
+        type(self).last_kwargs = kwargs
         self.kwargs = kwargs
 
     def convert(self, *, source):
@@ -102,6 +113,7 @@ class DocumentConverter:
 
 base_models.InputFormat = InputFormat
 pipeline_options.VlmPipelineOptions = VlmPipelineOptions
+pipeline_options.VlmConvertOptions = VlmConvertOptions
 vlm_model_specs.GRANITEDOCLING_TRANSFORMERS = "granite"
 datamodel.vlm_model_specs = vlm_model_specs
 document_converter.DocumentConverter = DocumentConverter
@@ -111,10 +123,12 @@ vlm_pipeline.VlmPipeline = VlmPipeline
 from src.pipeline.converter import convert_pdf
 
 results = [convert_pdf(path) for path in ("one.pdf", "two.pdf", "three.pdf")]
+configured = DocumentConverter.last_kwargs["format_options"]["pdf"].kwargs["pipeline_options"].kwargs["vlm_options"]
 print(json.dumps({
     "constructions": DocumentConverter.constructions,
     "sources": DocumentConverter.sources,
     "results": results,
+    "configured_vlm_options": configured,
 }))
 '''
 
@@ -135,4 +149,109 @@ print(json.dumps({
             {"source": "two.pdf"},
             {"source": "three.pdf"},
         ],
+        "configured_vlm_options": {"preset": "granite_docling"},
     }
+
+
+def test_build_vlm_options_uses_current_named_preset(monkeypatch) -> None:
+    import sys
+    import types
+
+    from src.pipeline import converter
+
+    calls: list[str] = []
+    module = types.ModuleType("docling.datamodel.pipeline_options")
+
+    class VlmConvertOptions:
+        @classmethod
+        def from_preset(cls, preset: str):
+            calls.append(preset)
+            return "modern-options"
+
+    module.VlmConvertOptions = VlmConvertOptions
+    monkeypatch.setitem(sys.modules, "docling.datamodel.pipeline_options", module)
+    assert converter._build_vlm_options() == "modern-options"
+    assert calls == ["granite_docling"]
+
+
+def test_build_vlm_options_keeps_transformers_engine_for_reproducibility(monkeypatch) -> None:
+    import sys
+    import types
+
+    from src.pipeline import converter
+
+    pipeline_module = types.ModuleType("docling.datamodel.pipeline_options")
+    engine_module = types.ModuleType("docling.datamodel.vlm_engine_options")
+
+    class Options:
+        engine_options = "auto"
+
+    options = Options()
+
+    class VlmConvertOptions:
+        @classmethod
+        def from_preset(cls, _preset: str):
+            return options
+
+    class TransformersVlmEngineOptions:
+        pass
+
+    pipeline_module.VlmConvertOptions = VlmConvertOptions
+    engine_module.TransformersVlmEngineOptions = TransformersVlmEngineOptions
+    monkeypatch.setitem(sys.modules, "docling.datamodel.pipeline_options", pipeline_module)
+    monkeypatch.setitem(sys.modules, "docling.datamodel.vlm_engine_options", engine_module)
+
+    assert converter._build_vlm_options() is options
+    assert isinstance(options.engine_options, TransformersVlmEngineOptions)
+
+
+def test_build_vlm_options_falls_back_only_when_modern_api_absent(monkeypatch) -> None:
+    import sys
+    import types
+
+    from src.pipeline import converter
+
+    options_module = types.ModuleType("docling.datamodel.pipeline_options")
+    specs_module = types.ModuleType("docling.datamodel.vlm_model_specs")
+    specs_module.GRANITEDOCLING_TRANSFORMERS = "legacy-options"
+    monkeypatch.setitem(sys.modules, "docling.datamodel.pipeline_options", options_module)
+    monkeypatch.setitem(sys.modules, "docling.datamodel.vlm_model_specs", specs_module)
+    assert converter._build_vlm_options() == "legacy-options"
+
+
+def test_build_vlm_options_does_not_hide_broken_modern_registry(monkeypatch) -> None:
+    import sys
+    import types
+
+    from src.pipeline import converter
+
+    module = types.ModuleType("docling.datamodel.pipeline_options")
+
+    class VlmConvertOptions:
+        @classmethod
+        def from_preset(cls, _preset: str):
+            raise KeyError("registry broken")
+
+    module.VlmConvertOptions = VlmConvertOptions
+    monkeypatch.setitem(sys.modules, "docling.datamodel.pipeline_options", module)
+    with pytest.raises(KeyError, match="registry broken"):
+        converter._build_vlm_options()
+
+
+def test_converter_logs_basename_without_absolute_path(monkeypatch, caplog, tmp_path: Path) -> None:
+    from src.pipeline import converter
+
+    class FakeConverter:
+        def convert(self, *, source):
+            return source
+
+    monkeypatch.setattr(converter, "_get_converter", lambda: FakeConverter())
+    absolute = tmp_path / "private" / "supplier.pdf"
+    sink_id = logger.add(caplog.handler, format="{message}", level="DEBUG")
+    try:
+        assert converter.convert_pdf(str(absolute)) == str(absolute)
+    finally:
+        logger.remove(sink_id)
+    assert "supplier.pdf" in caplog.text
+    if str(absolute) in caplog.text:
+        pytest.fail("converter log exposed an absolute source path")

@@ -12,13 +12,13 @@ This roadmap delivers an end-to-end pharmaceutical document intelligence system 
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Foundation & Ingestion** - Doc store, SQLite schema, Streamlit skeleton, Langfuse wiring, and Docling PDF ingestion pipeline
+- [x] **Phase 1: Foundation & Ingestion** - Doc store, SQLite schema, Streamlit skeleton, Langfuse wiring, and Docling PDF ingestion pipeline
 - [ ] **Phase 2: Extraction & Compliance** - VLM-powered structured field extraction with Pydantic validation and compliance risk flagging
 - [ ] **Phase 3: Retrieval & RAG Chatbot** - Hybrid BM25+dense retrieval with reranker, and linear RAG chatbot with page-level citations
 - [ ] **Phase 4: Dashboard & Evaluation** - Streamlit compliance table with color-coded risk levels, and eval harness with gold set
 - [ ] **Phase 5: Visual Retrieval & Critic Extraction** - ColQwen2 page-image retrieval, extraction critic loop, and per-field confidence ensemble
 - [ ] **Phase 6: Agentic RAG & Observability** - LangGraph agentic RAG pipeline, HITL review queue, and Langfuse tracing
-- [ ] **Phase 7: Benchmark & Polish** - Side-by-side Phase 1 vs Phase 2 benchmark, eval dashboard, architecture diagrams, walkthrough, and design doc
+- [x] **Phase 7: Benchmark & Polish** - Side-by-side Phase 1 vs Phase 2 benchmark, eval dashboard, architecture diagrams, walkthrough, and design doc (completed 2026-07-12)
 
 ## Phase Details
 
@@ -34,10 +34,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. Streamlit app launches with skeleton tabs (Compliance, Chat, Eval) and Langfuse connection is verified
 **Plans**: 4 plans
 Plans:
-- [ ] 01-01-PLAN.md — Project scaffold, pyproject.toml, config, Wave 0 test stubs
-- [ ] 01-02-PLAN.md — Core ingestion pipeline (DB schema, converter, rasterizer, CLI)
-- [ ] 01-03-PLAN.md — Streamlit skeleton and Langfuse v3 tracing
-- [ ] 01-04-PLAN.md — Ingestion integrity hardening: content identity, atomic page writes, exact page mapping, and current Docling preset API
+- [x] 01-01-PLAN.md — Project scaffold, pyproject.toml, config, Wave 0 test stubs
+- [x] 01-02-PLAN.md — Core ingestion pipeline (DB schema, converter, rasterizer, CLI)
+- [x] 01-03-PLAN.md — Streamlit skeleton and Langfuse v3 tracing
+- [x] 01-04-PLAN.md — Ingestion integrity hardening: content identity, atomic page writes, exact page mapping, and current Docling preset API
 
 ### Phase 2: Extraction & Compliance
 **Goal**: Every ingested document has structured metadata extracted and validated, with compliance risk levels computed and stored
@@ -119,7 +119,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation & Ingestion | 0/3 | Not started | - |
+| 1. Foundation & Ingestion | 4/4 | Complete    | 2026-07-12 |
 | 2. Extraction & Compliance | 0/TBD | Not started | - |
 | 3. Retrieval & RAG Chatbot | 0/TBD | Not started | - |
 | 4. Dashboard & Evaluation | 0/TBD | Not started | - |

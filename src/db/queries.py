@@ -44,6 +44,82 @@ class LoadedDocumentPages:
     pages: tuple[DocumentPage, ...]
 
 
+@dataclass(frozen=True)
+class DocumentIdentityLookup:
+    """Stored identity/completeness facts used by the ingestion boundary."""
+
+    doc_id: str
+    content_sha256: str | None
+    status: str
+    page_count: int
+    persisted_page_count: int
+    first_page_num: int | None
+    last_page_num: int | None
+
+
+def _upsert_document(
+    conn: sqlite3.Connection,
+    doc_id: str,
+    filename: str,
+    file_path: str,
+    page_count: int,
+    docling_json: Optional[str],
+    *,
+    content_sha256: str | None = None,
+) -> None:
+    """Upsert a document without replacing its parent row or cascading children."""
+
+    conn.execute(
+        """
+        INSERT INTO documents (
+            doc_id, filename, file_path, page_count, docling_json, status,
+            content_sha256
+        )
+        VALUES (?, ?, ?, ?, ?, 'pending', ?)
+        ON CONFLICT(doc_id) DO UPDATE SET
+            filename = excluded.filename,
+            file_path = excluded.file_path,
+            page_count = excluded.page_count,
+            docling_json = excluded.docling_json,
+            status = 'pending',
+            content_sha256 = COALESCE(excluded.content_sha256, documents.content_sha256)
+        """,
+        (doc_id, filename, file_path, page_count, docling_json, content_sha256),
+    )
+
+
+def _upsert_page(
+    conn: sqlite3.Connection,
+    doc_id: str,
+    page_num: int,
+    page_text: Optional[str],
+    image_blob: Optional[bytes],
+) -> None:
+    """Upsert one page on a caller-owned transaction."""
+
+    conn.execute(
+        """
+        INSERT INTO pages (doc_id, page_num, page_text, image_blob)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(doc_id, page_num) DO UPDATE SET
+            page_text = excluded.page_text,
+            image_blob = excluded.image_blob
+        """,
+        (
+            doc_id,
+            page_num,
+            page_text,
+            sqlite3.Binary(image_blob) if image_blob is not None else None,
+        ),
+    )
+
+
+def _mark_document_ingested(conn: sqlite3.Connection, doc_id: str) -> None:
+    """Mark a document complete on a caller-owned transaction."""
+
+    conn.execute("UPDATE documents SET status=? WHERE doc_id=?", ("ingested", doc_id))
+
+
 def insert_document(
     db_path: str,
     doc_id: str,
@@ -51,17 +127,24 @@ def insert_document(
     file_path: str,
     page_count: int,
     docling_json: Optional[str],
+    *,
+    content_sha256: str | None = None,
 ) -> None:
-    """Insert or replace a document row. Uses ? placeholders (T-1-04)."""
+    """Insert or update a document row. Uses ? placeholders (T-1-04)."""
     conn = _connect(db_path)
-    conn.execute(
-        "INSERT OR REPLACE INTO documents "
-        "(doc_id, filename, file_path, page_count, docling_json) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (doc_id, filename, file_path, page_count, docling_json),
-    )
-    conn.commit()
-    conn.close()
+    try:
+        _upsert_document(
+            conn,
+            doc_id,
+            filename,
+            file_path,
+            page_count,
+            docling_json,
+            content_sha256=content_sha256,
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def insert_page(
@@ -73,24 +156,65 @@ def insert_page(
 ) -> None:
     """Insert or replace a page row with text and PNG BLOB (D-02)."""
     conn = _connect(db_path)
-    conn.execute(
-        "INSERT OR REPLACE INTO pages (doc_id, page_num, page_text, image_blob) "
-        "VALUES (?, ?, ?, ?)",
-        (doc_id, page_num, page_text, sqlite3.Binary(image_blob) if image_blob else None),
-    )
-    conn.commit()
-    conn.close()
+    try:
+        _upsert_page(conn, doc_id, page_num, page_text, image_blob)
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def mark_document_ingested(db_path: str, doc_id: str) -> None:
     """Set status='ingested' for a document."""
     conn = _connect(db_path)
-    conn.execute(
-        "UPDATE documents SET status=? WHERE doc_id=?",
-        ("ingested", doc_id),
+    try:
+        _mark_document_ingested(conn, doc_id)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def lookup_document_identity(
+    db_path: str,
+    content_sha256: str,
+    legacy_doc_id: str,
+) -> DocumentIdentityLookup | None:
+    """Find content identity first, then the exact legacy path-derived row."""
+
+    conn = _connect(db_path)
+    try:
+        row = conn.execute(
+            """
+            SELECT
+                d.doc_id,
+                d.content_sha256,
+                d.status,
+                d.page_count,
+                COUNT(p.page_id) AS persisted_page_count,
+                MIN(p.page_num) AS first_page_num,
+                MAX(p.page_num) AS last_page_num
+            FROM documents AS d
+            LEFT JOIN pages AS p ON p.doc_id = d.doc_id
+            WHERE d.content_sha256 = ? OR d.doc_id = ?
+            GROUP BY d.doc_id
+            ORDER BY CASE WHEN d.content_sha256 = ? THEN 0 ELSE 1 END
+            LIMIT 1
+            """,
+            (content_sha256, legacy_doc_id, content_sha256),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if row is None:
+        return None
+    return DocumentIdentityLookup(
+        doc_id=str(row[0]),
+        content_sha256=row[1],
+        status=str(row[2]),
+        page_count=int(row[3]),
+        persisted_page_count=int(row[4]),
+        first_page_num=int(row[5]) if row[5] is not None else None,
+        last_page_num=int(row[6]) if row[6] is not None else None,
     )
-    conn.commit()
-    conn.close()
 
 
 def mark_document_error(db_path: str, doc_id: str, error_msg: str) -> None:

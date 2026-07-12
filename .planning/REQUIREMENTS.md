@@ -9,8 +9,8 @@
 
 ### Ingestion
 
-- [ ] **INGEST-01**: User can point the CLI at a folder of pharmaceutical PDFs and ingest them into the document store using Docling (v2.72+, Granite-Docling-258M) — handling scanned, stamped, and complex-table PDFs
-- [ ] **INGEST-02**: System renders each page as a 150 DPI PNG thumbnail and stores alongside extracted text (required for source-page links and Phase 2 visual retrieval)
+- [x] **INGEST-01**: User can point the CLI at a folder of pharmaceutical PDFs and ingest them into the document store using Docling (v2.72+, Granite-Docling-258M) — handling scanned, stamped, and complex-table PDFs
+- [x] **INGEST-02**: System renders each page as a 150 DPI PNG thumbnail and stores alongside extracted text (required for source-page links and Phase 2 visual retrieval)
 
 ### Extraction
 
@@ -85,8 +85,8 @@
 
 | Requirement | Version | Roadmap Phase | Status |
 |-------------|---------|---------------|--------|
-| INGEST-01 | v1 | Phase 1: Foundation & Ingestion | Pending |
-| INGEST-02 | v1 | Phase 1: Foundation & Ingestion | Pending |
+| INGEST-01 | v1 | Phase 1: Foundation & Ingestion | Complete |
+| INGEST-02 | v1 | Phase 1: Foundation & Ingestion | Complete |
 | EXTRACT-01 | v1 | Phase 2: Extraction & Compliance | Pending |
 | EXTRACT-02 | v1 | Phase 2: Extraction & Compliance | Pending |
 | RETRIEVE-01 | v1 | Phase 3: Retrieval & RAG Chatbot | Pending |
