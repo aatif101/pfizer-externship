@@ -47,7 +47,11 @@ Plans:
   1. System extracts doc_type, vendor_name, manufacturing_date, effective_date, revision_date, and expiry_date from each document into a Pydantic-validated model
   2. Each extracted field includes a verbatim source text span and source page reference
   3. Each document is flagged green (<2yr), amber (2-3yr), or red (>3yr) based on document age, stored in the compliance database
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 02-01-PLAN.md — Strict fixed-six Gemini schema, bounded retry, July 2026 pricing, and thinking-token provenance
+- [ ] 02-02-PLAN.md — Manifest-bound per-document run lifecycle, migrations, safe batch failure, and resumability
+- [ ] 02-03-PLAN.md — Literal grounding, conservative visual review, deterministic risk, completed-run eval provenance, and full gates
 
 ### Phase 3: Retrieval & RAG Chatbot
 **Goal**: Users can ask natural-language questions about the document corpus and receive grounded answers with page-level citations
@@ -120,7 +124,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation & Ingestion | 4/4 | Complete    | 2026-07-12 |
-| 2. Extraction & Compliance | 0/TBD | Not started | - |
+| 2. Extraction & Compliance | 0/3 | Planned | - |
 | 3. Retrieval & RAG Chatbot | 0/TBD | Not started | - |
 | 4. Dashboard & Evaluation | 0/TBD | Not started | - |
 | 5. Visual Retrieval & Critic Extraction | 0/TBD | Not started | - |
