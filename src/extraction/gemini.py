@@ -422,6 +422,13 @@ def _build_visual_prompt(*, request: VisualFallbackRequest) -> str:
         f"- {field.value}: {request.reason_codes[field]}"
         for field in request.eligible_field_names
     )
+    vendor_region_rule = ""
+    if SDFFieldName.VENDOR_NAME in request.eligible_field_names:
+        vendor_region_rule = (
+            "For vendor_name, also include a finite x/y/width/height bounding box around the printed "
+            "supplier label or logo. This is required when the supplier name is visible in the image "
+            "but absent from embedded page text.\n"
+        )
     return f"""You are performing targeted visual fallback extraction for Pfizer supplier SDF compliance metadata.
 Return ONLY valid JSON. Do not include markdown.
 
@@ -434,6 +441,7 @@ Eligibility reason codes:
 Use only the attached page images. Do not rely on page text, file paths, prior provider output, or unstated context.
 The response schema always requires all six fixed field keys. Extract only fields from the requested field allowlist; for every unrequested or unsupported field set all value fields and evidence to null and provide a short abstention_reason.
 Page references must be 0-indexed and must reference one of the image-backed page numbers above. For every non-abstained field include a short verbatim_span visible in the cited page image.
+{vendor_region_rule}
 
 Packet labeling policy:
 Many supplier PDFs are packets containing emails, handwritten notes, template pages, processing records, SDS pages, and multiple supporting certificates.

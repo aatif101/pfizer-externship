@@ -18,6 +18,11 @@ pages, processing records, SDS pages, and multiple supporting certificates bundl
 into one document. Always identify the **primary product/material certificate**
 (Certificate of Analysis, Certificate of Quality, Certificate of Compliance, or
 equivalent) and extract all six fields from that primary sub-document only.
+Section ownership follows strong document headings across page boundaries: a
+continuation page inherits the preceding certificate until another strong heading
+(for example an email cover, SDS, processing/dosimetry certificate, template, or
+calibration report) closes that scope. A prose mention of an attached certificate
+or specification is not a heading and cannot reopen primary scope.
 
 ## The Six Fields
 
@@ -31,6 +36,10 @@ certificate. Never abbreviate and never expand beyond what is printed.
 
 - Use "Colder Products Company", not the abbreviation "CPC".
 - Use the complete legal entity name exactly as it appears.
+- Reject product/material/trade names, lot or batch values, and approver/signatory
+  names. Accept an explicit vendor/supplier/manufacturer/"Issued By" value, a
+  corporate identity in supplier context, or a review-forced image/logo claim as
+  described by the grounding contract below.
 
 ### `manufacturing_date`
 The manufacturing / production date of the material on the primary certificate.
@@ -76,5 +85,8 @@ weakened by the synonym/N/A rules above:
 - **Visual-grounded (`evidence_type='visual'`):** when a cited page's stored text is
   EMPTY (scanned pages where verbatim text grounding is impossible), an
   image-grounded value is accepted with the page citation preserved and
-  `needs_review` forced on. A failed span match against **non-empty** page text
-  still abstains.
+  `needs_review` forced on. One deliberately narrow mixed-content exception exists
+  for `vendor_name`: a supplier logo/header omitted by OCR may be accepted from an
+  image-backed primary page only when the visual provider supplies a finite,
+  positive `x/y/width/height` region. It remains visual evidence and always requires
+  review. All other failed span matches against **non-empty** page text abstain.

@@ -68,7 +68,14 @@ def test_expired_expiry_date_is_red_without_age() -> None:
 
 
 def test_under_two_years_old_is_green() -> None:
-    risk = compute_fields_risk(make_fields(manufacturing_date=date(2024, 1, 2)), today=date(2026, 1, 1))
+    risk = compute_fields_risk(
+        make_fields(
+            manufacturing_date=date(2024, 1, 2),
+            effective_date=date(2024, 2, 1),
+            revision_date=date(2024, 3, 1),
+        ),
+        today=date(2026, 1, 1),
+    )
 
     assert risk.risk_level == "green"
     assert risk.compliance_status == "compliant"
@@ -192,3 +199,153 @@ def test_record_risk_accepts_repository_style_iso_strings() -> None:
 
     assert risk.risk_level == "amber"
     assert risk.age_days == 731
+
+
+def test_exact_three_year_anniversary_is_still_amber() -> None:
+    risk = compute_fields_risk(
+        make_fields(manufacturing_date=date(2023, 7, 15)),
+        today=date(2026, 7, 15),
+    )
+
+    assert risk.risk_level == "amber"
+    assert risk.compliance_status == "needs_review"
+
+
+def test_feb_29_anniversary_uses_conservative_feb_28_cutoff() -> None:
+    risk = compute_fields_risk(
+        make_fields(manufacturing_date=date(2026, 2, 28), expiry_date=date(2029, 1, 1)),
+        today=date(2028, 2, 29),
+    )
+
+    assert risk.risk_level == "amber"
+
+
+def test_uncertain_date_that_would_be_green_cannot_be_simply_compliant() -> None:
+    fields = make_fields(manufacturing_date=date(2025, 7, 15), expiry_date=date(2027, 7, 15))
+    manufacturing = fields[SDFFieldName.MANUFACTURING_DATE]
+    fields[SDFFieldName.MANUFACTURING_DATE] = manufacturing.model_copy(
+        update={
+            "confidence": 0.74,
+            "review_state": ReviewState.NEEDS_REVIEW,
+            "evidence": SourceEvidence(
+                page_num=0,
+                verbatim_span="2025-07-15",
+                evidence_type="visual",
+            ),
+        }
+    )
+
+    risk = compute_fields_risk(fields, today=date(2026, 7, 15))
+
+    assert risk.risk_level == "green"
+    assert risk.compliance_status == "needs_review"
+    assert "unverified" in risk.risk_reason.lower()
+
+
+def test_uncertainty_never_weakens_an_expired_red_result() -> None:
+    fields = make_fields(manufacturing_date=date(2025, 7, 15), expiry_date=date(2026, 7, 14))
+    expiry = fields[SDFFieldName.EXPIRY_DATE]
+    fields[SDFFieldName.EXPIRY_DATE] = expiry.model_copy(
+        update={"confidence": 0.2, "review_state": ReviewState.NEEDS_REVIEW}
+    )
+
+    risk = compute_fields_risk(fields, today=date(2026, 7, 15))
+
+    assert risk.risk_level == "red"
+    assert risk.compliance_status == "at_risk"
+
+
+def test_invalid_expiry_never_masks_a_valid_age_red_result() -> None:
+    risk = compute_fields_risk(
+        make_fields(
+            manufacturing_date=date(2022, 7, 14),
+            expiry_date="provider-invented-date",
+        ),
+        today=date(2026, 7, 15),
+    )
+
+    assert risk.risk_level == "red"
+    assert risk.compliance_status == "at_risk"
+    assert "over the 3-year threshold" in risk.risk_reason
+
+
+def test_one_invalid_age_field_never_masks_another_valid_age_red_result() -> None:
+    risk = compute_fields_risk(
+        make_fields(
+            manufacturing_date="not-a-date",
+            effective_date=date(2022, 7, 14),
+            revision_date=date(2025, 7, 15),
+        ),
+        today=date(2026, 7, 15),
+    )
+
+    assert risk.risk_level == "red"
+    assert risk.compliance_status == "at_risk"
+    assert "2022-07-14" in risk.risk_reason
+
+
+def test_missing_expiry_forces_review_even_when_age_band_is_green() -> None:
+    risk = compute_fields_risk(
+        make_fields(
+            manufacturing_date=date(2025, 1, 1),
+            effective_date=date(2025, 2, 1),
+            revision_date=date(2025, 3, 1),
+            expiry_date=None,
+        ),
+        today=date(2026, 1, 1),
+    )
+
+    assert risk.risk_level == "green"
+    assert risk.compliance_status == "needs_review"
+
+
+def test_non_oldest_visual_date_forces_review_for_a_green_band() -> None:
+    fields = make_fields(
+        manufacturing_date=date(2025, 1, 1),
+        effective_date=date(2025, 2, 1),
+        revision_date=date(2025, 3, 1),
+        expiry_date=date(2027, 1, 1),
+    )
+    revision = fields[SDFFieldName.REVISION_DATE]
+    fields[SDFFieldName.REVISION_DATE] = revision.model_copy(
+        update={
+            "evidence": revision.evidence.model_copy(update={"evidence_type": "visual"}),
+        }
+    )
+
+    risk = compute_fields_risk(fields, today=date(2026, 1, 1))
+
+    assert risk.risk_level == "green"
+    assert risk.compliance_status == "needs_review"
+
+
+def test_future_non_oldest_age_date_forces_review_for_a_green_band() -> None:
+    risk = compute_fields_risk(
+        make_fields(
+            manufacturing_date=date(2025, 1, 1),
+            effective_date=date(2027, 1, 1),
+            revision_date=date(2025, 3, 1),
+            expiry_date=date(2028, 1, 1),
+        ),
+        today=date(2026, 1, 1),
+    )
+
+    assert risk.risk_level == "green"
+    assert risk.compliance_status == "needs_review"
+    assert "unverified" in risk.risk_reason.lower()
+
+
+def test_not_applicable_marker_outside_expiry_cannot_create_false_green() -> None:
+    risk = compute_fields_risk(
+        make_fields(
+            manufacturing_date="N/A",
+            effective_date=date(2025, 1, 1),
+            revision_date=date(2025, 2, 1),
+            expiry_date=date(2027, 1, 1),
+        ),
+        today=date(2026, 1, 1),
+    )
+
+    assert risk.risk_level == "green"
+    assert risk.compliance_status == "needs_review"
+    assert "unverified" in risk.risk_reason.lower()

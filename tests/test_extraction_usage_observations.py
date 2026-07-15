@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import sqlite3
+from dataclasses import fields
 from pathlib import Path
 
 import pytest
@@ -53,11 +54,15 @@ def test_extraction_usage_observation_insert_and_filter_multiple_rows(tmp_path: 
             stage="field_extraction",
             provider="gemini",
             model="gemini-2.5-flash",
+            requested_model="gemini-2.5-flash",
+            resolved_model="gemini-2.5-flash-2026-06-17",
+            pricing_model="gemini-2.5-flash",
             status="complete",
             latency_ms="125.5",
             input_tokens="100",
             output_tokens=25,
-            total_tokens=125,
+            thought_tokens="5",
+            total_tokens=130,
             estimated_cost_usd="0.000045",
             trace_id="trace-run-1",
             error_reason=None,
@@ -104,11 +109,15 @@ def test_extraction_usage_observation_insert_and_filter_multiple_rows(tmp_path: 
     assert rows[0].stage == "field_extraction"
     assert rows[0].provider == "gemini"
     assert rows[0].model == "gemini-2.5-flash"
+    assert rows[0].requested_model == "gemini-2.5-flash"
+    assert rows[0].resolved_model == "gemini-2.5-flash-2026-06-17"
+    assert rows[0].pricing_model == "gemini-2.5-flash"
     assert rows[0].status == "complete"
     assert rows[0].latency_ms == 125.5
     assert rows[0].input_tokens == 100
     assert rows[0].output_tokens == 25
-    assert rows[0].total_tokens == 125
+    assert rows[0].thought_tokens == 5
+    assert rows[0].total_tokens == 130
     assert rows[0].estimated_cost_usd == 0.000045
     assert rows[0].trace_id == "trace-run-1"
     assert rows[0].error_reason is None
@@ -126,7 +135,14 @@ def test_extraction_usage_observation_insert_and_filter_multiple_rows(tmp_path: 
     assert [row.observation_id for row in list_extraction_usage_observations(db_path, status="error")] == [
         second_id
     ]
-    assert [row.observation_id for row in list_extraction_usage_observations(db_path, run_id="run-1", doc_id="doc-a", stage="field_extraction", status="complete")] == [
+    filtered_rows = list_extraction_usage_observations(
+        db_path,
+        run_id="run-1",
+        doc_id="doc-a",
+        stage="field_extraction",
+        status="complete",
+    )
+    assert [row.observation_id for row in filtered_rows] == [
         first_id
     ]
 
@@ -156,6 +172,10 @@ def test_extraction_usage_observation_nullable_metrics_stay_null(tmp_path: Path)
     assert rows[0].estimated_cost_usd is None
     assert rows[0].provider is None
     assert rows[0].model is None
+    assert rows[0].requested_model is None
+    assert rows[0].resolved_model is None
+    assert rows[0].pricing_model is None
+    assert rows[0].thought_tokens is None
     assert rows[0].trace_id is None
     assert rows[0].error_reason is None
 
@@ -194,9 +214,18 @@ def test_extraction_usage_observation_rejects_malformed_numeric_values_without_w
     invalid_rows = [
         ExtractionUsageObservationRow(run_id="extract-run-1", doc_id="doc-a", latency_ms="slow"),
         ExtractionUsageObservationRow(run_id="extract-run-1", doc_id="doc-a", input_tokens=True),
+        ExtractionUsageObservationRow(run_id="extract-run-1", doc_id="doc-a", input_tokens=-1),
         ExtractionUsageObservationRow(run_id="extract-run-1", doc_id="doc-a", output_tokens="many"),
+        ExtractionUsageObservationRow(run_id="extract-run-1", doc_id="doc-a", output_tokens=-1),
+        ExtractionUsageObservationRow(run_id="extract-run-1", doc_id="doc-a", thought_tokens=True),
+        ExtractionUsageObservationRow(run_id="extract-run-1", doc_id="doc-a", thought_tokens=-1),
+        ExtractionUsageObservationRow(run_id="extract-run-1", doc_id="doc-a", thought_tokens=1.5),
         ExtractionUsageObservationRow(run_id="extract-run-1", doc_id="doc-a", total_tokens=False),
+        ExtractionUsageObservationRow(run_id="extract-run-1", doc_id="doc-a", total_tokens=-1),
+        ExtractionUsageObservationRow(run_id="extract-run-1", doc_id="doc-a", latency_ms=-0.1),
         ExtractionUsageObservationRow(run_id="extract-run-1", doc_id="doc-a", estimated_cost_usd=math.inf),
+        ExtractionUsageObservationRow(run_id="extract-run-1", doc_id="doc-a", estimated_cost_usd=True),
+        ExtractionUsageObservationRow(run_id="extract-run-1", doc_id="doc-a", estimated_cost_usd=-0.1),
     ]
 
     for row in invalid_rows:
@@ -232,3 +261,158 @@ def test_extraction_usage_observation_limit_rejects_bool(tmp_path: Path) -> None
 
     with pytest.raises(ValueError, match="limit"):
         list_extraction_usage_observations(db_path, limit=True)  # type: ignore[arg-type]
+
+
+def test_extraction_usage_observation_rejects_unbounded_model_identities_before_writing(
+    tmp_path: Path,
+) -> None:
+    db_path = str(tmp_path / "usage.db")
+    init_db(db_path)
+    _insert_usage_parent_rows(db_path)
+
+    invalid_rows = [
+        ExtractionUsageObservationRow(
+            run_id="extract-run-1",
+            doc_id="doc-a",
+            requested_model="",
+        ),
+        ExtractionUsageObservationRow(
+            run_id="extract-run-1",
+            doc_id="doc-a",
+            resolved_model="x" * 256,
+        ),
+        ExtractionUsageObservationRow(
+            run_id="extract-run-1",
+            doc_id="doc-a",
+            pricing_model="gemini-2.5-flash\nraw-payload",
+        ),
+    ]
+
+    for row in invalid_rows:
+        with pytest.raises(ValueError):
+            insert_extraction_usage_observation(db_path, row)
+
+    assert list_extraction_usage_observations(db_path) == []
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        ExtractionUsageObservationRow(run_id="", doc_id="doc-a"),
+        ExtractionUsageObservationRow(run_id="extract-run-1", doc_id=""),
+        ExtractionUsageObservationRow(run_id="extract-run-1", doc_id="doc-a", stage="raw_prompt"),
+        ExtractionUsageObservationRow(run_id="extract-run-1", doc_id="doc-a", status="provider said secret"),
+        ExtractionUsageObservationRow(
+            run_id="extract-run-1",
+            doc_id="doc-a",
+            provider="gemini\nSECRET_PAYLOAD",
+        ),
+        ExtractionUsageObservationRow(
+            run_id="extract-run-1",
+            doc_id="doc-a",
+            trace_id="trace\nC:/private/source.pdf",
+        ),
+        ExtractionUsageObservationRow(
+            run_id="extract-run-1",
+            doc_id="doc-a",
+            status="error",
+            error_reason="raw exception C:/private/source.pdf SECRET",
+        ),
+    ],
+)
+def test_extraction_usage_observation_rejects_unbounded_or_content_bearing_metadata_before_write(
+    tmp_path: Path,
+    row: ExtractionUsageObservationRow,
+) -> None:
+    db_path = str(tmp_path / "usage.db")
+    init_db(db_path)
+    _insert_usage_parent_rows(db_path)
+
+    with pytest.raises(ValueError):
+        insert_extraction_usage_observation(db_path, row)
+
+    assert list_extraction_usage_observations(db_path) == []
+
+
+@pytest.mark.parametrize("limit", [0, -1, 1_000_002])
+def test_extraction_usage_observation_rejects_nonpositive_or_unbounded_limits(
+    tmp_path: Path,
+    limit: int,
+) -> None:
+    db_path = str(tmp_path / "usage.db")
+    init_db(db_path)
+
+    with pytest.raises(ValueError, match="limit"):
+        list_extraction_usage_observations(db_path, limit=limit)
+
+
+def test_extraction_usage_observation_dto_has_only_bounded_scalar_columns() -> None:
+    column_names = {field.name for field in fields(ExtractionUsageObservationRow)}
+    assert column_names == {
+        "observation_id",
+        "run_id",
+        "doc_id",
+        "stage",
+        "provider",
+        "model",
+        "requested_model",
+        "resolved_model",
+        "pricing_model",
+        "status",
+        "latency_ms",
+        "input_tokens",
+        "output_tokens",
+        "thought_tokens",
+        "total_tokens",
+        "estimated_cost_usd",
+        "trace_id",
+        "error_reason",
+        "created_at",
+    }
+    forbidden_column_fragments = {
+        "prompt",
+        "page_text",
+        "verbatim_span",
+        "image",
+        "pdf",
+        "payload",
+        "api_key",
+        "file_path",
+        "exception",
+    }
+    assert not any(
+        forbidden in column_name
+        for forbidden in forbidden_column_fragments
+        for column_name in column_names
+    )
+
+
+def test_extraction_usage_observation_unknown_pricing_stays_null(tmp_path: Path) -> None:
+    db_path = str(tmp_path / "usage.db")
+    init_db(db_path)
+    _insert_usage_parent_rows(db_path)
+
+    insert_extraction_usage_observation(
+        db_path,
+        ExtractionUsageObservationRow(
+            run_id="extract-run-1",
+            doc_id="doc-a",
+            model="gemini-future-alias",
+            requested_model="gemini-future-alias",
+            resolved_model="gemini-future-001",
+            pricing_model=None,
+            input_tokens=10,
+            output_tokens=3,
+            thought_tokens=2,
+            total_tokens=15,
+            estimated_cost_usd=None,
+        ),
+    )
+
+    row = list_extraction_usage_observations(db_path)[0]
+    assert row.requested_model == "gemini-future-alias"
+    assert row.resolved_model == "gemini-future-001"
+    assert row.pricing_model is None
+    assert row.output_tokens == 3
+    assert row.thought_tokens == 2
+    assert row.estimated_cost_usd is None

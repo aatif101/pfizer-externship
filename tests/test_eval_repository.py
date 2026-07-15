@@ -8,6 +8,7 @@ import pytest
 from src.db.queries import insert_document
 from src.db.schema import init_db
 from src.eval.repository import (
+    begin_eval_run,
     RAGEvalObservationRow,
     create_eval_run,
     insert_rag_eval_observation,
@@ -123,6 +124,53 @@ def test_eval_run_create_and_list_is_idempotent(tmp_path):
     runs2 = list_eval_runs(db_path)
     assert runs2[0].status == "complete"
     assert runs2[0].completed_at is not None
+
+
+def test_begin_eval_run_atomically_resets_terminal_state_params_and_metrics(tmp_path) -> None:
+    db_path = str(tmp_path / "eval.db")
+    init_db(db_path)
+    create_eval_run(db_path, "run-reuse", "extraction_eval", "old", params={"source_run_id": "source-a"})
+    upsert_eval_metric(db_path, "run-reuse", "extraction.macro.f1", 0.99)
+    mark_eval_run_complete(db_path, "run-reuse")
+
+    begin_eval_run(
+        db_path,
+        run_id="run-reuse",
+        eval_type="extraction_eval",
+        pipeline_label="new",
+        params={"source_run_id": "source-b"},
+    )
+
+    row = next(item for item in list_eval_runs(db_path) if item.run_id == "run-reuse")
+    assert row.status == "running"
+    assert row.completed_at is None
+    assert row.error_reason is None
+    assert row.pipeline_label == "new"
+    assert json.loads(row.params_json or "{}") == {"source_run_id": "source-b"}
+    assert list_eval_metrics(db_path, "run-reuse") == []
+
+
+def test_begin_eval_run_rejects_cross_type_id_reuse_without_mutation(tmp_path) -> None:
+    db_path = str(tmp_path / "eval.db")
+    init_db(db_path)
+    create_eval_run(db_path, "run-collision", "retrieval_eval", "original", params={"source": "a"})
+    upsert_eval_metric(db_path, "run-collision", "retrieval.recall_at_5", 0.5)
+    mark_eval_run_complete(db_path, "run-collision")
+
+    with pytest.raises(ValueError, match="^eval_run_type_mismatch$"):
+        begin_eval_run(
+            db_path,
+            run_id="run-collision",
+            eval_type="extraction_eval",
+            pipeline_label="replacement",
+            params={"source": "b"},
+        )
+
+    row = next(item for item in list_eval_runs(db_path) if item.run_id == "run-collision")
+    assert row.eval_type == "retrieval_eval"
+    assert row.status == "complete"
+    assert json.loads(row.params_json or "{}") == {"source": "a"}
+    assert len(list_eval_metrics(db_path, "run-collision")) == 1
 
 
 def test_eval_run_error_sets_status_and_reason(tmp_path):

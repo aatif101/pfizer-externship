@@ -264,7 +264,7 @@ class SDFExtractionRecord(BaseModel):
     def dashboard_needs_review(self) -> bool:
         """Document-level review flag for compliance dashboard filtering."""
 
-        return any(field.needs_review for field in self.fields.values())
+        return self.compliance_status == "needs_review" or any(field.needs_review for field in self.fields.values())
 
     @computed_field
     @property

@@ -31,6 +31,11 @@ SECRET_PAGE_TEXT = "Supplier Declaration Form\nVendor Name: Acme Pharma Ltd."
 IMAGE_BYTES = b"\x89PNG\r\n\x1a\nvisual-test-image"
 
 
+def assert_not_exposed(fragment: str, content: str) -> None:
+    if fragment in content:
+        raise AssertionError("forbidden content was exposed")
+
+
 def pending_field(field_name: SDFFieldName, *, confidence: float = 0.91) -> ExtractedField:
     return ExtractedField(
         field_name=field_name,
@@ -89,9 +94,9 @@ def test_visual_fallback_reason_codes_are_bounded_and_do_not_include_values_or_s
 
     assert "field_abstained" in reason_repr
     assert "field_needs_review" in reason_repr
-    assert SECRET_FIELD_VALUE not in reason_repr
-    assert SECRET_SPAN not in reason_repr
-    assert "Provider returned no source evidence" not in reason_repr
+    assert_not_exposed(SECRET_FIELD_VALUE, reason_repr)
+    assert_not_exposed(SECRET_SPAN, reason_repr)
+    assert_not_exposed("Provider returned no source evidence", reason_repr)
 
 
 def test_visual_fallback_request_selects_only_image_backed_pages_and_eligible_field_names() -> None:
@@ -148,6 +153,20 @@ def test_visual_fallback_plan_skips_when_eligible_fields_have_no_page_images() -
     assert plan.request is None
 
 
+def test_visual_fallback_plan_treats_an_empty_image_blob_as_missing() -> None:
+    fields = all_pending_fields()
+    fields[SDFFieldName.VENDOR_NAME] = abstained_field(SDFFieldName.VENDOR_NAME)
+
+    plan = build_visual_fallback_request_plan(
+        fields,
+        (DocumentPage(doc_id="doc-001", page_num=0, page_text=SECRET_PAGE_TEXT, image_blob=b""),),
+    )
+
+    assert plan.status == "skipped"
+    assert plan.reason_code == "missing_page_images"
+    assert plan.request is None
+
+
 def test_visual_fallback_plan_skips_when_provider_is_not_configured() -> None:
     fields = all_pending_fields()
     fields[SDFFieldName.VENDOR_NAME] = abstained_field(SDFFieldName.VENDOR_NAME)
@@ -186,7 +205,26 @@ def test_visual_fallback_provider_receives_bounded_request_when_configured() -> 
     assert provider.seen_request.eligible_field_names == (SDFFieldName.EXPIRY_DATE,)
     assert provider.seen_request.reason_codes == {SDFFieldName.EXPIRY_DATE: "field_needs_review"}
     assert SECRET_PAGE_TEXT in (provider.seen_request.pages[0].page_text or "")
-    assert SECRET_FIELD_VALUE not in repr(provider.seen_request.reason_codes)
+    assert_not_exposed(SECRET_FIELD_VALUE, repr(provider.seen_request.reason_codes))
+
+
+def test_public_visual_fallback_helper_sanitizes_provider_exceptions() -> None:
+    fields = all_pending_fields()
+    fields[SDFFieldName.VENDOR_NAME] = abstained_field(SDFFieldName.VENDOR_NAME)
+    provider = RaisingRuntimeVisualProvider()
+
+    outcome = extract_visual_fallback_candidates(
+        document=document_metadata(),
+        fields=fields,
+        pages=(DocumentPage(doc_id="doc-001", page_num=0, page_text=SECRET_PAGE_TEXT, image_blob=IMAGE_BYTES),),
+        run_id="run-public-visual-error",
+        visual_provider=provider,
+    )
+
+    assert provider.calls == 1
+    assert outcome.provider_result is None
+    assert outcome.plan.status == "error"
+    assert outcome.plan.reason_code == "visual_provider_error"
 
 
 def test_extract_document_visual_fallback_fills_abstained_field_and_preserves_good_text_values(tmp_path: Path) -> None:
@@ -235,13 +273,68 @@ def test_extract_document_visual_fallback_fills_abstained_field_and_preserves_go
     visual_row = visual_rows[0]
     assert visual_row.provider == "visual-fake"
     assert visual_row.model == "visual-model-v1"
+    assert visual_row.requested_model == "visual-model"
+    assert visual_row.resolved_model == "visual-model-v1"
+    assert visual_row.pricing_model == "visual-model"
     assert visual_row.status == "complete"
     assert visual_row.input_tokens == 11
     assert visual_row.output_tokens == 7
-    assert visual_row.total_tokens == 18
+    assert visual_row.thought_tokens == 2
+    assert visual_row.total_tokens == 20
     assert visual_row.estimated_cost_usd == 0.0003
     assert visual_row.trace_id == "trace-visual-fake"
     assert visual_row.error_reason is None
+
+
+def test_mixed_content_page_accepts_bbox_grounded_visual_vendor_with_forced_review(tmp_path: Path) -> None:
+    db_path = str(tmp_path / "visual-mixed-content-logo.db")
+    init_db(db_path)
+    insert_document(
+        db_path,
+        doc_id="doc-001",
+        filename="mixed-content-certificate.pdf",
+        file_path="C:/confidential/mixed-content-certificate.pdf",
+        page_count=1,
+        docling_json=None,
+    )
+    insert_page(
+        db_path,
+        doc_id="doc-001",
+        page_num=0,
+        page_text="Certificate of Analysis\nProduct Name: Example Material",
+        image_blob=IMAGE_BYTES,
+    )
+    text_provider = TextProvider(fields=all_provider_fields(overrides={SDFFieldName.VENDOR_NAME: None}))
+    visual_provider = VisualProvider(
+        fields=(
+            ProviderFieldPayload(
+                field_name=SDFFieldName.VENDOR_NAME,
+                raw_value="Acme Pharma Ltd.",
+                confidence=0.99,
+                evidence=ProviderSourceEvidence(
+                    page_num=0,
+                    verbatim_span="Acme Pharma Ltd.",
+                    bbox={"x": 12, "y": 18, "width": 220, "height": 48},
+                ),
+            ),
+        )
+    )
+
+    result = extract_document(
+        db_path,
+        "doc-001",
+        text_provider,
+        visual_provider=visual_provider,
+        today=date(2026, 1, 1),
+        run_id="run-visual-mixed-content-logo",
+    )
+
+    vendor = result.record.fields[SDFFieldName.VENDOR_NAME]
+    assert vendor.raw_value == "Acme Pharma Ltd."
+    assert vendor.evidence.evidence_type == "visual"
+    assert vendor.evidence.bbox == {"x": 12, "y": 18, "width": 220, "height": 48}
+    assert vendor.review_state is ReviewState.NEEDS_REVIEW
+    assert result.record.dashboard_needs_review is True
 
 
 def test_extract_document_visual_fallback_skips_with_no_images_and_records_reason(tmp_path: Path) -> None:
@@ -292,9 +385,34 @@ def test_extract_document_visual_fallback_provider_exception_preserves_text_and_
     rows = list_extraction_usage_observations(db_path, run_id="run-visual-error", stage="visual_fallback")
     assert len(rows) == 1
     assert rows[0].status == "error"
-    assert rows[0].error_reason == "RuntimeError"
-    assert "SECRET" not in repr(rows[0])
-    assert "image" not in repr(rows[0]).lower()
+    assert rows[0].error_reason == "visual_provider_error"
+    assert_not_exposed("SECRET", repr(rows[0]))
+    assert_not_exposed("image", repr(rows[0]).lower())
+
+
+def test_malformed_visual_output_fails_closed_and_preserves_text_result(tmp_path: Path) -> None:
+    db_path = str(tmp_path / "visual-malformed.db")
+    prepare_visual_doc(db_path, image_blob=IMAGE_BYTES)
+    low_confidence_vendor = provider_payload(SDFFieldName.VENDOR_NAME, "Acme Pharma Ltd.", confidence=0.4)
+    text_provider = TextProvider(fields=all_provider_fields(overrides={SDFFieldName.VENDOR_NAME: low_confidence_vendor}))
+    visual_provider = MalformedVisualProvider()
+
+    result = extract_document(
+        db_path,
+        "doc-001",
+        text_provider,
+        visual_provider=visual_provider,
+        today=date(2026, 1, 1),
+        run_id="run-visual-malformed",
+    )
+
+    vendor = result.record.fields[SDFFieldName.VENDOR_NAME]
+    assert vendor.raw_value == "Acme Pharma Ltd."
+    assert vendor.review_state is ReviewState.NEEDS_REVIEW
+    rows = list_extraction_usage_observations(db_path, run_id="run-visual-malformed", stage="visual_fallback")
+    assert len(rows) == 1
+    assert rows[0].status == "error"
+    assert rows[0].error_reason == "visual_provider_output_invalid"
 
 
 def test_extract_document_visual_fallback_abstains_when_candidate_is_not_stronger(tmp_path: Path) -> None:
@@ -418,6 +536,115 @@ def test_visual_tier_still_abstains_on_failed_match_against_non_empty_text(tmp_p
     )
 
     assert result.record.fields[SDFFieldName.EXPIRY_DATE].review_state == ReviewState.ABSTAINED
+
+
+def test_visual_candidate_citing_an_unsent_page_is_rejected(tmp_path: Path) -> None:
+    db_path = str(tmp_path / "visual-unsent-page.db")
+    prepare_visual_doc(db_path, image_blob=IMAGE_BYTES)
+    text_provider = TextProvider(fields=all_provider_fields(overrides={SDFFieldName.VENDOR_NAME: None}))
+    visual_provider = VisualProvider(
+        fields=(
+            ProviderFieldPayload(
+                field_name=SDFFieldName.VENDOR_NAME,
+                raw_value="Acme Pharma Ltd.",
+                confidence=0.99,
+                evidence=ProviderSourceEvidence(page_num=9, verbatim_span="Acme Pharma Ltd."),
+            ),
+        )
+    )
+
+    result = extract_document(
+        db_path,
+        "doc-001",
+        text_provider,
+        visual_provider=visual_provider,
+        today=date(2026, 1, 1),
+        run_id="run-visual-unsent-page",
+    )
+
+    assert result.record.fields[SDFFieldName.VENDOR_NAME].review_state is ReviewState.ABSTAINED
+
+
+def test_visual_candidate_cannot_overwrite_a_noneligible_good_field(tmp_path: Path) -> None:
+    db_path = str(tmp_path / "visual-noneligible-field.db")
+    prepare_visual_doc(db_path, image_blob=IMAGE_BYTES)
+    text_provider = TextProvider(fields=all_provider_fields(overrides={SDFFieldName.VENDOR_NAME: None}))
+    visual_provider = VisualProvider(
+        fields=(
+            provider_payload(
+                SDFFieldName.EXPIRY_DATE,
+                "2027-01-31",
+                normalized_date="2027-01-31",
+                confidence=1.0,
+            ),
+        )
+    )
+
+    result = extract_document(
+        db_path,
+        "doc-001",
+        text_provider,
+        visual_provider=visual_provider,
+        today=date(2026, 1, 1),
+        run_id="run-visual-noneligible-field",
+    )
+
+    assert result.record.fields[SDFFieldName.VENDOR_NAME].review_state is ReviewState.ABSTAINED
+    assert result.record.fields[SDFFieldName.EXPIRY_DATE].raw_value == "2027-01-31"
+
+
+def test_visual_candidate_cannot_replace_exact_low_confidence_text_or_weaken_red_risk(tmp_path: Path) -> None:
+    db_path = str(tmp_path / "visual-preserve-text-red.db")
+    init_db(db_path)
+    insert_document(
+        db_path,
+        doc_id="doc-001",
+        filename="mixed.pdf",
+        file_path="C:/confidential/mixed.pdf",
+        page_count=2,
+        docling_json=None,
+    )
+    primary_text = PAGE_TEXT.replace("Expiry Date: 2027-01-31", "Expiry Date: 2025-12-31")
+    insert_page(db_path, doc_id="doc-001", page_num=0, page_text=primary_text, image_blob=IMAGE_BYTES)
+    insert_page(db_path, doc_id="doc-001", page_num=1, page_text="", image_blob=IMAGE_BYTES)
+    low_confidence_expiry = provider_payload(
+        SDFFieldName.EXPIRY_DATE,
+        "2025-12-31",
+        normalized_date="2025-12-31",
+        confidence=0.4,
+    )
+    text_provider = TextProvider(
+        fields=all_provider_fields(overrides={SDFFieldName.EXPIRY_DATE: low_confidence_expiry})
+    )
+    visual_provider = VisualProvider(
+        fields=(
+            ProviderFieldPayload(
+                field_name=SDFFieldName.EXPIRY_DATE,
+                raw_value="2099-01-01",
+                normalized_date="2099-01-01",
+                confidence=1.0,
+                evidence=ProviderSourceEvidence(
+                    page_num=1,
+                    verbatim_span="Expiry Date: 2099-01-01",
+                ),
+            ),
+        )
+    )
+
+    result = extract_document(
+        db_path,
+        "doc-001",
+        text_provider,
+        visual_provider=visual_provider,
+        today=date(2026, 1, 1),
+        run_id="run-visual-preserve-text-red",
+    )
+
+    expiry = result.record.fields[SDFFieldName.EXPIRY_DATE]
+    assert expiry.raw_value == "2025-12-31"
+    assert expiry.evidence.evidence_type == "text"
+    assert result.record.risk_level == "red"
+    assert result.record.compliance_status == "at_risk"
 
 
 def test_text_tier_matching_span_keeps_evidence_type_text(tmp_path: Path) -> None:
@@ -570,6 +797,7 @@ def all_provider_fields(
 class TextProvider:
     fields: tuple[ProviderFieldPayload, ...]
     seen_pages_had_images: bool | None = None
+    calls: int = 0
 
     def extract_fields(
         self,
@@ -579,6 +807,7 @@ class TextProvider:
         run_id: str,
     ) -> ProviderExtractionResult:
         assert document.doc_id == "doc-001"
+        self.calls += 1
         self.seen_pages_had_images = any(page.image_blob is not None for page in pages)
         return ProviderExtractionResult(fields=self.fields, trace_id="trace-text-fake", provider_name="text-fake")
 
@@ -606,9 +835,13 @@ class VisualProvider:
             provider_model="visual-model-v1",
             usage_metadata=ProviderUsageMetadata(
                 model="visual-model-from-usage",
+                requested_model="visual-model",
+                resolved_model="visual-model-v1",
+                pricing_model="visual-model",
                 input_tokens=11,
                 output_tokens=7,
-                total_tokens=18,
+                thought_tokens=2,
+                total_tokens=20,
                 estimated_cost_usd=0.0003,
             ),
         )
@@ -617,6 +850,7 @@ class VisualProvider:
 @dataclass
 class RaisingRuntimeVisualProvider:
     calls: int = 0
+    reason_code = "secret_api_key"
 
     def extract_visual_fields(
         self,
@@ -627,3 +861,48 @@ class RaisingRuntimeVisualProvider:
     ) -> ProviderExtractionResult:
         self.calls += 1
         raise RuntimeError("SECRET visual provider payload, prompt, page text, and image bytes must not persist")
+
+
+@dataclass
+class MalformedVisualProvider:
+    calls: int = 0
+
+    def extract_visual_fields(
+        self,
+        *,
+        document: DocumentMetadata,
+        request: VisualFallbackRequest,
+        run_id: str,
+    ) -> object:
+        self.calls += 1
+        return object()
+
+
+def test_all_scanned_document_skips_text_provider_and_forces_visual_review(tmp_path: Path) -> None:
+    db_path = str(tmp_path / "all-scanned-visual.db")
+    init_db(db_path)
+    insert_document(
+        db_path,
+        doc_id="doc-001",
+        filename="scanned.pdf",
+        file_path="C:/confidential/scanned.pdf",
+        page_count=1,
+        docling_json=None,
+    )
+    insert_page(db_path, doc_id="doc-001", page_num=0, page_text="", image_blob=IMAGE_BYTES)
+    text_provider = TextProvider(fields=all_provider_fields())
+    visual_provider = VisualProvider(fields=all_provider_fields())
+
+    result = extract_document(
+        db_path,
+        "doc-001",
+        text_provider,
+        visual_provider=visual_provider,
+        today=date(2026, 1, 1),
+        run_id="run-all-scanned",
+    )
+
+    assert text_provider.calls == 0
+    assert visual_provider.calls == 1
+    assert all(field.review_state is ReviewState.NEEDS_REVIEW for field in result.record.fields.values())
+    assert all(field.evidence.evidence_type == "visual" for field in result.record.fields.values())

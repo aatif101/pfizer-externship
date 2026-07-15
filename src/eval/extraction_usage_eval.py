@@ -7,13 +7,16 @@ Streamlit; the source rows already contain the only allowed usage telemetry.
 
 from __future__ import annotations
 
-import re
 import sqlite3
 import uuid
 
+from src.eval.extraction_eval_runner import (
+    SourceExtractionRunIncompleteError,
+    load_complete_extraction_source_run,
+)
 from src.eval.operational_metrics import aggregate_extraction_usage_metrics
 from src.eval.repository import (
-    create_eval_run,
+    begin_eval_run,
     list_extraction_usage_observations,
     mark_eval_run_complete,
     mark_eval_run_error,
@@ -31,9 +34,19 @@ _EXTRACTION_USAGE_TRACE_ALLOWED_KEYS = frozenset(
         "observation_count",
         "metric_count",
         "error_class",
+        "reason_code",
     }
 )
-_ERROR_SANITIZE_RE = re.compile(r"[^A-Za-z0-9 _.:\-/#]+")
+_EXTRACTION_USAGE_EVAL_ERROR_REASON = "extraction_usage_eval_error"
+
+
+class ExtractionUsageEvalError(RuntimeError):
+    """Raised when usage aggregation fails without exposing persisted values."""
+
+    reason_code = _EXTRACTION_USAGE_EVAL_ERROR_REASON
+
+    def __init__(self) -> None:
+        super().__init__(self.reason_code)
 
 
 @observe(name="extraction_usage_eval_run")
@@ -49,10 +62,12 @@ def run_extraction_usage_eval(
 
     Returns the eval run id. Empty or older DBs with no observation table complete
     successfully with no metrics. Malformed persisted numeric values fail visibly,
-    mark the eval run ``error``, and store only a sanitized error class/message.
+    mark the eval run ``error``, and store only a stable bounded reason code.
     """
 
     run_id = eval_run_id or uuid.uuid4().hex
+    if isinstance(max_observations, bool) or not isinstance(max_observations, int) or not 1 <= max_observations <= 1_000_000:
+        raise ValueError("max_observations_invalid")
     observation_count = 0
     metric_count = 0
     _update_extraction_usage_trace_metadata(
@@ -63,7 +78,7 @@ def run_extraction_usage_eval(
         metric_count=metric_count,
     )
 
-    create_eval_run(
+    begin_eval_run(
         db_path,
         run_id=run_id,
         eval_type="extraction_usage_eval",
@@ -72,6 +87,8 @@ def run_extraction_usage_eval(
     )
 
     try:
+        if load_complete_extraction_source_run(db_path, source_run_id) is None:
+            raise SourceExtractionRunIncompleteError()
         observations = _load_optional_extraction_usage_observations(
             db_path,
             source_run_id=source_run_id,
@@ -93,7 +110,12 @@ def run_extraction_usage_eval(
         )
         return run_id
     except Exception as exc:
-        mark_eval_run_error(db_path, run_id, _sanitize_error(exc))
+        reason_code = (
+            exc.reason_code
+            if isinstance(exc, SourceExtractionRunIncompleteError)
+            else _EXTRACTION_USAGE_EVAL_ERROR_REASON
+        )
+        mark_eval_run_error(db_path, run_id, reason_code)
         _update_extraction_usage_trace_metadata(
             status="error",
             run_id=run_id,
@@ -101,13 +123,19 @@ def run_extraction_usage_eval(
             observation_count=observation_count,
             metric_count=metric_count,
             error_class=exc.__class__.__name__,
+            reason_code=reason_code,
         )
-        raise
+        if isinstance(exc, SourceExtractionRunIncompleteError):
+            raise
+        raise ExtractionUsageEvalError() from None
 
 
 def _load_optional_extraction_usage_observations(db_path: str, *, source_run_id: str, limit: int):
     try:
-        return list_extraction_usage_observations(db_path, run_id=source_run_id, limit=limit)
+        rows = list_extraction_usage_observations(db_path, run_id=source_run_id, limit=limit + 1)
+        if len(rows) > limit:
+            raise ValueError("extraction_usage_observations_truncated")
+        return rows
     except sqlite3.OperationalError as exc:
         if "extraction_usage_observations" in str(exc) and "no such table" in str(exc).lower():
             return []
@@ -122,6 +150,7 @@ def _update_extraction_usage_trace_metadata(
     observation_count: int,
     metric_count: int,
     error_class: str | None = None,
+    reason_code: str | None = None,
 ) -> None:
     """Attach bounded extraction-usage eval metadata to the current trace.
 
@@ -141,12 +170,7 @@ def _update_extraction_usage_trace_metadata(
             "observation_count": observation_count,
             "metric_count": metric_count,
             "error_class": error_class,
+            "reason_code": reason_code,
         },
         allowed_metadata_keys=_EXTRACTION_USAGE_TRACE_ALLOWED_KEYS,
     )
-
-
-def _sanitize_error(exc: Exception) -> str:
-    message = f"{exc.__class__.__name__}: {exc}"
-    message = _ERROR_SANITIZE_RE.sub("", message)
-    return message[:500]

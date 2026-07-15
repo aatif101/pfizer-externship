@@ -15,7 +15,7 @@ from src.db.queries import DocumentMetadata, DocumentPage, insert_document, inse
 from src.db.schema import init_db
 from src.extraction.gemini import GeminiSDFExtractionProvider, MALFORMED_OUTPUT_REASON
 from src.extraction.models import ReviewState, SDFFieldName
-from src.extraction.pipeline import extract_document
+from src.extraction.pipeline import PROVIDER_ABSTENTION_REASON, extract_document
 from src.extraction.providers import ExtractionConfigurationError, ExtractionProviderError
 from src.extraction.repository import get_extraction_record
 
@@ -223,7 +223,7 @@ def test_malformed_gemini_json_becomes_abstention_records(tmp_db_path: str) -> N
     stored = get_extraction_record(tmp_db_path, "doc-001")
     assert stored is not None
     assert all(field.review_state == ReviewState.ABSTAINED for field in stored.fields.values())
-    assert all(field.abstention_reason == MALFORMED_OUTPUT_REASON for field in stored.fields.values())
+    assert all(field.abstention_reason == PROVIDER_ABSTENTION_REASON for field in stored.fields.values())
 
 
 @pytest.mark.parametrize("response_text", malformed_payload_cases())

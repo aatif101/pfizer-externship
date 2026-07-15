@@ -380,13 +380,31 @@ def get_complete_extraction_run(db_path: str, run_id: str) -> ExtractionRunSumma
 
 
 def record_extraction_run_resolved_model(db_path: str, run_id: str, resolved_model: str | None) -> None:
-    """Persist the bounded provider-resolved model identity for audit evidence."""
+    """Persist one immutable provider-resolved model identity for audit evidence.
+
+    A response that omits its resolved model is a no-op. Once a concrete model is
+    recorded, retries may repeat that same identity but may never silently replace
+    it with a different one.
+    """
 
     safe_run_id = _validate_identity(run_id, field="run_id")
     safe_model = None if resolved_model is None else _validate_identity(resolved_model, field="resolved_model")
     conn = _connect(db_path)
     try:
-        cursor = conn.execute(
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT resolved_model FROM extraction_runs WHERE run_id = ?",
+            (safe_run_id,),
+        ).fetchone()
+        if row is None:
+            raise ExtractionRunStateError("extraction_run_not_found", run_id=safe_run_id)
+        current_model = row[0]
+        if safe_model is None or current_model == safe_model:
+            conn.commit()
+            return
+        if current_model is not None:
+            raise ExtractionRunStateError("extraction_run_model_mismatch", run_id=safe_run_id)
+        conn.execute(
             """
             UPDATE extraction_runs SET resolved_model = ?,
                 updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
@@ -394,8 +412,6 @@ def record_extraction_run_resolved_model(db_path: str, run_id: str, resolved_mod
             """,
             (safe_model, safe_run_id),
         )
-        if cursor.rowcount != 1:
-            raise ExtractionRunStateError("extraction_run_not_found", run_id=safe_run_id)
         conn.commit()
     except Exception:
         conn.rollback()

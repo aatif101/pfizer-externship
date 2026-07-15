@@ -41,6 +41,7 @@ _DATE_FIELDS_FOR_AGE: tuple[SDFFieldName, ...] = (
 _NOT_APPLICABLE_DATE_MARKERS: frozenset[str] = frozenset(
     {"n/a", "n.a.", "na", "not applicable"}
 )
+_UNCALIBRATED_CONFIDENCE_REVIEW_THRESHOLD = 0.75
 
 
 def compute_record_risk(record: SDFExtractionRecord, *, today: date) -> RiskMetadata:
@@ -63,8 +64,6 @@ def compute_fields_risk(fields: Mapping[SDFFieldName, ExtractedField], *, today:
     """
 
     expiry_value = _field_date(fields.get(SDFFieldName.EXPIRY_DATE))
-    if expiry_value.error:
-        return _needs_review(expiry_value.reason)
     if expiry_value.value is not None and expiry_value.value < today:
         return RiskMetadata(
             risk_level="red",
@@ -73,21 +72,26 @@ def compute_fields_risk(fields: Mapping[SDFFieldName, ExtractedField], *, today:
             age_days=None,
         )
 
-    age_dates: list[date] = []
-    invalid_reasons: list[str] = []
+    age_dates: list[tuple[SDFFieldName, date, ExtractedField]] = []
+    invalid_reasons: list[str] = [expiry_value.reason] if expiry_value.error else []
     for field_name in _DATE_FIELDS_FOR_AGE:
         parsed = _field_date(fields.get(field_name))
         if parsed.error:
             invalid_reasons.append(parsed.reason)
         elif parsed.value is not None:
-            age_dates.append(parsed.value)
+            field = fields.get(field_name)
+            if parsed.value > today:
+                invalid_reasons.append(f"{field_name.value} is future-dated and requires review.")
+            elif field is not None:
+                age_dates.append((field_name, parsed.value, field))
 
-    if invalid_reasons:
-        return _needs_review("; ".join(invalid_reasons))
     if not age_dates:
-        return _needs_review("No usable manufacturing, effective, or revision date was extracted for age-based risk scoring.")
+        reason = "No usable manufacturing, effective, or revision date was extracted for age-based risk scoring."
+        if invalid_reasons:
+            reason = "; ".join([*invalid_reasons, reason])
+        return _needs_review(reason)
 
-    oldest_date = min(age_dates)
+    oldest_date = min(value for _, value, _ in age_dates)
     age_days = (today - oldest_date).days
     if age_days < 0:
         return _needs_review(f"Oldest relevant date {oldest_date.isoformat()} is after {today.isoformat()}.")
@@ -95,26 +99,47 @@ def compute_fields_risk(fields: Mapping[SDFFieldName, ExtractedField], *, today:
     two_year_cutoff = _subtract_years(today, 2)
     three_year_cutoff = _subtract_years(today, 3)
 
-    if oldest_date > two_year_cutoff:
+    if oldest_date < three_year_cutoff:
+        reason = f"Oldest relevant date {oldest_date.isoformat()} is {age_days} days old, over the 3-year threshold."
+        if invalid_reasons:
+            reason += " Additional date evidence remains unverified."
         return RiskMetadata(
+            risk_level="red",
+            risk_reason=reason,
+            compliance_status="at_risk",
+            age_days=age_days,
+        )
+
+    if oldest_date > two_year_cutoff:
+        risk = RiskMetadata(
             risk_level="green",
             risk_reason=f"Oldest relevant date {oldest_date.isoformat()} is {age_days} days old, under the 2-year threshold.",
             compliance_status="compliant",
             age_days=age_days,
         )
+        relevant_fields = [
+            fields.get(field_name)
+            for field_name in (*_DATE_FIELDS_FOR_AGE, SDFFieldName.EXPIRY_DATE)
+        ]
+        if invalid_reasons or any(_field_is_uncertain(field) for field in relevant_fields):
+            return RiskMetadata(
+                risk_level=risk.risk_level,
+                risk_reason=risk.risk_reason + " Compliance review is required because source evidence is unverified.",
+                compliance_status="needs_review",
+                age_days=risk.age_days,
+            )
+        return risk
     if oldest_date >= three_year_cutoff:
+        reason = f"Oldest relevant date {oldest_date.isoformat()} is {age_days} days old, between 2 and 3 years."
+        if invalid_reasons:
+            reason += " Additional date evidence remains unverified."
         return RiskMetadata(
             risk_level="amber",
-            risk_reason=f"Oldest relevant date {oldest_date.isoformat()} is {age_days} days old, between 2 and 3 years.",
+            risk_reason=reason,
             compliance_status="needs_review",
             age_days=age_days,
         )
-    return RiskMetadata(
-        risk_level="red",
-        risk_reason=f"Oldest relevant date {oldest_date.isoformat()} is {age_days} days old, over the 3-year threshold.",
-        compliance_status="at_risk",
-        age_days=age_days,
-    )
+    raise AssertionError("unreachable risk boundary")
 
 
 @dataclass(frozen=True)
@@ -141,6 +166,12 @@ def _field_date(field: ExtractedField | None) -> _ParsedDate:
     # document is not parked at risk_level='unknown'. See module docstring and
     # docs/field-definitions.md (expiry_date rules).
     if isinstance(candidate, str) and candidate.strip().casefold() in _NOT_APPLICABLE_DATE_MARKERS:
+        if field.field_name is not SDFFieldName.EXPIRY_DATE:
+            return _ParsedDate(
+                None,
+                True,
+                f"{field.field_name.value} cannot use a not-applicable date marker.",
+            )
         return _ParsedDate(None, False, "")
 
     parsed = _parse_date(candidate)
@@ -148,7 +179,7 @@ def _field_date(field: ExtractedField | None) -> _ParsedDate:
         return _ParsedDate(
             None,
             True,
-            f"{field.field_name.value} has an ambiguous or invalid date value: {candidate!r}.",
+            f"{field.field_name.value} has an ambiguous or invalid date value.",
         )
     return _ParsedDate(parsed, False, "")
 
@@ -176,6 +207,15 @@ def _subtract_years(value: date, years: int) -> date:
         # Feb 29 has no equivalent in non-leap years; Feb 28 is the conservative
         # anniversary cutoff for calendar-year document age thresholds.
         return value.replace(year=value.year - years, day=28)
+
+
+def _field_is_uncertain(field: ExtractedField | None) -> bool:
+    return (
+        field is None
+        or field.review_state in {ReviewState.NEEDS_REVIEW, ReviewState.ABSTAINED}
+        or field.evidence.evidence_type == "visual"
+        or field.confidence < _UNCALIBRATED_CONFIDENCE_REVIEW_THRESHOLD
+    )
 
 
 def _needs_review(reason: str) -> RiskMetadata:

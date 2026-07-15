@@ -91,6 +91,7 @@ VisualFallbackReasonCode = Literal[
     "no_eligible_fields",
     "missing_page_images",
     "not_configured",
+    "visual_provider_error",
 ]
 VisualFallbackStatus = Literal["ready", "skipped", "complete", "abstained", "error"]
 

@@ -17,9 +17,9 @@ import pytest
 from src.db.queries import DocumentMetadata, DocumentPage, insert_document, insert_page
 from src.db.schema import init_db
 from src.eval.repository import list_extraction_usage_observations
-from src.extraction.gemini import GeminiSDFExtractionProvider, MALFORMED_OUTPUT_REASON
+from src.extraction.gemini import GeminiSDFExtractionProvider
 from src.extraction.models import ReviewState, SDFFieldName
-from src.extraction.pipeline import extract_document
+from src.extraction.pipeline import PROVIDER_ABSTENTION_REASON, extract_document
 from src.extraction.repository import get_extraction_record
 
 PAGE_TEXT = """
@@ -466,7 +466,7 @@ def test_malformed_gemini_json_with_usage_persists_abstained_usage_observation(t
     stored = get_extraction_record(tmp_db_path, "doc-001")
     assert stored is not None
     assert all(field.review_state == ReviewState.ABSTAINED for field in stored.fields.values())
-    assert all(field.abstention_reason == MALFORMED_OUTPUT_REASON for field in stored.fields.values())
+    assert all(field.abstention_reason == PROVIDER_ABSTENTION_REASON for field in stored.fields.values())
     assert set(stored.fields) == set(SDFFieldName)
 
     rows = list_extraction_usage_observations(

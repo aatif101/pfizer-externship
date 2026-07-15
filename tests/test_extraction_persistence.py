@@ -188,7 +188,7 @@ def test_upsert_record_round_trips_field_and_compliance_rows(tmp_db_path: str) -
             "expiry_date": "2026-01-31",
             "aggregate_confidence": pytest.approx(record.aggregate_confidence),
             "review_state": "pending",
-            "needs_review": 0,
+            "needs_review": 1,
             "trace_id": "trace-001",
             "run_id": "run-001",
             "extracted_at": "2026-05-19T12:00:00+00:00",
@@ -632,6 +632,13 @@ def test_resolved_model_and_safe_terminal_metadata_are_bounded(tmp_db_path: str)
         corpus_version="v1",
     )
     record_extraction_run_resolved_model(tmp_db_path, "run-model", "gemini-2.5-flash-001")
+    record_extraction_run_resolved_model(tmp_db_path, "run-model", "gemini-2.5-flash-001")
+    record_extraction_run_resolved_model(tmp_db_path, "run-model", None)
+    assert list_extraction_run_summaries(tmp_db_path)[0].resolved_model == "gemini-2.5-flash-001"
+
+    with pytest.raises(ExtractionRunStateError) as exc_info:
+        record_extraction_run_resolved_model(tmp_db_path, "run-model", "gemini-2.5-flash-002")
+    assert exc_info.value.reason_code == "extraction_run_model_mismatch"
     assert list_extraction_run_summaries(tmp_db_path)[0].resolved_model == "gemini-2.5-flash-001"
 
     with pytest.raises(ExtractionRunStateError):

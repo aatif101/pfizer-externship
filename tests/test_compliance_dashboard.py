@@ -146,7 +146,7 @@ def test_load_and_format_compliance_rows_exposes_dashboard_fields(tmp_db_path: s
     assert row["age_days"] == 865
     assert row["aggregate_confidence"] == make_record().aggregate_confidence
     assert row["review_state"] == "pending"
-    assert row["needs_review"] == 0
+    assert row["needs_review"] == 1
     assert row["run_id"] == "run-dashboard-001"
     assert row["trace_id"] == "trace-dashboard-001"
     assert row["source_verbatim_span"] == "Expiry Date: 2026-01-31"
@@ -155,7 +155,7 @@ def test_load_and_format_compliance_rows_exposes_dashboard_fields(tmp_db_path: s
     assert row["source_page_display"] == 3
     assert row["source_page_label"] == "Page 3"
     assert row["source_evidence_label"] == "Page 3"
-    assert row["needs_review_display"] == "No review needed"
+    assert row["needs_review_display"] == "Needs review"
     assert row["aggregate_confidence_display"] == "86%"
     assert row["risk_level_label"] == "Amber"
     assert row["review_state_label"] == "Pending"

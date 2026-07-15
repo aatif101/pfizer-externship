@@ -13,7 +13,7 @@ This roadmap delivers an end-to-end pharmaceutical document intelligence system 
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation & Ingestion** - Doc store, SQLite schema, Streamlit skeleton, Langfuse wiring, and Docling PDF ingestion pipeline
-- [ ] **Phase 2: Extraction & Compliance** - VLM-powered structured field extraction with Pydantic validation and compliance risk flagging
+- [x] **Phase 2: Extraction & Compliance** - VLM-powered structured field extraction with Pydantic validation and compliance risk flagging
 - [ ] **Phase 3: Retrieval & RAG Chatbot** - Hybrid BM25+dense retrieval with reranker, and linear RAG chatbot with page-level citations
 - [ ] **Phase 4: Dashboard & Evaluation** - Streamlit compliance table with color-coded risk levels, and eval harness with gold set
 - [ ] **Phase 5: Visual Retrieval & Critic Extraction** - ColQwen2 page-image retrieval, extraction critic loop, and per-field confidence ensemble
@@ -51,7 +51,7 @@ Plans:
 Plans:
 - [x] 02-01-PLAN.md — Strict fixed-six Gemini schema, bounded retry, July 2026 pricing, and thinking-token provenance
 - [x] 02-02-PLAN.md — Manifest-bound per-document run lifecycle, migrations, safe batch failure, and resumability
-- [ ] 02-03-PLAN.md — Literal grounding, conservative visual review, deterministic risk, completed-run eval provenance, and full gates
+- [x] 02-03-PLAN.md — Literal grounding, conservative visual review, deterministic risk, completed-run eval provenance, and full gates
 
 ### Phase 3: Retrieval & RAG Chatbot
 **Goal**: Users can ask natural-language questions about the document corpus and receive grounded answers with page-level citations
@@ -124,7 +124,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation & Ingestion | 4/4 | Complete    | 2026-07-12 |
-| 2. Extraction & Compliance | 0/3 | Planned | - |
+| 2. Extraction & Compliance | 3/3 | Complete | 2026-07-15 |
 | 3. Retrieval & RAG Chatbot | 0/TBD | Not started | - |
 | 4. Dashboard & Evaluation | 0/TBD | Not started | - |
 | 5. Visual Retrieval & Critic Extraction | 0/TBD | Not started | - |

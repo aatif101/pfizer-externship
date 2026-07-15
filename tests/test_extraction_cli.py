@@ -323,7 +323,7 @@ def test_extract_all_reports_provider_failure_without_raw_document_text(monkeypa
 
     assert result.exit_code == 1
     assert provider.calls == ["doc-a", "doc-b"]
-    assert "reason=extraction_provider_error" in result.output
+    assert "reason=provider_invocation_failed" in result.output
     assert "doc_id=doc-b" in result.output
     assert "status=partial expected=2 attempted=2 succeeded=1 failed=1 skipped=0 corpus_version=unversioned" in result.output
     assert "Acme Pharma Ltd." not in result.output
