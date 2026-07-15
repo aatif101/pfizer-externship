@@ -35,6 +35,7 @@ dependencies = [
 dev = [
     "pytest",
     "pytest-cov",
+    "pytest-socket>=0.7,<1",
 ]
 
 [tool.setuptools.packages.find]
@@ -45,5 +46,8 @@ include = ["src*"]
 testpaths = ["tests"]
 addopts = "-x --tb=short"
 markers = [
-    "gpu: requires a CUDA GPU + the pinned ColQwen/torch/qdrant stack; skipped offline",
+    "phase3_required: release-blocking Phase 3 test; must pass offline with zero skips or xpasses",
+    "live: explicit live-provider release test; excluded from ordinary offline CI and never replay-backed",
+    "model: real cached embedding/reranker model test; excluded from ordinary offline CI and required in the release environment",
+    "gpu: requires a CUDA GPU and the pinned ColQwen/torch/qdrant stack; excluded from the Phase 3 text release gate",
 ]

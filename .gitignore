@@ -3,6 +3,7 @@ compliance.db
 *.sqlite
 .env
 settings.local.json
+.artifacts/
 
 # Confidential local document/data artifacts — never commit supplier PDFs,
 # page images, populated DBs, or private benchmark outputs.
@@ -12,6 +13,18 @@ data/pdfs/
 private/
 local_data/
 reports/private/
+data/private/
+benchmarks/sdf-synthetic-v1/generated/
+qdrant_storage/
+.qdrant/
+.checkpoints/
+checkpoints/
+.model-cache/
+model_cache/
+hf_cache/
+.hf-cache/
+*.db-shm
+*.db-wal
 *.pdf
 *.png
 *.jpg
