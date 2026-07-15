@@ -91,15 +91,38 @@ CREATE TABLE IF NOT EXISTS compliance_records (
 );
 
 CREATE TABLE IF NOT EXISTS extraction_runs (
-    run_id          TEXT PRIMARY KEY,
-    status          TEXT NOT NULL,
-    document_count  INTEGER NOT NULL DEFAULT 0,
-    field_count     INTEGER NOT NULL DEFAULT 0,
-    trace_id         TEXT,
-    started_at       TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-    completed_at     TIMESTAMP,
-    created_at       TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-    updated_at       TIMESTAMP
+    run_id                       TEXT PRIMARY KEY,
+    status                       TEXT NOT NULL,
+    document_count               INTEGER NOT NULL DEFAULT 0,
+    field_count                  INTEGER NOT NULL DEFAULT 0,
+    expected_document_count      INTEGER NOT NULL DEFAULT 0 CHECK (expected_document_count >= 0),
+    attempted_document_count     INTEGER NOT NULL DEFAULT 0 CHECK (attempted_document_count >= 0),
+    succeeded_document_count     INTEGER NOT NULL DEFAULT 0 CHECK (succeeded_document_count >= 0),
+    failed_document_count        INTEGER NOT NULL DEFAULT 0 CHECK (failed_document_count >= 0),
+    provider                     TEXT,
+    requested_model              TEXT,
+    resolved_model               TEXT,
+    corpus_version               TEXT,
+    manifest_hash                TEXT,
+    trace_id                     TEXT,
+    started_at                   TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    completed_at                 TIMESTAMP,
+    created_at                   TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    updated_at                   TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS extraction_run_documents (
+    run_id         TEXT NOT NULL REFERENCES extraction_runs(run_id) ON DELETE CASCADE,
+    doc_id         TEXT NOT NULL REFERENCES documents(doc_id) ON DELETE CASCADE,
+    status         TEXT NOT NULL DEFAULT 'pending'
+                   CHECK (status IN ('pending', 'running', 'completed', 'failed')),
+    attempt_count  INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+    trace_id       TEXT,
+    error_reason   TEXT,
+    started_at     TIMESTAMP,
+    completed_at   TIMESTAMP,
+    updated_at     TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    PRIMARY KEY (run_id, doc_id)
 );
 
 CREATE TABLE IF NOT EXISTS extraction_history (
@@ -209,10 +232,14 @@ CREATE TABLE IF NOT EXISTS extraction_usage_observations (
     stage               TEXT NOT NULL,
     provider            TEXT,
     model               TEXT,
+    requested_model     TEXT,
+    resolved_model      TEXT,
+    pricing_model       TEXT,
     status              TEXT NOT NULL,
     latency_ms          REAL,
     input_tokens        INTEGER,
     output_tokens       INTEGER,
+    thought_tokens      INTEGER,
     total_tokens        INTEGER,
     estimated_cost_usd  REAL,
     trace_id            TEXT,
@@ -353,6 +380,25 @@ _EXTRACTION_MIGRATION_COLUMNS: tuple[tuple[str, str], ...] = (
     ("updated_at", "TIMESTAMP"),
 )
 
+_EXTRACTION_RUN_MIGRATION_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("expected_document_count", "INTEGER NOT NULL DEFAULT 0 CHECK (expected_document_count >= 0)"),
+    ("attempted_document_count", "INTEGER NOT NULL DEFAULT 0 CHECK (attempted_document_count >= 0)"),
+    ("succeeded_document_count", "INTEGER NOT NULL DEFAULT 0 CHECK (succeeded_document_count >= 0)"),
+    ("failed_document_count", "INTEGER NOT NULL DEFAULT 0 CHECK (failed_document_count >= 0)"),
+    ("provider", "TEXT"),
+    ("requested_model", "TEXT"),
+    ("resolved_model", "TEXT"),
+    ("corpus_version", "TEXT"),
+    ("manifest_hash", "TEXT"),
+)
+
+_EXTRACTION_USAGE_MIGRATION_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("requested_model", "TEXT"),
+    ("resolved_model", "TEXT"),
+    ("pricing_model", "TEXT"),
+    ("thought_tokens", "INTEGER"),
+)
+
 # Additive evidence_type columns (D027). NULL-at-rest is treated as "text" on read.
 _EVIDENCE_TYPE_MIGRATIONS: tuple[tuple[str, str, str], ...] = (
     ("extractions", "evidence_type", "TEXT"),
@@ -367,6 +413,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_content_sha256
 CREATE INDEX IF NOT EXISTS idx_extractions_review_state ON extractions(review_state);
 CREATE INDEX IF NOT EXISTS idx_extractions_needs_review ON extractions(needs_review);
 CREATE INDEX IF NOT EXISTS idx_retrieval_pages_text_source ON retrieval_index_pages(text_source);
+CREATE INDEX IF NOT EXISTS idx_extraction_run_documents_status
+    ON extraction_run_documents(run_id, status, doc_id);
+CREATE INDEX IF NOT EXISTS idx_extraction_runs_manifest_hash
+    ON extraction_runs(manifest_hash);
+CREATE INDEX IF NOT EXISTS idx_extraction_usage_requested_model
+    ON extraction_usage_observations(requested_model);
+CREATE INDEX IF NOT EXISTS idx_extraction_usage_resolved_model
+    ON extraction_usage_observations(resolved_model);
 """
 
 
@@ -385,6 +439,9 @@ def init_db(db_path: str) -> None:
         _migrate_documents_table(conn)
         _migrate_extractions_table(conn)
         _migrate_evidence_type_columns(conn)
+        _migrate_extraction_runs_table(conn)
+        _migrate_extraction_usage_observations_table(conn)
+        _backfill_extraction_run_lifecycle(conn)
         _migrate_retrieval_index_pages_table(conn)
         _migrate_visual_index_runs_table(conn)
         _init_retrieval_index_fts(conn)
@@ -440,6 +497,101 @@ def _migrate_extractions_table(conn: sqlite3.Connection) -> None:
         if column_name not in existing_columns:
             conn.execute(f"ALTER TABLE extractions ADD COLUMN {column_name} {column_type}")
             existing_columns.add(column_name)
+
+
+def _migrate_extraction_runs_table(conn: sqlite3.Connection) -> None:
+    """Add manifest/provenance/count columns to pre-lifecycle run tables."""
+
+    existing_columns = _table_columns(conn, "extraction_runs")
+    if not existing_columns:
+        return
+    for column_name, column_def in _EXTRACTION_RUN_MIGRATION_COLUMNS:
+        if column_name not in existing_columns:
+            conn.execute(f"ALTER TABLE extraction_runs ADD COLUMN {column_name} {column_def}")
+            existing_columns.add(column_name)
+
+
+def _migrate_extraction_usage_observations_table(conn: sqlite3.Connection) -> None:
+    """Add model-resolution and thinking-token slots without rewriting usage rows."""
+
+    existing_columns = _table_columns(conn, "extraction_usage_observations")
+    if not existing_columns:
+        return
+    for column_name, column_def in _EXTRACTION_USAGE_MIGRATION_COLUMNS:
+        if column_name not in existing_columns:
+            conn.execute(f"ALTER TABLE extraction_usage_observations ADD COLUMN {column_name} {column_def}")
+            existing_columns.add(column_name)
+
+
+def _backfill_extraction_run_lifecycle(conn: sqlite3.Connection) -> None:
+    """Derive conservative completed children and counts from immutable history.
+
+    Only legacy parents (``manifest_hash IS NULL``) are aggregated here. Managed
+    runs own their lifecycle through the repository API and must never be
+    rewritten by a later idempotent ``init_db`` call.
+    """
+
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO extraction_run_documents (
+            run_id, doc_id, status, attempt_count, trace_id,
+            started_at, completed_at, updated_at
+        )
+        SELECT historical.run_id, historical.doc_id, 'completed', 1,
+               historical.trace_id,
+               COALESCE(parent.started_at, strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+               COALESCE(parent.completed_at, strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+               strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+        FROM (
+            SELECT run_id, doc_id, MAX(trace_id) AS trace_id
+            FROM (
+                SELECT run_id, doc_id, trace_id FROM extraction_history
+                UNION ALL
+                SELECT run_id, doc_id, trace_id FROM compliance_record_history
+            )
+            GROUP BY run_id, doc_id
+        ) AS historical
+        JOIN extraction_runs AS parent ON parent.run_id = historical.run_id
+        JOIN documents AS document ON document.doc_id = historical.doc_id
+        WHERE parent.manifest_hash IS NULL
+        """
+    )
+    conn.execute(
+        """
+        UPDATE extraction_runs
+        SET expected_document_count = (
+                SELECT COUNT(*) FROM extraction_run_documents child
+                WHERE child.run_id = extraction_runs.run_id
+            ),
+            attempted_document_count = (
+                SELECT COUNT(*) FROM extraction_run_documents child
+                WHERE child.run_id = extraction_runs.run_id AND child.attempt_count > 0
+            ),
+            succeeded_document_count = (
+                SELECT COUNT(*) FROM extraction_run_documents child
+                WHERE child.run_id = extraction_runs.run_id AND child.status = 'completed'
+            ),
+            failed_document_count = (
+                SELECT COUNT(*) FROM extraction_run_documents child
+                WHERE child.run_id = extraction_runs.run_id AND child.status = 'failed'
+            ),
+            document_count = CASE
+                WHEN (SELECT COUNT(*) FROM extraction_run_documents child
+                      WHERE child.run_id = extraction_runs.run_id) > 0
+                THEN (SELECT COUNT(*) FROM extraction_run_documents child
+                      WHERE child.run_id = extraction_runs.run_id)
+                ELSE document_count
+            END,
+            field_count = CASE
+                WHEN (SELECT COUNT(*) FROM extraction_history history
+                      WHERE history.run_id = extraction_runs.run_id) > 0
+                THEN (SELECT COUNT(*) FROM extraction_history history
+                      WHERE history.run_id = extraction_runs.run_id)
+                ELSE field_count
+            END
+        WHERE manifest_hash IS NULL
+        """
+    )
 
 
 def _migrate_evidence_type_columns(conn: sqlite3.Connection) -> None:

@@ -50,7 +50,7 @@ Plans:
 **Plans**: 3 plans
 Plans:
 - [x] 02-01-PLAN.md — Strict fixed-six Gemini schema, bounded retry, July 2026 pricing, and thinking-token provenance
-- [ ] 02-02-PLAN.md — Manifest-bound per-document run lifecycle, migrations, safe batch failure, and resumability
+- [x] 02-02-PLAN.md — Manifest-bound per-document run lifecycle, migrations, safe batch failure, and resumability
 - [ ] 02-03-PLAN.md — Literal grounding, conservative visual review, deterministic risk, completed-run eval provenance, and full gates
 
 ### Phase 3: Retrieval & RAG Chatbot

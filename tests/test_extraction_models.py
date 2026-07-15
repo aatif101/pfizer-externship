@@ -1,18 +1,85 @@
 """Tests for the typed SDF extraction contract."""
 from __future__ import annotations
 
+from dataclasses import fields as dataclass_fields
 from datetime import date
 
 import pytest
 from pydantic import ValidationError
 
 from src.extraction.models import (
+    ExtractionDocumentStatus,
+    ExtractionRunDocument,
+    ExtractionRunStatus,
+    ExtractionRunSummary,
     ExtractedField,
     ReviewState,
     SDFExtractionRecord,
     SDFFieldName,
     SourceEvidence,
 )
+
+
+def test_extraction_lifecycle_models_are_typed_frozen_and_content_free() -> None:
+    document = ExtractionRunDocument(
+        run_id="run-001",
+        doc_id="doc-001",
+        status=ExtractionDocumentStatus.PENDING,
+        attempt_count=0,
+        trace_id=None,
+        error_reason=None,
+        started_at=None,
+        completed_at=None,
+        updated_at=None,
+    )
+    summary = ExtractionRunSummary(
+        run_id="run-001",
+        status=ExtractionRunStatus.RUNNING,
+        document_count=0,
+        field_count=0,
+        expected_document_count=1,
+        attempted_document_count=0,
+        succeeded_document_count=0,
+        failed_document_count=0,
+        provider="gemini",
+        requested_model="gemini-2.5-flash",
+        resolved_model=None,
+        corpus_version="holdout-v1",
+        manifest_hash="a" * 64,
+        trace_id=None,
+        started_at=None,
+        completed_at=None,
+        created_at=None,
+        updated_at=None,
+    )
+
+    assert [status.value for status in ExtractionRunStatus] == ["running", "completed", "partial", "failed"]
+    assert [status.value for status in ExtractionDocumentStatus] == ["pending", "running", "completed", "failed"]
+    assert document.status is ExtractionDocumentStatus.PENDING
+    assert summary.status is ExtractionRunStatus.RUNNING
+    public_field_names = {
+        field.name
+        for dto in (ExtractionRunDocument, ExtractionRunSummary)
+        for field in dataclass_fields(dto)
+    }
+    assert public_field_names.isdisjoint(
+        {
+            "filename",
+            "file_path",
+            "field_value",
+            "verbatim_span",
+            "page_text",
+            "image_blob",
+            "provider_payload",
+            "raw_error",
+            "api_key",
+            "secret",
+        }
+    )
+    forbidden = ("page text sentinel", "provider payload sentinel", "secret sentinel", "C:\\private\\doc.pdf")
+    assert not any(value in repr(document) + repr(summary) for value in forbidden)
+    with pytest.raises(AttributeError):
+        document.attempt_count = 1  # type: ignore[misc]
 
 
 def make_field(

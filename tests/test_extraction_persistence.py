@@ -1,6 +1,7 @@
 """Tests for idempotent SDF extraction persistence."""
 from __future__ import annotations
 
+import hashlib
 import sqlite3
 from datetime import date, datetime, timezone
 
@@ -8,13 +9,32 @@ import pytest
 
 from src.db.queries import insert_document
 from src.db.schema import init_db
-from src.extraction.models import ExtractedField, ReviewState, SDFExtractionRecord, SDFFieldName, SourceEvidence
+from src.extraction.models import (
+    ExtractedField,
+    ExtractionDocumentStatus,
+    ExtractionRunStatus,
+    ReviewState,
+    SDFExtractionRecord,
+    SDFFieldName,
+    SourceEvidence,
+)
 from src.extraction.repository import (
+    ExtractionRunConflictError,
+    ExtractionRunStateError,
+    _compute_extraction_manifest_hash,
+    begin_or_resume_extraction_run,
+    finalize_extraction_run,
+    get_complete_extraction_run,
     get_extraction_record,
     get_extraction_record_for_run,
+    list_resume_candidates,
     list_compliance_records,
     list_compliance_records_for_run,
     list_extraction_run_summaries,
+    mark_run_document_completed,
+    mark_run_document_failed,
+    mark_run_document_running,
+    record_extraction_run_resolved_model,
     upsert_extraction_field,
     upsert_extraction_record,
 )
@@ -440,3 +460,228 @@ def test_sql_metacharacters_round_trip_safely_in_history(tmp_db_path: str) -> No
     assert stored.fields[SDFFieldName.VENDOR_NAME].raw_value == hostile_vendor
     assert list_compliance_records_for_run(tmp_db_path, "run-hostile")[0]["vendor_name"] == hostile_vendor
     assert table_count(tmp_db_path, "extraction_history") == 6
+
+
+def test_manifest_hash_uses_exact_content_free_canonical_contract() -> None:
+    expected = hashlib.sha256("holdout-v1\x1fdoc-a\x1edoc-b".encode()).hexdigest()
+
+    assert _compute_extraction_manifest_hash("holdout-v1", ("doc-b", "doc-a", "doc-b")) == expected
+
+
+def test_managed_run_transitions_resume_and_sql_terminal_states(tmp_db_path: str) -> None:
+    prepare_db(tmp_db_path, "doc-b", "doc-a")
+    started = begin_or_resume_extraction_run(
+        tmp_db_path,
+        run_id="run-managed",
+        doc_ids=("doc-b", "doc-a"),
+        provider="gemini",
+        requested_model="gemini-2.5-flash",
+        corpus_version="holdout-v1",
+    )
+    assert started.status is ExtractionRunStatus.RUNNING
+    assert started.expected_document_count == 2
+    assert [item.doc_id for item in list_resume_candidates(tmp_db_path, "run-managed")] == ["doc-a", "doc-b"]
+
+    claimed_a = mark_run_document_running(tmp_db_path, "run-managed", "doc-a")
+    assert claimed_a.status is ExtractionDocumentStatus.RUNNING
+    assert claimed_a.attempt_count == 1
+    upsert_extraction_record(tmp_db_path, make_record(doc_id="doc-a", run_id="run-managed"))
+    mark_run_document_completed(tmp_db_path, "run-managed", "doc-a", trace_id="trace-a")
+
+    claimed_b = mark_run_document_running(tmp_db_path, "run-managed", "doc-b")
+    assert claimed_b.attempt_count == 1
+    mark_run_document_failed(tmp_db_path, "run-managed", "doc-b", reason_code="extraction_provider_error")
+    partial = finalize_extraction_run(tmp_db_path, "run-managed")
+    assert partial.status is ExtractionRunStatus.PARTIAL
+    assert (
+        partial.expected_document_count,
+        partial.attempted_document_count,
+        partial.succeeded_document_count,
+        partial.failed_document_count,
+    ) == (2, 2, 1, 1)
+    assert partial.document_count == 1
+    assert partial.field_count == 6
+    assert get_complete_extraction_run(tmp_db_path, "run-managed") is None
+    assert [item.doc_id for item in list_resume_candidates(tmp_db_path, "run-managed")] == ["doc-b"]
+
+    retry_b = mark_run_document_running(tmp_db_path, "run-managed", "doc-b")
+    assert retry_b.attempt_count == 2
+    upsert_extraction_record(tmp_db_path, make_record(doc_id="doc-b", run_id="run-managed"))
+    mark_run_document_completed(tmp_db_path, "run-managed", "doc-b", trace_id="trace-b")
+    completed = finalize_extraction_run(tmp_db_path, "run-managed")
+    assert completed.status is ExtractionRunStatus.COMPLETED
+    assert completed.completed_at is not None
+    assert completed.document_count == 2
+    assert completed.field_count == 12
+    assert list_resume_candidates(tmp_db_path, "run-managed") == ()
+    assert get_complete_extraction_run(tmp_db_path, "run-managed") == completed
+
+
+def test_finalize_distinguishes_running_and_all_failed(tmp_db_path: str) -> None:
+    prepare_db(tmp_db_path, "doc-a", "doc-b")
+    begin_or_resume_extraction_run(
+        tmp_db_path,
+        run_id="run-states",
+        doc_ids=("doc-a", "doc-b"),
+        provider="gemini",
+        requested_model="gemini-2.5-flash",
+        corpus_version="v1",
+    )
+    mark_run_document_running(tmp_db_path, "run-states", "doc-a")
+    mark_run_document_failed(tmp_db_path, "run-states", "doc-a", reason_code="extraction_provider_error")
+
+    interrupted = finalize_extraction_run(tmp_db_path, "run-states")
+    assert interrupted.status is ExtractionRunStatus.RUNNING
+    assert interrupted.completed_at is None
+
+    mark_run_document_running(tmp_db_path, "run-states", "doc-b")
+    mark_run_document_failed(tmp_db_path, "run-states", "doc-b", reason_code="extraction_provider_error")
+    failed = finalize_extraction_run(tmp_db_path, "run-states")
+    assert failed.status is ExtractionRunStatus.FAILED
+    assert failed.attempted_document_count == 2
+    assert failed.failed_document_count == 2
+    assert failed.completed_at is not None
+
+
+@pytest.mark.parametrize(
+    ("doc_ids", "provider", "requested_model", "corpus_version"),
+    [
+        (("doc-a",), "gemini", "gemini-2.5-flash", "v1"),
+        (("doc-a", "doc-b"), "other", "gemini-2.5-flash", "v1"),
+        (("doc-a", "doc-b"), "gemini", "gemini-3.5-flash", "v1"),
+        (("doc-a", "doc-b"), "gemini", "gemini-2.5-flash", "v2"),
+    ],
+)
+def test_resume_identity_mismatch_is_reason_coded_and_non_mutating(
+    tmp_db_path: str,
+    doc_ids: tuple[str, ...],
+    provider: str,
+    requested_model: str,
+    corpus_version: str,
+) -> None:
+    prepare_db(tmp_db_path, "doc-a", "doc-b")
+    begin_or_resume_extraction_run(
+        tmp_db_path,
+        run_id="run-fixed",
+        doc_ids=("doc-a", "doc-b"),
+        provider="gemini",
+        requested_model="gemini-2.5-flash",
+        corpus_version="v1",
+    )
+    before = list_extraction_run_summaries(tmp_db_path)
+    children_before = list_resume_candidates(tmp_db_path, "run-fixed")
+
+    with pytest.raises(ExtractionRunConflictError) as captured:
+        begin_or_resume_extraction_run(
+            tmp_db_path,
+            run_id="run-fixed",
+            doc_ids=doc_ids,
+            provider=provider,
+            requested_model=requested_model,
+            corpus_version=corpus_version,
+        )
+
+    assert captured.value.reason_code == "extraction_run_identity_mismatch"
+    assert list_extraction_run_summaries(tmp_db_path) == before
+    assert list_resume_candidates(tmp_db_path, "run-fixed") == children_before
+
+
+def test_hostile_sql_identifiers_round_trip_without_changing_manifest_membership(tmp_db_path: str) -> None:
+    hostile_doc = "doc-'); DROP TABLE documents; --"
+    hostile_run = "run-'); DROP TABLE extraction_runs; --"
+    prepare_db(tmp_db_path, hostile_doc)
+    summary = begin_or_resume_extraction_run(
+        tmp_db_path,
+        run_id=hostile_run,
+        doc_ids=(hostile_doc,),
+        provider="gemini",
+        requested_model="gemini-2.5-flash",
+        corpus_version="v1",
+    )
+    assert summary.run_id == hostile_run
+    assert [item.doc_id for item in list_resume_candidates(tmp_db_path, hostile_run)] == [hostile_doc]
+    assert table_count(tmp_db_path, "documents") == 1
+    assert table_count(tmp_db_path, "extraction_runs") == 1
+
+
+def test_managed_upsert_cannot_add_document_outside_manifest(tmp_db_path: str) -> None:
+    prepare_db(tmp_db_path, "doc-a", "doc-b")
+    begin_or_resume_extraction_run(
+        tmp_db_path,
+        run_id="run-fixed",
+        doc_ids=("doc-a",),
+        provider="gemini",
+        requested_model="gemini-2.5-flash",
+        corpus_version="v1",
+    )
+
+    with pytest.raises(ExtractionRunConflictError):
+        upsert_extraction_record(tmp_db_path, make_record(doc_id="doc-b", run_id="run-fixed"))
+
+    assert table_count_where(tmp_db_path, "extraction_history", "run_id = ?", ("run-fixed",)) == 0
+
+
+def test_resolved_model_and_safe_terminal_metadata_are_bounded(tmp_db_path: str) -> None:
+    prepare_db(tmp_db_path, "doc-a")
+    begin_or_resume_extraction_run(
+        tmp_db_path,
+        run_id="run-model",
+        doc_ids=("doc-a",),
+        provider="gemini",
+        requested_model="gemini-2.5-flash",
+        corpus_version="v1",
+    )
+    record_extraction_run_resolved_model(tmp_db_path, "run-model", "gemini-2.5-flash-001")
+    assert list_extraction_run_summaries(tmp_db_path)[0].resolved_model == "gemini-2.5-flash-001"
+
+    with pytest.raises(ExtractionRunStateError):
+        mark_run_document_failed(tmp_db_path, "run-model", "doc-a", reason_code="raw error /private/doc.pdf")
+
+
+def test_begin_run_rolls_back_parent_and_children_when_child_insert_fails(monkeypatch, tmp_db_path: str) -> None:
+    import src.extraction.repository as repository
+
+    prepare_db(tmp_db_path, "doc-a", "doc-b")
+    real_connect = repository._connect
+
+    class FailingConnection:
+        def __init__(self, connection: sqlite3.Connection) -> None:
+            self.connection = connection
+
+        @property
+        def row_factory(self):
+            return self.connection.row_factory
+
+        @row_factory.setter
+        def row_factory(self, value) -> None:
+            self.connection.row_factory = value
+
+        def execute(self, *args, **kwargs):
+            return self.connection.execute(*args, **kwargs)
+
+        def executemany(self, *args, **kwargs):
+            raise sqlite3.OperationalError("injected child insert failure")
+
+        def commit(self) -> None:
+            self.connection.commit()
+
+        def rollback(self) -> None:
+            self.connection.rollback()
+
+        def close(self) -> None:
+            self.connection.close()
+
+    monkeypatch.setattr(repository, "_connect", lambda db_path: FailingConnection(real_connect(db_path)))
+    with pytest.raises(sqlite3.OperationalError):
+        begin_or_resume_extraction_run(
+            tmp_db_path,
+            run_id="run-rollback",
+            doc_ids=("doc-a", "doc-b"),
+            provider="gemini",
+            requested_model="gemini-2.5-flash",
+            corpus_version="v1",
+        )
+    monkeypatch.setattr(repository, "_connect", real_connect)
+
+    assert table_count_where(tmp_db_path, "extraction_runs", "run_id = ?", ("run-rollback",)) == 0
+    assert table_count_where(tmp_db_path, "extraction_run_documents", "run_id = ?", ("run-rollback",)) == 0

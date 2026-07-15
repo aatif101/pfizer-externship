@@ -1,11 +1,69 @@
 """Extraction contract models for Pfizer SDF documents."""
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
+
+
+class ExtractionRunStatus(StrEnum):
+    """Durable aggregate states for a manifest-bound extraction run."""
+
+    RUNNING = "running"
+    COMPLETED = "completed"
+    PARTIAL = "partial"
+    FAILED = "failed"
+
+
+class ExtractionDocumentStatus(StrEnum):
+    """Durable per-document states within an extraction manifest."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+@dataclass(frozen=True)
+class ExtractionRunDocument:
+    """Content-free lifecycle metadata for one run/document pair."""
+
+    run_id: str
+    doc_id: str
+    status: ExtractionDocumentStatus
+    attempt_count: int
+    trace_id: str | None
+    error_reason: str | None
+    started_at: str | None
+    completed_at: str | None
+    updated_at: str | None
+
+
+@dataclass(frozen=True)
+class ExtractionRunSummary:
+    """Bounded provenance and SQL-derived counts for one extraction run."""
+
+    run_id: str
+    status: ExtractionRunStatus
+    document_count: int
+    field_count: int
+    trace_id: str | None
+    started_at: str | None
+    completed_at: str | None
+    created_at: str | None
+    updated_at: str | None
+    expected_document_count: int = 0
+    attempted_document_count: int = 0
+    succeeded_document_count: int = 0
+    failed_document_count: int = 0
+    provider: str | None = None
+    requested_model: str | None = None
+    resolved_model: str | None = None
+    corpus_version: str | None = None
+    manifest_hash: str | None = None
 
 
 class SDFFieldName(str, Enum):
