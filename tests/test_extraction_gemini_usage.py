@@ -36,6 +36,7 @@ Expiry Date: 2027-01-31
 class FakeUsageMetadata:
     prompt_token_count: int | None = None
     candidates_token_count: int | None = None
+    thoughts_token_count: int | None = None
     total_token_count: int | None = None
 
 
@@ -44,6 +45,8 @@ class FakeGeminiResponse:
     text: str
     response_id: str = "gemini-trace-usage-001"
     usage_metadata: Any | None = None
+    model_version: Any | None = None
+    parsed: Any | None = None
 
 
 class FakeGeminiModels:
@@ -78,7 +81,6 @@ def prepare_doc(db_path: str) -> None:
 
 
 def field_payload(
-    field_name: str,
     raw_value: str,
     *,
     normalized_value: str | None = None,
@@ -86,7 +88,6 @@ def field_payload(
     confidence: float,
 ) -> dict[str, Any]:
     return {
-        "field_name": field_name,
         "raw_value": raw_value,
         "normalized_value": normalized_value,
         "normalized_date": normalized_date,
@@ -97,15 +98,15 @@ def field_payload(
 
 
 def valid_payload() -> str:
-    fields = [
-        field_payload("doc_type", "Supplier Declaration Form", normalized_value="SDF", confidence=0.96),
-        field_payload("vendor_name", "Acme Pharma Ltd.", confidence=0.94),
-        field_payload("manufacturing_date", "2024-01-05", normalized_date="2024-01-05", confidence=0.91),
-        field_payload("effective_date", "2024-02-01", normalized_date="2024-02-01", confidence=0.90),
-        field_payload("revision_date", "2024-03-15", normalized_date="2024-03-15", confidence=0.88),
-        field_payload("expiry_date", "2027-01-31", normalized_date="2027-01-31", confidence=0.93),
-    ]
-    return json.dumps({"trace_id": "provider-json-trace", "fields": fields})
+    fields = {
+        "doc_type": field_payload("Supplier Declaration Form", normalized_value="SDF", confidence=0.96),
+        "vendor_name": field_payload("Acme Pharma Ltd.", confidence=0.94),
+        "manufacturing_date": field_payload("2024-01-05", normalized_date="2024-01-05", confidence=0.91),
+        "effective_date": field_payload("2024-02-01", normalized_date="2024-02-01", confidence=0.90),
+        "revision_date": field_payload("2024-03-15", normalized_date="2024-03-15", confidence=0.88),
+        "expiry_date": field_payload("2027-01-31", normalized_date="2027-01-31", confidence=0.93),
+    }
+    return json.dumps({"fields": fields})
 
 
 def assert_usage_row_is_bounded(row: object) -> None:
@@ -127,7 +128,7 @@ def assert_usage_row_is_bounded(row: object) -> None:
         assert fragment not in row_repr
 
 
-def test_gemini_provider_extracts_bounded_usage_metadata_and_estimated_flash_cost() -> None:
+def test_gemini_provider_prices_25_candidate_and_thinking_tokens_with_auditable_models() -> None:
     client = FakeGeminiClient(
         [
             FakeGeminiResponse(
@@ -135,8 +136,10 @@ def test_gemini_provider_extracts_bounded_usage_metadata_and_estimated_flash_cos
                 usage_metadata=FakeUsageMetadata(
                     prompt_token_count=1_000,
                     candidates_token_count=250,
-                    total_token_count=1_250,
+                    thoughts_token_count=50,
+                    total_token_count=1_300,
                 ),
+                model_version="gemini-2.5-flash",
             )
         ]
     )
@@ -158,10 +161,14 @@ def test_gemini_provider_extracts_bounded_usage_metadata_and_estimated_flash_cos
     assert result.provider_model == "gemini-2.5-flash"
     assert result.usage_metadata is not None
     assert result.usage_metadata.model == "gemini-2.5-flash"
+    assert result.usage_metadata.requested_model == "gemini-2.5-flash"
+    assert result.usage_metadata.resolved_model == "gemini-2.5-flash"
+    assert result.usage_metadata.pricing_model == "gemini-2.5-flash"
     assert result.usage_metadata.input_tokens == 1_000
     assert result.usage_metadata.output_tokens == 250
-    assert result.usage_metadata.total_tokens == 1_250
-    assert result.usage_metadata.estimated_cost_usd == pytest.approx(0.0003)
+    assert result.usage_metadata.thought_tokens == 50
+    assert result.usage_metadata.total_tokens == 1_300
+    assert result.usage_metadata.estimated_cost_usd == pytest.approx((1_000 * 0.30 + 300 * 2.50) / 1_000_000)
     assert "Acme Pharma Ltd." not in repr(result.usage_metadata)
 
 
@@ -198,10 +205,167 @@ def test_gemini_provider_unknown_model_keeps_tokens_but_null_cost() -> None:
 
     assert result.usage_metadata is not None
     assert result.usage_metadata.model == "gemini-future-model"
+    assert result.usage_metadata.requested_model == "gemini-future-model"
+    assert result.usage_metadata.resolved_model is None
+    assert result.usage_metadata.pricing_model is None
     assert result.usage_metadata.input_tokens == 100
     assert result.usage_metadata.output_tokens == 20
     assert result.usage_metadata.total_tokens == 120
     assert result.usage_metadata.estimated_cost_usd is None
+
+
+def test_gemini_35_uses_the_same_schema_path_and_july_2026_price() -> None:
+    client = FakeGeminiClient(
+        [
+            FakeGeminiResponse(
+                valid_payload(),
+                usage_metadata=FakeUsageMetadata(
+                    prompt_token_count=1_000,
+                    candidates_token_count=250,
+                    thoughts_token_count=50,
+                    total_token_count=1_300,
+                ),
+                model_version="gemini-3.5-flash",
+            )
+        ]
+    )
+    provider = GeminiSDFExtractionProvider(
+        api_key="test-key",
+        model="gemini-3.5-flash",
+        client=client,
+        max_attempts=1,
+    )
+
+    result = provider.extract_fields(
+        document=DocumentMetadata(
+            doc_id="doc-001",
+            filename="supplier-sdf.pdf",
+            file_path="/tmp/supplier-sdf.pdf",
+            page_count=1,
+            status="ingested",
+        ),
+        pages=(DocumentPage(doc_id="doc-001", page_num=0, page_text=PAGE_TEXT),),
+        run_id="run-gemini-35",
+    )
+
+    call = client.models.calls[0]
+    assert call["model"] == "gemini-3.5-flash"
+    assert call["config"]["response_json_schema"]
+    assert "temperature" not in call["config"]
+    assert result.usage_metadata is not None
+    assert result.usage_metadata.requested_model == "gemini-3.5-flash"
+    assert result.usage_metadata.resolved_model == "gemini-3.5-flash"
+    assert result.usage_metadata.pricing_model == "gemini-3.5-flash"
+    assert result.usage_metadata.thought_tokens == 50
+    assert result.usage_metadata.estimated_cost_usd == pytest.approx((1_000 * 1.50 + 300 * 9.00) / 1_000_000)
+
+
+def test_recognized_resolved_model_prices_an_unknown_requested_alias() -> None:
+    provider = GeminiSDFExtractionProvider(
+        api_key="test-key",
+        model="internal-quality-alias",
+        client=FakeGeminiClient(
+            [
+                FakeGeminiResponse(
+                    valid_payload(),
+                    model_version="gemini-2.5-flash",
+                    usage_metadata={
+                        "prompt_token_count": 100,
+                        "candidates_token_count": 20,
+                        "thoughts_token_count": 5,
+                    },
+                )
+            ]
+        ),
+        max_attempts=1,
+    )
+
+    result = provider.extract_fields(
+        document=DocumentMetadata(
+            doc_id="doc-001",
+            filename="supplier-sdf.pdf",
+            file_path="/tmp/supplier-sdf.pdf",
+            page_count=1,
+            status="ingested",
+        ),
+        pages=(DocumentPage(doc_id="doc-001", page_num=0, page_text=PAGE_TEXT),),
+        run_id="run-resolved-model",
+    )
+
+    assert result.usage_metadata is not None
+    assert result.usage_metadata.model == "gemini-2.5-flash"
+    assert result.usage_metadata.requested_model == "internal-quality-alias"
+    assert result.usage_metadata.resolved_model == "gemini-2.5-flash"
+    assert result.usage_metadata.pricing_model == "gemini-2.5-flash"
+    assert result.usage_metadata.total_tokens == 125
+    assert result.usage_metadata.estimated_cost_usd == pytest.approx((100 * 0.30 + 25 * 2.50) / 1_000_000)
+
+
+@pytest.mark.parametrize("model", ["gemini-2.5-flash-latest", "models/gemini-2.5-flash", "gemini-2.5-flash-preview"])
+def test_model_aliases_and_prefixes_never_inherit_exact_registry_prices(model: str) -> None:
+    provider = GeminiSDFExtractionProvider(
+        api_key="test-key",
+        model=model,
+        client=FakeGeminiClient(
+            [FakeGeminiResponse(valid_payload(), model_version=model, usage_metadata={"prompt_token_count": 10})]
+        ),
+        max_attempts=1,
+    )
+
+    result = provider.extract_fields(
+        document=DocumentMetadata(
+            doc_id="doc-001",
+            filename="supplier-sdf.pdf",
+            file_path="/tmp/supplier-sdf.pdf",
+            page_count=1,
+            status="ingested",
+        ),
+        pages=(DocumentPage(doc_id="doc-001", page_num=0, page_text=PAGE_TEXT),),
+        run_id="run-alias-model",
+    )
+
+    assert result.usage_metadata is not None
+    assert result.usage_metadata.pricing_model is None
+    assert result.usage_metadata.estimated_cost_usd is None
+
+
+def test_invalid_usage_counters_are_ignored_and_missing_total_is_derived() -> None:
+    provider = GeminiSDFExtractionProvider(
+        api_key="test-key",
+        client=FakeGeminiClient(
+            [
+                FakeGeminiResponse(
+                    valid_payload(),
+                    usage_metadata={
+                        "prompt_token_count": 100,
+                        "candidates_token_count": -1,
+                        "thoughts_token_count": 5,
+                        "total_token_count": True,
+                    },
+                )
+            ]
+        ),
+        max_attempts=1,
+    )
+
+    result = provider.extract_fields(
+        document=DocumentMetadata(
+            doc_id="doc-001",
+            filename="supplier-sdf.pdf",
+            file_path="/tmp/supplier-sdf.pdf",
+            page_count=1,
+            status="ingested",
+        ),
+        pages=(DocumentPage(doc_id="doc-001", page_num=0, page_text=PAGE_TEXT),),
+        run_id="run-invalid-counters",
+    )
+
+    assert result.usage_metadata is not None
+    assert result.usage_metadata.input_tokens == 100
+    assert result.usage_metadata.output_tokens is None
+    assert result.usage_metadata.thought_tokens == 5
+    assert result.usage_metadata.total_tokens == 105
+    assert result.usage_metadata.estimated_cost_usd == pytest.approx((100 * 0.30 + 5 * 2.50) / 1_000_000)
 
 
 def test_pipeline_persists_one_bounded_text_usage_observation_for_mocked_gemini(tmp_db_path: str) -> None:
@@ -243,7 +407,7 @@ def test_pipeline_persists_one_bounded_text_usage_observation_for_mocked_gemini(
     assert row.input_tokens == 1_000
     assert row.output_tokens == 250
     assert row.total_tokens == 1_250
-    assert row.estimated_cost_usd == pytest.approx(0.0003)
+    assert row.estimated_cost_usd == pytest.approx((1_000 * 0.30 + 250 * 2.50) / 1_000_000)
     assert row.trace_id == "gemini-trace-usage-001"
     assert row.error_reason is None
     assert_usage_row_is_bounded(row)
@@ -318,6 +482,6 @@ def test_malformed_gemini_json_with_usage_persists_abstained_usage_observation(t
     assert row.input_tokens == 80
     assert row.output_tokens == 12
     assert row.total_tokens == 92
-    assert row.estimated_cost_usd == pytest.approx(0.0000192)
+    assert row.estimated_cost_usd == pytest.approx((80 * 0.30 + 12 * 2.50) / 1_000_000)
     assert row.trace_id == "gemini-malformed-trace"
     assert_usage_row_is_bounded(row)

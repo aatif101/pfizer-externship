@@ -64,8 +64,12 @@ class ProviderUsageMetadata:
     """
 
     model: str | None = None
+    requested_model: str | None = None
+    resolved_model: str | None = None
+    pricing_model: str | None = None
     input_tokens: int | None = None
     output_tokens: int | None = None
+    thought_tokens: int | None = None
     total_tokens: int | None = None
     estimated_cost_usd: float | None = None
 

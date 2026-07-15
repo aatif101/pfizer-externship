@@ -8,13 +8,15 @@ raw responses and page text are not logged or surfaced in exceptions.
 """
 from __future__ import annotations
 
-import json
-import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from datetime import date
+from time import sleep
+from types import MappingProxyType
+from typing import Annotated, Any
 
-from tenacity import Retrying, retry_if_exception, stop_after_attempt, wait_none
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from tenacity import Retrying, retry_if_exception, stop_after_attempt, wait_random_exponential
 
 from src.config import get_settings
 from src.db.queries import DocumentMetadata, DocumentPage
@@ -32,8 +34,117 @@ from src.extraction.providers import (
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 MALFORMED_OUTPUT_REASON = "Provider returned malformed structured output."
 _PROVIDER_NAME = "gemini"
-_GEMINI_2_5_FLASH_INPUT_USD_PER_1M = 0.15
-_GEMINI_2_5_FLASH_OUTPUT_USD_PER_1M = 0.60
+_MAX_PROVIDER_TEXT_LENGTH = 500
+_MAX_ABSTENTION_REASON_LENGTH = 240
+_MAX_BBOX_COORDINATE = 1_000_000.0
+_MAX_MODEL_IDENTIFIER_LENGTH = 128
+_MODEL_IDENTIFIER_CHARACTERS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._:/"
+)
+
+_BoundedProviderString = Annotated[str, Field(max_length=_MAX_PROVIDER_TEXT_LENGTH)]
+_FiniteNormalizedFloat = Annotated[float, Field(allow_inf_nan=False)]
+
+
+class _GeminiBBox(BaseModel):
+    """Strict, finite, size-bounded provider bounding box."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    x: float = Field(ge=-_MAX_BBOX_COORDINATE, le=_MAX_BBOX_COORDINATE, allow_inf_nan=False)
+    y: float = Field(ge=-_MAX_BBOX_COORDINATE, le=_MAX_BBOX_COORDINATE, allow_inf_nan=False)
+    width: float = Field(ge=0.0, le=_MAX_BBOX_COORDINATE, allow_inf_nan=False)
+    height: float = Field(ge=0.0, le=_MAX_BBOX_COORDINATE, allow_inf_nan=False)
+
+
+class _GeminiEvidence(BaseModel):
+    """Untrusted provider evidence after structural validation."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    page_num: int = Field(ge=0)
+    verbatim_span: str = Field(min_length=1, max_length=_MAX_PROVIDER_TEXT_LENGTH)
+    bbox: _GeminiBBox | None = None
+
+    @field_validator("verbatim_span")
+    @classmethod
+    def verbatim_span_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("verbatim_span must not be blank")
+        return value
+
+
+class _GeminiField(BaseModel):
+    """One fixed-key provider field before adaptation to domain-neutral DTOs."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    raw_value: _BoundedProviderString | None
+    normalized_value: _BoundedProviderString | int | _FiniteNormalizedFloat | bool | None
+    normalized_date: date | None
+    confidence: float = Field(ge=0.0, le=1.0, allow_inf_nan=False)
+    evidence: _GeminiEvidence | None
+    abstention_reason: str | None = Field(default=None, max_length=_MAX_ABSTENTION_REASON_LENGTH)
+
+    @field_validator("normalized_date", mode="before")
+    @classmethod
+    def parse_exact_iso_date(cls, value: Any) -> Any:
+        if value is None or isinstance(value, date):
+            return value
+        if isinstance(value, str) and len(value) == 10 and value[4] == "-" and value[7] == "-":
+            return date.fromisoformat(value)
+        raise ValueError("normalized_date must be an ISO YYYY-MM-DD date")
+
+    @model_validator(mode="after")
+    def validate_value_or_abstention(self) -> _GeminiField:
+        values = (self.raw_value, self.normalized_value, self.normalized_date)
+        has_value = any(value is not None and (not isinstance(value, str) or bool(value.strip())) for value in values)
+        has_reason = self.abstention_reason is not None and bool(self.abstention_reason.strip())
+
+        if has_reason:
+            if has_value or self.evidence is not None:
+                raise ValueError("abstention fields cannot carry a value or evidence")
+            return self
+        if self.abstention_reason is not None:
+            raise ValueError("abstention_reason must not be blank")
+        if not has_value or self.evidence is None:
+            raise ValueError("accepted fields require a value and evidence")
+        return self
+
+
+class _GeminiFields(BaseModel):
+    """Exactly the six canonical SDF fields; provider-controlled names are impossible."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    doc_type: _GeminiField
+    vendor_name: _GeminiField
+    manufacturing_date: _GeminiField
+    effective_date: _GeminiField
+    revision_date: _GeminiField
+    expiry_date: _GeminiField
+
+
+class _GeminiExtractionResponse(BaseModel):
+    """Strict structured-output envelope shared by text and visual extraction."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    fields: _GeminiFields
+
+
+@dataclass(frozen=True)
+class _GeminiPrice:
+    input_usd_per_1m: float
+    output_and_thinking_usd_per_1m: float
+
+
+_GEMINI_STANDARD_PRICING_USD_PER_1M = MappingProxyType(
+    {
+        "gemini-2.5-flash": _GeminiPrice(input_usd_per_1m=0.30, output_and_thinking_usd_per_1m=2.50),
+        "gemini-3.5-flash": _GeminiPrice(input_usd_per_1m=1.50, output_and_thinking_usd_per_1m=9.00),
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -55,13 +166,27 @@ class GeminiSDFExtractionProvider:
         model: str | None = None,
         client: Any | None = None,
         client_factory: Callable[[str], Any] | None = None,
-        max_attempts: int = 2,
+        max_attempts: int | None = None,
+        retry_sleep: Callable[[float], None] | None = None,
     ) -> None:
         settings = get_settings()
-        self.model = (model or settings.gemini_model or DEFAULT_GEMINI_MODEL).strip()
-        self.max_attempts = max(1, int(max_attempts))
+        configured_model = model or settings.gemini_model or DEFAULT_GEMINI_MODEL
+        bounded_model = _bounded_model_identifier(configured_model)
+        if bounded_model is None:
+            raise ExtractionConfigurationError("Gemini extraction model must be a bounded model identifier.")
+        configured_attempts = settings.gemini_extraction_max_attempts if max_attempts is None else max_attempts
+        if (
+            isinstance(configured_attempts, bool)
+            or not isinstance(configured_attempts, int)
+            or not 1 <= configured_attempts <= 5
+        ):
+            raise ExtractionConfigurationError("Gemini extraction max attempts must be an integer from 1 through 5.")
+
+        self.model = bounded_model
+        self.max_attempts = configured_attempts
         self._client = client
         self._client_factory = client_factory
+        self._retry_sleep = retry_sleep or sleep
         self._api_key = (api_key if api_key is not None else settings.gemini_api_key).strip()
         self.diagnostics = GeminiProviderDiagnostics(
             provider_name=_PROVIDER_NAME,
@@ -81,29 +206,23 @@ class GeminiSDFExtractionProvider:
     ) -> ProviderExtractionResult:
         """Call Gemini and convert structured output into provider DTOs.
 
-        Exceptions are sanitized: callers receive typed errors containing model,
-        provider, run/document identifiers, and exception class only — never API
-        keys, page text, image bytes, or raw model responses.
+        Exceptions are sanitized: callers receive typed errors containing only
+        provider, bounded model identity, and exception class — never caller IDs,
+        API keys, page text, image bytes, or raw model responses.
         """
 
         try:
             response = self._generate_content_with_retry(
-                contents=_build_contents(document=document, pages=pages, run_id=run_id)
+                contents=_build_contents(pages=pages)
             )
         except Exception as exc:  # noqa: BLE001 - provider boundary sanitizes arbitrary SDK failures.
             raise ExtractionProviderError(
                 "Gemini extraction provider failed after bounded retry "
-                f"(provider={_PROVIDER_NAME}, model={self.model}, run_id={run_id}, "
-                f"doc_id={document.doc_id}, error_class={exc.__class__.__name__})."
-            ) from exc
+                f"(provider={_PROVIDER_NAME}, model={self.model}, error_class={exc.__class__.__name__})."
+            ) from None
 
         usage_metadata = _extract_usage_metadata(response, model=self.model)
-        response_text = _response_text(response)
-        payload = _parse_json_object(response_text)
-        if payload is None:
-            return _malformed_result(trace_id=_response_trace_id(response), model=self.model, usage_metadata=usage_metadata)
-
-        fields = _parse_fields(payload)
+        fields = _parse_fields(response)
         if fields is None:
             return _malformed_result(trace_id=_response_trace_id(response), model=self.model, usage_metadata=usage_metadata)
 
@@ -118,8 +237,9 @@ class GeminiSDFExtractionProvider:
     def _generate_content_with_retry(self, *, contents: Any) -> Any:
         retrying = Retrying(
             stop=stop_after_attempt(self.max_attempts),
-            wait=wait_none(),
+            wait=wait_random_exponential(multiplier=0.25, max=2.0),
             retry=retry_if_exception(_is_retryable_provider_exception),
+            sleep=self._retry_sleep,
             reraise=True,
         )
         for attempt in retrying:
@@ -131,7 +251,12 @@ class GeminiSDFExtractionProvider:
         client = self._get_client()
         config = {
             "response_mime_type": "application/json",
-            "temperature": 0,
+            # google-genai 2.7's legacy response_schema path attempts to
+            # parameterize a Pydantic v2 model class and fails before the HTTP
+            # request. The SDK's supported JSON Schema path accepts the exact
+            # schema generated from the same strict model and leaves local
+            # validation under this adapter's control.
+            "response_json_schema": _GeminiExtractionResponse.model_json_schema(),
         }
         return client.models.generate_content(model=self.model, contents=contents, config=config)
 
@@ -143,9 +268,15 @@ class GeminiSDFExtractionProvider:
             return self._client
         try:
             from google import genai  # type: ignore[import-not-found]
-        except Exception as exc:  # noqa: BLE001 - optional dependency boundary.
-            raise ExtractionConfigurationError("google-genai is installed/configured incorrectly for Gemini extraction.") from exc
-        self._client = genai.Client(api_key=self._api_key)
+            from google.genai import types as genai_types  # type: ignore[import-not-found]
+        except Exception:  # noqa: BLE001 - optional dependency boundary.
+            raise ExtractionConfigurationError("google-genai is installed/configured incorrectly for Gemini extraction.") from None
+        self._client = genai.Client(
+            api_key=self._api_key,
+            http_options=genai_types.HttpOptions(
+                retry_options=genai_types.HttpRetryOptions(attempts=1),
+            ),
+        )
         return self._client
 
 
@@ -160,7 +291,8 @@ class GeminiSDFVisualFallbackProvider(GeminiSDFExtractionProvider):
         client: Any | None = None,
         client_factory: Callable[[str], Any] | None = None,
         part_factory: Any | None = None,
-        max_attempts: int = 2,
+        max_attempts: int | None = None,
+        retry_sleep: Callable[[float], None] | None = None,
     ) -> None:
         super().__init__(
             api_key=api_key,
@@ -168,6 +300,7 @@ class GeminiSDFVisualFallbackProvider(GeminiSDFExtractionProvider):
             client=client,
             client_factory=client_factory,
             max_attempts=max_attempts,
+            retry_sleep=retry_sleep,
         )
         self._part_factory = part_factory
 
@@ -190,31 +323,18 @@ class GeminiSDFVisualFallbackProvider(GeminiSDFExtractionProvider):
         try:
             response = self._generate_content_with_retry(
                 contents=_build_visual_contents(
-                    document=document,
                     request=request,
-                    run_id=run_id,
                     part_factory=self._get_part_factory(),
                 )
             )
         except Exception as exc:  # noqa: BLE001 - provider boundary sanitizes arbitrary SDK failures.
             raise ExtractionProviderError(
                 "Gemini visual fallback provider failed after bounded retry "
-                f"(provider={_PROVIDER_NAME}, model={self.model}, run_id={run_id}, "
-                f"doc_id={document.doc_id}, error_class={exc.__class__.__name__})."
-            ) from exc
+                f"(provider={_PROVIDER_NAME}, model={self.model}, error_class={exc.__class__.__name__})."
+            ) from None
 
         usage_metadata = _extract_usage_metadata(response, model=self.model)
-        response_text = _response_text(response)
-        payload = _parse_json_object(response_text)
-        if payload is None:
-            return _malformed_result(
-                trace_id=_response_trace_id(response),
-                model=self.model,
-                usage_metadata=usage_metadata,
-                field_names=requested_fields,
-            )
-
-        fields = _parse_fields(payload)
+        fields = _parse_fields(response)
         if fields is None:
             return _malformed_result(
                 trace_id=_response_trace_id(response),
@@ -237,23 +357,19 @@ class GeminiSDFVisualFallbackProvider(GeminiSDFExtractionProvider):
             return self._part_factory
         try:
             from google.genai.types import Part  # type: ignore[import-not-found]
-        except Exception as exc:  # noqa: BLE001 - optional dependency boundary.
-            raise ExtractionConfigurationError("google-genai is installed/configured incorrectly for Gemini visual fallback.") from exc
+        except Exception:  # noqa: BLE001 - optional dependency boundary.
+            raise ExtractionConfigurationError("google-genai is installed/configured incorrectly for Gemini visual fallback.") from None
         self._part_factory = Part
         return self._part_factory
 
 
-def _build_contents(*, document: DocumentMetadata, pages: tuple[DocumentPage, ...], run_id: str) -> str:
+def _build_contents(*, pages: tuple[DocumentPage, ...]) -> str:
     page_blocks = "\n\n".join(
         f"<page index=\"{page.page_num}\">\n{page.page_text or ''}\n</page>" for page in pages
     )
     field_names = ", ".join(field.value for field in SDFFieldName)
     return f"""You are extracting Pfizer supplier SDF compliance metadata.
 Return ONLY valid JSON. Do not include markdown.
-
-Document id: {document.doc_id}
-Filename: {document.filename}
-Run id: {run_id}
 
 Required fields exactly: {field_names}
 Page references must be 0-indexed. For every non-abstained field include a short
@@ -280,22 +396,6 @@ Field labeling rules (per docs/field-definitions.md):
   abstain) — a printed "N/A" means "no expiry".
 - vendor_name must be the full legal name as printed, never an abbreviation.
 
-JSON schema:
-{{
-  "trace_id": "optional provider trace id",
-  "fields": [
-    {{
-      "field_name": "doc_type | vendor_name | manufacturing_date | effective_date | revision_date | expiry_date",
-      "raw_value": "string or null",
-      "normalized_value": "string/number/boolean or null",
-      "normalized_date": "YYYY-MM-DD or null",
-      "confidence": 0.0,
-      "evidence": {{"page_num": 0, "verbatim_span": "short copied text", "bbox": null}},
-      "abstention_reason": "string or null"
-    }}
-  ]
-}}
-
 Pages:
 {page_blocks}
 """
@@ -303,12 +403,10 @@ Pages:
 
 def _build_visual_contents(
     *,
-    document: DocumentMetadata,
     request: VisualFallbackRequest,
-    run_id: str,
     part_factory: Any,
 ) -> list[Any]:
-    prompt = _build_visual_prompt(document=document, request=request, run_id=run_id)
+    prompt = _build_visual_prompt(request=request)
     image_parts = [
         part_factory.from_bytes(data=page.image_blob, mime_type="image/png")
         for page in request.pages
@@ -317,7 +415,7 @@ def _build_visual_contents(
     return [prompt, *image_parts]
 
 
-def _build_visual_prompt(*, document: DocumentMetadata, request: VisualFallbackRequest, run_id: str) -> str:
+def _build_visual_prompt(*, request: VisualFallbackRequest) -> str:
     requested_fields = ", ".join(field.value for field in request.eligible_field_names)
     page_numbers = ", ".join(str(page.page_num) for page in request.pages)
     reason_lines = "\n".join(
@@ -327,8 +425,6 @@ def _build_visual_prompt(*, document: DocumentMetadata, request: VisualFallbackR
     return f"""You are performing targeted visual fallback extraction for Pfizer supplier SDF compliance metadata.
 Return ONLY valid JSON. Do not include markdown.
 
-Document id: {document.doc_id}
-Run id: {run_id}
 Image-backed page numbers: {page_numbers}
 
 Requested fields exactly: {requested_fields}
@@ -336,7 +432,7 @@ Eligibility reason codes:
 {reason_lines}
 
 Use only the attached page images. Do not rely on page text, file paths, prior provider output, or unstated context.
-Only return fields from the requested field allowlist. If a requested field is uncertain or unsupported by the image, set all value fields to null and provide an abstention_reason.
+The response schema always requires all six fixed field keys. Extract only fields from the requested field allowlist; for every unrequested or unsupported field set all value fields and evidence to null and provide a short abstention_reason.
 Page references must be 0-indexed and must reference one of the image-backed page numbers above. For every non-abstained field include a short verbatim_span visible in the cited page image.
 
 Packet labeling policy:
@@ -348,22 +444,6 @@ Field labeling rules (per docs/field-definitions.md), applied only to requested 
 - An effective date may be sourced from the synonym labels "Approved On", "Issue Date", or "Date of Issue" on the primary certificate.
 - If an expiry is printed as "N/A", return the literal value "N/A" (do not abstain) — a printed "N/A" means "no expiry".
 - A vendor must be the full legal name as printed, never an abbreviation.
-
-JSON schema:
-{{
-  "trace_id": "optional provider trace id",
-  "fields": [
-    {{
-      "field_name": "one requested field name only",
-      "raw_value": "string or null",
-      "normalized_value": "string/number/boolean or null",
-      "normalized_date": "YYYY-MM-DD or null",
-      "confidence": 0.0,
-      "evidence": {{"page_num": 0, "verbatim_span": "short copied visible text", "bbox": null}},
-      "abstention_reason": "string or null"
-    }}
-  ]
-}}
 """
 
 
@@ -385,7 +465,7 @@ def _filter_requested_fields(
 def _response_text(response: Any) -> str:
     if isinstance(response, str):
         return response
-    text = getattr(response, "text", None)
+    text = response.get("text") if isinstance(response, dict) else _safe_getattr(response, "text")
     if isinstance(text, str):
         return text
     return ""
@@ -393,42 +473,63 @@ def _response_text(response: Any) -> str:
 
 def _response_trace_id(response: Any) -> str | None:
     for attr in ("trace_id", "response_id", "id"):
-        value = getattr(response, attr, None)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
+        value = _response_value(response, attr)
+        bounded = _bounded_model_identifier(value)
+        if bounded is not None:
+            return bounded
     return None
 
 
-def _extract_usage_metadata(response: Any, *, model: str) -> ProviderUsageMetadata | None:
-    raw_usage = getattr(response, "usage_metadata", None)
-    if raw_usage is None and isinstance(response, dict):
-        raw_usage = response.get("usage_metadata")
-    if raw_usage is None:
-        return None
+def _extract_usage_metadata(response: Any, *, model: str) -> ProviderUsageMetadata:
+    requested_model = _bounded_model_identifier(model)
+    resolved_model = _bounded_model_identifier(_response_value(response, "model_version"))
+    pricing_model = _pricing_model_for(requested_model=requested_model, resolved_model=resolved_model)
 
-    input_tokens = _optional_int(_usage_value(raw_usage, "prompt_token_count"))
-    output_tokens = _optional_int(_usage_value(raw_usage, "candidates_token_count"))
-    total_tokens = _optional_int(_usage_value(raw_usage, "total_token_count"))
-    if input_tokens is None and output_tokens is None and total_tokens is None:
-        return None
+    raw_usage = _response_value(response, "usage_metadata")
+
+    input_tokens = (
+        _optional_int(_usage_value(raw_usage, "prompt_token_count")) if raw_usage is not None else None
+    )
+    output_tokens = (
+        _optional_int(_usage_value(raw_usage, "candidates_token_count")) if raw_usage is not None else None
+    )
+    thought_tokens = (
+        _optional_int(_usage_value(raw_usage, "thoughts_token_count")) if raw_usage is not None else None
+    )
+    total_tokens = (
+        _optional_int(_usage_value(raw_usage, "total_token_count")) if raw_usage is not None else None
+    )
+    if total_tokens is None and any(value is not None for value in (input_tokens, output_tokens, thought_tokens)):
+        total_tokens = sum(value or 0 for value in (input_tokens, output_tokens, thought_tokens))
 
     return ProviderUsageMetadata(
-        model=model,
+        model=resolved_model or requested_model,
+        requested_model=requested_model,
+        resolved_model=resolved_model,
+        pricing_model=pricing_model,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
+        thought_tokens=thought_tokens,
         total_tokens=total_tokens,
         estimated_cost_usd=_estimate_gemini_cost_usd(
-            model=model,
+            pricing_model=pricing_model,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
+            thought_tokens=thought_tokens,
         ),
     )
+
+
+def _response_value(response: Any, field_name: str) -> Any:
+    if isinstance(response, dict):
+        return response.get(field_name)
+    return _safe_getattr(response, field_name)
 
 
 def _usage_value(raw_usage: Any, field_name: str) -> Any:
     if isinstance(raw_usage, dict):
         return raw_usage.get(field_name)
-    return getattr(raw_usage, field_name, None)
+    return _safe_getattr(raw_usage, field_name)
 
 
 def _optional_int(value: Any) -> int | None:
@@ -436,86 +537,85 @@ def _optional_int(value: Any) -> int | None:
         return None
     try:
         integer = int(value)
-    except (TypeError, ValueError):
+    except Exception:  # noqa: BLE001 - untrusted provider scalar conversion.
         return None
     return integer if integer >= 0 else None
 
 
-def _estimate_gemini_cost_usd(*, model: str, input_tokens: int | None, output_tokens: int | None) -> float | None:
-    if model.strip().lower() != DEFAULT_GEMINI_MODEL:
+def _estimate_gemini_cost_usd(
+    *,
+    pricing_model: str | None,
+    input_tokens: int | None,
+    output_tokens: int | None,
+    thought_tokens: int | None,
+) -> float | None:
+    if pricing_model is None:
         return None
-    if input_tokens is None and output_tokens is None:
+    if input_tokens is None and output_tokens is None and thought_tokens is None:
         return None
-    input_cost = ((input_tokens or 0) / 1_000_000) * _GEMINI_2_5_FLASH_INPUT_USD_PER_1M
-    output_cost = ((output_tokens or 0) / 1_000_000) * _GEMINI_2_5_FLASH_OUTPUT_USD_PER_1M
+    price = _GEMINI_STANDARD_PRICING_USD_PER_1M[pricing_model]
+    input_cost = ((input_tokens or 0) / 1_000_000) * price.input_usd_per_1m
+    output_cost = (
+        ((output_tokens or 0) + (thought_tokens or 0)) / 1_000_000
+    ) * price.output_and_thinking_usd_per_1m
     return input_cost + output_cost
 
 
-def _parse_json_object(text: str) -> dict[str, Any] | None:
-    stripped = text.strip()
-    if not stripped:
+def _pricing_model_for(*, requested_model: str | None, resolved_model: str | None) -> str | None:
+    for candidate in (resolved_model, requested_model):
+        if candidate is None:
+            continue
+        exact_key = candidate.strip().casefold()
+        if exact_key in _GEMINI_STANDARD_PRICING_USD_PER_1M:
+            return exact_key
+    return None
+
+
+def _bounded_model_identifier(value: Any) -> str | None:
+    if not isinstance(value, str):
         return None
-    if stripped.startswith("```"):
-        stripped = re.sub(r"^```(?:json)?\s*", "", stripped, flags=re.IGNORECASE)
-        stripped = re.sub(r"\s*```$", "", stripped)
+    stripped = value.strip()
+    if not stripped or len(stripped) > _MAX_MODEL_IDENTIFIER_LENGTH:
+        return None
+    if any(character not in _MODEL_IDENTIFIER_CHARACTERS for character in stripped):
+        return None
+    return stripped
+
+
+def _parse_fields(response: Any) -> list[ProviderFieldPayload] | None:
+    parsed = _response_value(response, "parsed")
     try:
-        parsed = json.loads(stripped)
-    except json.JSONDecodeError:
-        return None
-    return parsed if isinstance(parsed, dict) else None
-
-
-def _parse_fields(payload: dict[str, Any]) -> list[ProviderFieldPayload] | None:
-    raw_fields = payload.get("fields")
-    if not isinstance(raw_fields, list):
+        if parsed is not None:
+            validated = _GeminiExtractionResponse.model_validate(parsed)
+        else:
+            validated = _GeminiExtractionResponse.model_validate_json(_response_text(response))
+    except Exception:  # noqa: BLE001 - fail closed on any untrusted SDK/payload behavior.
         return None
 
     fields: list[ProviderFieldPayload] = []
-    for item in raw_fields:
-        if not isinstance(item, dict):
-            return None
-        field_name = item.get("field_name")
-        if not isinstance(field_name, str):
-            return None
-
-        raw_evidence = item.get("evidence")
-        evidence = None
-        if isinstance(raw_evidence, dict):
-            page_num = raw_evidence.get("page_num")
-            evidence = ProviderSourceEvidence(
-                page_num=page_num if isinstance(page_num, int) else -1,
-                verbatim_span=_optional_str(raw_evidence.get("verbatim_span")),
-                bbox=raw_evidence.get("bbox"),
-            )
-
+    for field_name in SDFFieldName:
+        provider_field = getattr(validated.fields, field_name.value)
+        evidence = provider_field.evidence
         fields.append(
             ProviderFieldPayload(
                 field_name=field_name,
-                raw_value=_optional_str(item.get("raw_value")),
-                normalized_value=item.get("normalized_value"),
-                normalized_date=item.get("normalized_date"),
-                confidence=_float_or_zero(item.get("confidence")),
-                evidence=evidence,
-                abstention_reason=_optional_str(item.get("abstention_reason")),
+                raw_value=provider_field.raw_value,
+                normalized_value=provider_field.normalized_value,
+                normalized_date=provider_field.normalized_date,
+                confidence=provider_field.confidence,
+                evidence=(
+                    ProviderSourceEvidence(
+                        page_num=evidence.page_num,
+                        verbatim_span=evidence.verbatim_span,
+                        bbox=evidence.bbox.model_dump(mode="json") if evidence.bbox is not None else None,
+                    )
+                    if evidence is not None
+                    else None
+                ),
+                abstention_reason=provider_field.abstention_reason,
             )
         )
     return fields
-
-
-def _optional_str(value: Any) -> str | None:
-    if value is None:
-        return None
-    if isinstance(value, str):
-        stripped = value.strip()
-        return stripped or None
-    return str(value)
-
-
-def _float_or_zero(value: Any) -> float:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return 0.0
 
 
 def _malformed_result(
@@ -531,7 +631,7 @@ def _malformed_result(
             ProviderFieldPayload(
                 field_name=field,
                 confidence=0.0,
-                evidence=ProviderSourceEvidence(page_num=0),
+                evidence=None,
                 abstention_reason=MALFORMED_OUTPUT_REASON,
             )
             for field in result_field_names
@@ -544,11 +644,30 @@ def _malformed_result(
 
 
 def _is_retryable_provider_exception(exc: BaseException) -> bool:
-    status = getattr(exc, "status_code", None) or getattr(exc, "code", None)
+    status = _status_code(_safe_getattr(exc, "status_code"))
+    if status is None:
+        status = _status_code(_safe_getattr(exc, "code"))
     if status in {408, 429, 500, 502, 503, 504}:
         return True
     class_name = exc.__class__.__name__.lower()
-    if "timeout" in class_name or "ratelimit" in class_name or "rate_limit" in class_name:
-        return True
-    message = str(exc).lower()
-    return any(token in message for token in ("429", "503", "504", "timeout", "temporarily unavailable"))
+    return "timeout" in class_name or "ratelimit" in class_name or "rate_limit" in class_name
+
+
+def _status_code(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    enum_value = _safe_getattr(value, "value")
+    if isinstance(enum_value, int) and not isinstance(enum_value, bool):
+        return enum_value
+    if isinstance(value, str) and value.isascii() and value.isdigit() and len(value) == 3:
+        return int(value)
+    return None
+
+
+def _safe_getattr(value: Any, field_name: str) -> Any:
+    try:
+        return getattr(value, field_name, None)
+    except Exception:  # noqa: BLE001 - provider/SDK objects are untrusted at this boundary.
+        return None

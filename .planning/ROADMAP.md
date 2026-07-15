@@ -49,7 +49,7 @@ Plans:
   3. Each document is flagged green (<2yr), amber (2-3yr), or red (>3yr) based on document age, stored in the compliance database
 **Plans**: 3 plans
 Plans:
-- [ ] 02-01-PLAN.md — Strict fixed-six Gemini schema, bounded retry, July 2026 pricing, and thinking-token provenance
+- [x] 02-01-PLAN.md — Strict fixed-six Gemini schema, bounded retry, July 2026 pricing, and thinking-token provenance
 - [ ] 02-02-PLAN.md — Manifest-bound per-document run lifecycle, migrations, safe batch failure, and resumability
 - [ ] 02-03-PLAN.md — Literal grounding, conservative visual review, deterministic risk, completed-run eval provenance, and full gates
 

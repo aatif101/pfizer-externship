@@ -231,12 +231,12 @@ def _get_client(self) -> Any:
 
 **Apply to:** `src/extraction/gemini.py`.
 
-Preserve constructor injection and lazy SDK import. Define private Pydantic response-envelope classes in this provider module rather than adding a second public schema module. Pass the model class through the existing plain-dict fake-client-compatible `config`:
+Preserve constructor injection and lazy SDK import. Define private Pydantic response-envelope classes in this provider module rather than adding a second public schema module. Pass the strict model's generated JSON Schema through the existing plain-dict fake-client-compatible `config`. A real google-genai 2.7 construction check proved the legacy model-class `response_schema` path fails before HTTP, while the supported `response_json_schema` path accepts the generated schema:
 
 ```python
 config = {
     "response_mime_type": "application/json",
-    "response_schema": _GeminiExtractionResponse,
+    "response_json_schema": _GeminiExtractionResponse.model_json_schema(),
 }
 ```
 
@@ -313,13 +313,13 @@ The identifiers come only from a static tuple, never user input. Run backfill af
 
 **Source:** `tests/test_extraction_provider_gemini.py:113-140`
 
-The fake client records `model`, `contents`, and `config`; assertions inspect the call without network access. Extend this test to inspect `response_schema.model_json_schema()`:
+The fake client records `model`, `contents`, and `config`; assertions inspect the call without network access. Extend this test to inspect the generated `response_json_schema`, and separately construct the real SDK config offline:
 
 ```python
 call = client.models.calls[0]
 assert call["model"] == "gemini-2.5-flash"
 assert call["config"]["response_mime_type"] == "application/json"
-schema = call["config"]["response_schema"].model_json_schema()
+schema = call["config"]["response_json_schema"]
 assert set(schema["$defs"][...]["properties"]) == EXPECTED_FIELD_NAMES
 ```
 

@@ -82,7 +82,7 @@ Four defects prevent the current implementation from satisfying its own Phase 2 
 |-----------------|-----------------|-------------|
 | Python | Repo runtime 3.11.9 | Preserve current runtime. `[VERIFIED: local environment]` |
 | Pydantic | Repo runtime 2.13.3 | Strict provider envelope and domain revalidation with `extra="forbid"`. `[VERIFIED: local environment]` |
-| `google-genai` | Repo runtime 2.7.0; PyPI current 2.10.0 | Existing 2.7 surface supports `response_schema`, `response_json_schema`, `response.parsed`, and `thoughts_token_count`; pin a tested 2.x range before the live benchmark rather than leaving `>=1.0` open-ended. `[VERIFIED: installed SDK introspection]` `[CITED: https://googleapis.github.io/python-genai/]` `[CITED: https://pypi.org/project/google-genai/]` |
+| `google-genai` | Repo runtime 2.7.0; PyPI current 2.10.0 | Existing 2.7 exposes both schema fields, but an offline real-SDK construction test proved that passing a Pydantic v2 class through legacy `response_schema` fails before HTTP. Use Google's recommended `response_json_schema=Model.model_json_schema()` path, then revalidate locally. Pin a tested 2.x range rather than leaving `>=1.0` open-ended. `[VERIFIED: installed SDK construction test, 2026-07-15]` `[CITED: https://github.com/googleapis/python-genai#json-response-schema]` `[CITED: https://pypi.org/project/google-genai/]` |
 | Gemini 2.5 Flash | Stable; earliest shutdown 2026-10-16; replacement `gemini-3.5-flash` | Low-cost frozen-corpus benchmark profile. `[CITED: https://ai.google.dev/gemini-api/docs/deprecations]` |
 | Gemini 3.5 Flash | Stable since 2026-05-19; structured outputs, image/PDF input supported | Quality profile; exact same adapter contract. `[CITED: https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash]` |
 | Docling | Repo runtime 2.91.0; PyPI current 2.108.0 | Keep Phase 2 behind persisted `DocumentPage` text/image DTOs; do not couple Gemini extraction to Docling's changing VLM runtime API. `[VERIFIED: local environment]` `[CITED: https://pypi.org/project/docling/]` |
@@ -154,7 +154,7 @@ class ProviderResponse(BaseModel):
 
 config = {
     "response_mime_type": "application/json",
-    "response_schema": ProviderResponse,
+    "response_json_schema": ProviderResponse.model_json_schema(),
 }
 validated = ProviderResponse.model_validate_json(response.text)
 ```

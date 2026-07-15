@@ -25,6 +25,12 @@ class Settings(BaseSettings):
 
     gemini_api_key: str = Field(default="", description="Gemini API key for live extraction and answer providers")
     gemini_model: str = Field(default="gemini-2.5-flash", description="Gemini model for live SDF extraction and answers")
+    gemini_extraction_max_attempts: int = Field(
+        default=2,
+        ge=1,
+        le=5,
+        description="Maximum adapter-owned Gemini extraction attempts, including the initial call",
+    )
     extraction_low_confidence_threshold: float = Field(
         default=0.75,
         ge=0.0,

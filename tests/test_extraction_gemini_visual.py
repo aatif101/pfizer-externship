@@ -7,6 +7,7 @@ PDF/image bytes, secrets, prompts in observations, or provider payload logging.
 from __future__ import annotations
 
 import json
+import traceback
 from dataclasses import dataclass
 from typing import Any
 
@@ -15,7 +16,7 @@ import pytest
 from src.db.queries import DocumentMetadata, DocumentPage
 from src.extraction.gemini import GeminiSDFVisualFallbackProvider, MALFORMED_OUTPUT_REASON
 from src.extraction.models import SDFFieldName
-from src.extraction.providers import VisualFallbackRequest
+from src.extraction.providers import ExtractionProviderError, VisualFallbackRequest
 
 SECRET_PAGE_TEXT = "Supplier Declaration Form\nVendor Name: Acme Pharma Ltd.\nSECRET raw page text"
 SECRET_LOCAL_PATH = "C:/confidential/pfizer/supplier-sdf.pdf"
@@ -34,6 +35,7 @@ class FakeGeminiResponse:
     text: str
     response_id: str = "gemini-visual-trace-001"
     usage_metadata: Any | None = None
+    parsed: Any | None = None
 
 
 @dataclass(frozen=True)
@@ -93,9 +95,8 @@ def visual_request(
     )
 
 
-def field_payload(field_name: str, raw_value: str, *, page_num: int = 0) -> dict[str, Any]:
+def field_payload(raw_value: str, *, page_num: int = 0) -> dict[str, Any]:
     return {
-        "field_name": field_name,
         "raw_value": raw_value,
         "normalized_value": raw_value,
         "normalized_date": None,
@@ -105,15 +106,29 @@ def field_payload(field_name: str, raw_value: str, *, page_num: int = 0) -> dict
     }
 
 
+def abstained_payload(reason: str = "not_requested") -> dict[str, Any]:
+    return {
+        "raw_value": None,
+        "normalized_value": None,
+        "normalized_date": None,
+        "confidence": 0.0,
+        "evidence": None,
+        "abstention_reason": reason,
+    }
+
+
 def valid_visual_payload() -> str:
+    fields = {field.value: abstained_payload() for field in SDFFieldName}
+    fields.update(
+        {
+            "vendor_name": field_payload("Acme Pharma Ltd."),
+            "expiry_date": field_payload("2027-01-31"),
+            "doc_type": field_payload("Supplier Declaration Form"),
+        }
+    )
     return json.dumps(
         {
-            "trace_id": "provider-json-trace",
-            "fields": [
-                field_payload("vendor_name", "Acme Pharma Ltd."),
-                field_payload("expiry_date", "2027-01-31"),
-                field_payload("doc_type", "Supplier Declaration Form"),
-            ],
+            "fields": fields,
         }
     )
 
@@ -137,7 +152,14 @@ def test_visual_provider_sends_png_image_parts_and_bounded_prompt() -> None:
     assert len(client.models.calls) == 1
     call = client.models.calls[0]
     assert call["model"] == "gemini-2.5-flash"
-    assert call["config"] == {"response_mime_type": "application/json", "temperature": 0}
+    assert call["config"]["response_mime_type"] == "application/json"
+    schema = call["config"]["response_json_schema"]
+    fields_ref = schema["properties"]["fields"]["$ref"].rsplit("/", 1)[-1]
+    fields_schema = schema["$defs"][fields_ref]
+    expected_names = {field.value for field in SDFFieldName}
+    assert set(fields_schema["properties"]) == expected_names
+    assert set(fields_schema["required"]) == expected_names
+    assert "temperature" not in call["config"]
     contents = call["contents"]
     assert isinstance(contents, list)
     assert len(contents) == 3
@@ -148,13 +170,16 @@ def test_visual_provider_sends_png_image_parts_and_bounded_prompt() -> None:
         {"data": IMAGE_BYTES, "mime_type": "image/png"},
         {"data": b"second-image", "mime_type": "image/png"},
     ]
-    assert "Document id: doc-visual-001" in prompt
-    assert "Run id: run-visual-gemini" in prompt
+    assert "Document id:" not in prompt
+    assert "doc-visual-001" not in prompt
+    assert "Run id:" not in prompt
+    assert "run-visual-gemini" not in prompt
     assert "Image-backed page numbers: 0, 1" in prompt
     assert "vendor_name" in prompt
     assert "expiry_date" in prompt
     assert SECRET_PAGE_TEXT not in prompt
     assert SECRET_LOCAL_PATH not in prompt
+    assert "supplier-sdf.pdf" not in prompt
     assert "Acme Pharma Ltd." not in prompt
     assert repr(IMAGE_BYTES) not in prompt
 
@@ -203,7 +228,9 @@ def test_visual_provider_populates_usage_metadata_and_filters_unrequested_fields
     assert result.usage_metadata.input_tokens == 1000
     assert result.usage_metadata.output_tokens == 250
     assert result.usage_metadata.total_tokens == 1250
-    assert result.usage_metadata.estimated_cost_usd == pytest.approx(0.0003)
+    assert result.usage_metadata.requested_model == "gemini-2.5-flash"
+    assert result.usage_metadata.pricing_model == "gemini-2.5-flash"
+    assert result.usage_metadata.estimated_cost_usd == pytest.approx((1000 * 0.30 + 250 * 2.50) / 1_000_000)
     assert SECRET_PAGE_TEXT not in repr(result.usage_metadata)
     assert SECRET_LOCAL_PATH not in repr(result.usage_metadata)
 
@@ -237,17 +264,35 @@ def test_visual_provider_malformed_json_returns_safe_requested_field_abstentions
     assert result.usage_metadata.input_tokens == 80
     assert result.usage_metadata.output_tokens == 12
     assert result.usage_metadata.total_tokens == 92
-    assert result.usage_metadata.estimated_cost_usd == pytest.approx(0.0000192)
+    assert result.usage_metadata.estimated_cost_usd == pytest.approx((80 * 0.30 + 12 * 2.50) / 1_000_000)
     assert "not-json and not logged" not in repr(result)
     assert SECRET_PAGE_TEXT not in repr(result)
     assert SECRET_LOCAL_PATH not in repr(result)
+
+
+def test_visual_provider_validates_all_six_fields_before_local_allowlist_filtering() -> None:
+    payload = json.loads(valid_visual_payload())
+    payload["fields"].pop("doc_type")
+    provider = make_provider(FakeGeminiClient([FakeGeminiResponse(json.dumps(payload))]))
+
+    result = provider.extract_visual_fields(
+        document=document_metadata(),
+        request=visual_request(fields=(SDFFieldName.EXPIRY_DATE,)),
+        run_id="run-full-schema-required",
+    )
+
+    assert len(result.fields) == 1
+    assert result.fields[0].field_name == SDFFieldName.EXPIRY_DATE
+    assert result.fields[0].raw_value is None
+    assert result.fields[0].evidence is None
+    assert result.fields[0].abstention_reason == MALFORMED_OUTPUT_REASON
 
 
 def test_visual_provider_error_is_sanitized_without_payload_text_paths_or_images() -> None:
     client = FakeGeminiClient([RuntimeError("SECRET provider payload with C:/confidential path and page text")])
     provider = make_provider(client)
 
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(ExtractionProviderError) as exc_info:
         provider.extract_visual_fields(document=document_metadata(), request=visual_request(), run_id="run-error")
 
     message = str(exc_info.value)
@@ -257,3 +302,9 @@ def test_visual_provider_error_is_sanitized_without_payload_text_paths_or_images
     assert SECRET_LOCAL_PATH not in message
     assert SECRET_PAGE_TEXT not in message
     assert repr(IMAGE_BYTES) not in message
+    assert "doc-visual-001" not in message
+    assert "run-error" not in message
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__suppress_context__ is True
+    formatted = "".join(traceback.format_exception(exc_info.value))
+    assert "SECRET provider payload" not in formatted
