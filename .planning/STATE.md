@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 2 complete; Phase 3 benchmark-first retrieval and RAG planning next
+stopped_at: Phase 3 planned and independently checked; execute 03-00 benchmark freeze next
 last_updated: "2026-07-15T00:00:00Z"
 last_activity: 2026-07-15
 progress:
   total_phases: 7
   completed_phases: 2
-  total_plans: 7
+  total_plans: 13
   completed_plans: 7
   percent: 29
 ---
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-04-16)
 
 ## Current Position
 
-Phase: 3 (Retrieval & RAG Chatbot) — READY FOR PLANNING
-Plan: Benchmark freeze and retrieval/RAG provenance first
-Status: Phase 2 complete; retrieval/RAG audit captured release-blocking gaps
-Last activity: 2026-07-15 - Grounded extraction/compliance completed with 635-test full-regression evidence
+Phase: 3 (Retrieval & RAG Chatbot) — READY FOR EXECUTION
+Plan: 03-00 — Nyquist controls and pre-tuning public benchmark freeze
+Status: Six-plan Phase 3 set independently checked with no HIGH issues
+Last activity: 2026-07-15 - Phase 3 AI contract, research, validation, and executable plans completed
 
 Progress: [███░░░░░░░] 29%
 
@@ -36,7 +36,7 @@ Progress: [███░░░░░░░] 29%
 
 **Velocity:**
 
-- Total plans completed: 6
+- Total plans completed: 7
 - Average duration: -
 - Total execution time: 0 hours
 
@@ -45,7 +45,7 @@ Progress: [███░░░░░░░] 29%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1 | 4 | - | - |
-| 2 | 2 | - | - |
+| 2 | 3 | - | - |
 
 **Recent Trend:**
 
@@ -74,13 +74,12 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-None yet.
+- Execute 03-00 before any retrieval calibration or prompt changes so `sdf-synthetic-v1` holdout remains untouched.
 
 ### Blockers/Concerns
 
-yet.
-
-- Public release-quality benchmark evidence is not yet complete. The historical 17-query visual result remains exploratory until Phase 7 produces frozen holdout provenance and confidence bounds.
+- Public release-quality benchmark evidence is not yet complete. The historical 17-query visual result remains exploratory; Phase 3 now owns a frozen public holdout plus offline and live seals before any demo-ready claim.
+- Live Phase 3 release requires a configured Gemini key, real pinned model cache/network access, and an explicitly bounded maximum $9 evaluation acknowledgement; replay cannot substitute.
 
 ### Quick Tasks Completed
 
@@ -102,5 +101,5 @@ yet.
 ## Session Continuity
 
 Last session: 2026-06-23T21:55:15.562Z
-Stopped at: Completed 05-01-PLAN.md (visual retrieval plumbing foundation)
+Stopped at: Phase 3 planning complete; execute 03-00-PLAN.md
 Resume file: None

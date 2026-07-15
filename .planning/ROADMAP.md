@@ -62,7 +62,13 @@ Plans:
   2. Retrieval fuses BM25 and dense candidates via RRF and re-ranks with a cross-encoder
   3. User can ask a question in the Chat tab and receive an answer with document filename and page number citations
   4. System returns "I don't have enough information to answer reliably" when retrieval confidence is low instead of generating unsupported answers
-**Plans**: TBD
+**Plans**:
+- [ ] 03-00-PLAN.md — Nyquist network/no-skip controls and pre-tuning freeze of `sdf-synthetic-v1`
+- [ ] 03-01-PLAN.md — RAGAS dependency isolation, stable chunks, and atomic named-vector Qdrant indexing
+- [ ] 03-02-PLAN.md — BM25+BGE hybrid query, RRF/cross-encoder reranking, and calibrated evidence gate
+- [ ] 03-03-PLAN.md — Strict claim-grounded Gemini output and bounded deterministic LangGraph answering
+- [ ] 03-04-PLAN.md — Mandatory 900-row offline replay seal, public metrics, coverage, and regression gates
+- [ ] 03-05-PLAN.md — Real-model/Gemini/RAGAS/adjudication live seal and redacted publishable report
 
 ### Phase 4: Dashboard & Evaluation
 **Goal**: Compliance officers can see all documents in a sortable, color-coded table and the eval harness validates pipeline quality against a gold set
