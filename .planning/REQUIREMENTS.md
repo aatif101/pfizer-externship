@@ -1,7 +1,7 @@
 # Requirements — Pfizer SDF Intelligence System
 
 **Version:** v1 (Phase 1 + Phase 2 + Phase 3)
-**Last updated:** 2026-04-21
+**Last updated:** 2026-09-22 (submission acceptance added; historical implementation status is not release verification)
 
 ---
 
@@ -46,7 +46,7 @@
 ## v2 Requirements (Phase 2 — Differentiated Upgrade)
 
 - [ ] **VISUAL-01**: System indexes each page image with ColQwen2.5-v0.2 embeddings (three named Qdrant vectors: full multivector with HNSW disabled, mean-pooled rows, mean-pooled columns) in a versioned `sdf_page_images` collection
-- [x] **VISUAL-02**: Retriever uses a two-stage ColQwen2 strategy: mean-pooled HNSW prefetch → full multivector MaxSim reranking — fused with Phase 1 text retrieval candidates
+- [ ] **VISUAL-02**: Retriever uses a two-stage ColQwen2 strategy: mean-pooled HNSW prefetch → full multivector MaxSim reranking — fused with Phase 1 text retrieval candidates
 - [ ] **EXTRACT-03**: Extraction uses a critic/reflection loop — extractor proposes fields, critic re-reads the source page image and challenges each claim, disagreements trigger a reconciliation pass (hard cap: 2 iterations)
 - [ ] **EXTRACT-04**: System computes a per-field confidence ensemble score: `0.4 × logprob + 0.4 × self-consistency(k=3) + 0.2 × critic_agreement`; fields below threshold (default 0.75) are routed to the HITL review queue
 - [ ] **HITL-01**: Dashboard HITL tab surfaces low-confidence extractions for human review and correction; corrections update the Compliance DB
@@ -103,8 +103,8 @@
 | EVAL-05 | v1 | Phase 4: Dashboard & Evaluation | Pending |
 | VISUAL-01 | v2 | Phase 5: Visual Retrieval & Critic Extraction | Pending |
 | VISUAL-02 | v2 | Phase 5: Visual Retrieval & Critic Extraction | Pending |
-| EXTRACT-03 | v2 | Phase 5: Visual Retrieval & Critic Extraction | Pending |
-| EXTRACT-04 | v2 | Phase 5: Visual Retrieval & Critic Extraction | Pending |
+| EXTRACT-03 | v2 | Phase 5.1: Visual Retrieval & Critic Extraction | Pending |
+| EXTRACT-04 | v2 | Phase 5.1: Visual Retrieval & Critic Extraction | Pending |
 | HITL-01 | v2 | Phase 6: Agentic RAG & Observability | Pending |
 | RAG-03 | v2 | Phase 6: Agentic RAG & Observability | Pending |
 | OBS-01 | v2 | Phase 6: Agentic RAG & Observability | Pending |
@@ -113,3 +113,30 @@
 | POLISH-01 | v3 | Phase 7: Benchmark & Polish | Pending |
 | POLISH-02 | v3 | Phase 7: Benchmark & Polish | Pending |
 | POLISH-03 | v3 | Phase 7: Benchmark & Polish | Pending |
+
+
+## Submission acceptance requirements (2026-09-22)
+
+These supplement, not replace, the original requirements. See SUBMISSION-READINESS.md for exact evidence and acceptance contracts. Existing checked implementation items do not substitute for final integrated verification. VISUAL-02 is reopened because a notebook fusion seam is not yet ordinary Chat integration. Extraction Phase 2 has implementation summaries; fresh release-quality evidence remains pending.
+
+- [ ] **SUBMIT-01**: Clean locked install and required offline tests pass on Windows; explicit optional live/model/GPU gates, no unexpected skips/xpasses or outbound network in the offline gate.
+- [ ] **SUBMIT-02**: Complete public licensed synthetic corpus/specifications/manifests reproduce; development and frozen holdout remain separated under the existing Phase 3 contract.
+- [ ] **SUBMIT-03**: A fresh full SDF packet flows through ingestion, document-type classification, extraction, risk, retrieval, grounded Chat, source inspection and review/recovery; visual mode uses an actual backend.
+- [ ] **SUBMIT-04**: Evaluation observations are scoped uniquely to an evaluation run with complete counts; classification, field extraction, retrieval, claims/citations, abstention, failure rates, full latency and measured usage/cost are reproducible across document types/modes.
+- [ ] **SUBMIT-05**: Fresh Colab executes the complete workflow from permitted PDFs at an explicit release revision, without the developer's database, hidden patches or cached setup.
+- [ ] **SUBMIT-06**: Final baseline/upgraded comparison and existing quality gates are measured from the integrated revision using isolated repeated runs, frozen data and real model/provider evidence with complete provenance.
+- [ ] **SUBMIT-07**: Reviewer can access the actual walkthrough video, repository, Colab and results; recording demonstrates full-document processing, source evidence, abstention, metrics and limitations.
+- [ ] **SUBMIT-08**: README/design/architecture/setup accurately describe behavior, model/runtime requirements and external API data flow; release identity and public artifacts are coherent and confidential data/secrets are excluded.
+
+| Requirement | Implementation owner | Final verification |
+|-------------|----------------------|--------------------|
+| SUBMIT-01 | 2.1 | 7 |
+| SUBMIT-02 | 2.1 | 3 and 7 |
+| SUBMIT-03 | 3 text; 5.1 visual; 6 complete workflow | 7 |
+| SUBMIT-04 | 4 | 7 |
+| SUBMIT-05 | 7 | 7 fresh-session UAT |
+| SUBMIT-06 | 7 (reuses 3/4 gates) | 7 |
+| SUBMIT-07 | 7 | 7 playback/access check |
+| SUBMIT-08 | 2.1 initial corrections; 7 final package | 7 |
+
+Original EXTRACT-03/04 are owned by Phase 5.1, following the explicit deferral in 05-CONTEXT.md. VISUAL-01 foundation is verified in 5; VISUAL-02 integration closes in 5.1. Original numerical Phase 3 gates are unchanged. Any confidence-formula or gate amendment must be explicit before affected implementation/evaluation, never silently weakened to pass.

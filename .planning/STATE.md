@@ -1,17 +1,20 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.0
-milestone_name: milestone
-status: executing
-stopped_at: Phase 3 planning complete; execute 03-00-PLAN.md
-last_updated: "2026-07-15T12:32:07.202Z"
-last_activity: 2026-07-15 -- Phase 03 execution started
+current_phase: 2.1
+current_phase_name: submission-baseline-recovery
+status: planning
+stopped_at: Submission roadmap ready; run /gsd-plan-phase 2.1
+last_updated: "2026-09-22T06:34:07.509Z"
+last_activity: 2026-09-22
+last_activity_desc: Submission roadmap prepared; see .planning/START-HERE.md
+state_head: 8f6c803ac3d5d37c275f063ddb4c586fa9fe7dcd
 progress:
-  total_phases: 7
-  completed_phases: 3
+  total_phases: 9
+  completed_phases: 1
   total_plans: 17
-  completed_plans: 12
-  percent: 71
+  completed_plans: 11
+milestone_name: milestone
 ---
 
 # Project State
@@ -21,16 +24,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-16)
 
 **Core value:** A pharmaceutical compliance officer can upload supplier documents and immediately see which are expired or at risk, ask natural language questions across the corpus, and trust every answer is grounded in a cited source page.
-**Current focus:** Phase 03 — retrieval-rag-chatbot
+**Current focus:** Phase 2.1 - Submission Baseline Recovery
 
 ## Current Position
 
-Phase: 03 (retrieval-rag-chatbot) — EXECUTING
-Plan: 1 of 6
-Status: Executing Phase 03
-Last activity: 2026-07-15 -- Phase 03 execution started
+Phase: 2.1 (submission-baseline-recovery)
+Plan: Not planned; run /gsd-plan-phase 2.1
+Status: Ready to plan
+Last activity: 2026-09-22 - Submission roadmap prepared; see .planning/START-HERE.md
 
-Progress: [███████░░░] 71%
+Progress: Submission gates pending; historical plan counts are not a readiness percentage
 
 ## Performance Metrics
 
@@ -92,6 +95,11 @@ Recent decisions affecting current work:
 | 260611-mw5 | Wire real RAGAS faithfulness + answer_relevancy (Gemini judge) into the eval harness; lazy-import seam, `eval run --with-ragas` CLI, real per-query scores keyed by query_id | 2026-06-11 | cc4556d | [260611-mw5-wire-real-ragas-faithfulness-and-answer-](./quick/260611-mw5-wire-real-ragas-faithfulness-and-answer-/) |
 | 260711-6ip | Disable Langfuse automatic input/output capture at all sensitive pipeline boundaries | 2026-07-11 | 7475fab | [260711-6ip-disable-langfuse-automatic-input-and-out](./quick/260711-6ip-disable-langfuse-automatic-input-and-out/) |
 
+### Roadmap Evolution
+
+- Phase 2.1 inserted after Phase 2: Recover public benchmark and offline gate before Phase 3; submission contract in SUBMISSION-READINESS.md (URGENT)
+- Phase 5.1 inserted after Phase 5: Own deferred visual Chat wiring and extraction critic/confidence; Phase 7 reopened for final release evidence
+
 ## Deferred Items
 
 | Category | Item | Status | Deferred At |
@@ -100,6 +108,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-06-23T21:55:15.562Z
-Stopped at: Phase 3 planning complete; execute 03-00-PLAN.md
-Resume file: None
+Last session: 2026-09-22T06:34:05.826Z
+Stopped at: Submission roadmap ready; run /gsd-plan-phase 2.1
+Resume file: .planning/START-HERE.md

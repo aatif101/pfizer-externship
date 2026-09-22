@@ -117,3 +117,8 @@ These remain valid Phase 5 roadmap requirements; they are split out so the visua
 
 *Phase: 05-visual-retrieval-critic-extraction*
 *Context gathered: 2026-06-23 via direct user decisions*
+
+
+## Submission sequencing addendum — 2026-09-22
+
+Read `.planning/SUBMISSION-READINESS.md` before further planning. Existing locked technical decisions remain intact. Phase 2.1 recovers/reconciles 03-00 prerequisites without duplicating the frozen benchmark. Phase 5 foundation needs fresh GPU verification; deferred visual Chat wiring and EXTRACT-03/04 now belong to Phase 5.1. Final integrated evidence and Colab/video packaging belong to Phase 7. Historical summaries do not establish submission readiness.

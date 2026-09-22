@@ -40,3 +40,8 @@ Deliver a locally operational, benchmarkable hybrid text retriever and grounded 
 ## Implementation Freedom
 
 Exact module boundaries, internal class names, migration details, batching, cache paths, and test fixture organization may follow existing repository patterns as long as the locked contracts and release gates above remain true.
+
+
+## Submission sequencing addendum — 2026-09-22
+
+Read `.planning/SUBMISSION-READINESS.md` before further planning. Existing locked technical decisions remain intact. Phase 2.1 recovers/reconciles 03-00 prerequisites without duplicating the frozen benchmark. Phase 5 foundation needs fresh GPU verification; deferred visual Chat wiring and EXTRACT-03/04 now belong to Phase 5.1. Final integrated evidence and Colab/video packaging belong to Phase 7. Historical summaries do not establish submission readiness.
