@@ -525,12 +525,12 @@ Accept iff `verdict == "supported" and faithfulness >= critic_min_faithfulness`.
 | A7 | Reviewer identity is a free-text/default value (no auth; RBAC out of scope) | Pattern 5 | Weak audit attribution. Acceptable for a single-user demo |
 | A8 | Langfuse merges tags from `propagate_attributes` with tags from `update_current_trace` (union) rather than replacing them | Pitfall 10 | Phase tag could be overwritten by a later module tag update. Mitigated by also injecting the phase into `safe_update_current_trace` |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **LangGraph version deviation (A1).** Recommendation: pin 1.0.1 and log a decision. Surface this to the user at plan approval.
-2. **Critic fallback when no Anthropic key.** Recommendation: `critic_provider: "anthropic" | "gemini"`, default `"anthropic"`. If the key is missing, the Chat tab shows a config hint and the agentic path abstains with `CRITIC_ERROR`. Using a Gemini fallback is an explicit opt-in.
-3. **Should "confirm absent" be in scope?** Recommendation: yes. It is small with the audit-table approach, and abstained fields otherwise stay in the queue forever.
-4. **Should visual-fused retrieval be used inside the agentic graph?** Local `visual-fused` raises by design (no GPU). The graph calls `retrieve_evidence` with the configured `retrieval_mode`, so it inherits whatever is configured. Do not add GPU work in this phase.
+1. **LangGraph version deviation (A1).** Recommendation: pin 1.0.1 and log a decision. Surface this to the user at plan approval. **RESOLVED:** user locked D-01 (`langgraph==1.0.1`, recorded as D028 in 06-01).
+2. **Critic fallback when no Anthropic key.** Recommendation: `critic_provider: "anthropic" | "gemini"`, default `"anthropic"`. If the key is missing, the Chat tab shows a config hint and the agentic path abstains with `CRITIC_ERROR`. Using a Gemini fallback is an explicit opt-in. **RESOLVED:** user locked D-02 (fail closed; Gemini opt-in only; 06-01/06-04).
+3. **Should "confirm absent" be in scope?** Recommendation: yes. It is small with the audit-table approach, and abstained fields otherwise stay in the queue forever. **RESOLVED:** in scope via 06-02 `CONFIRM_ABSENT`.
+4. **Should visual-fused retrieval be used inside the agentic graph?** Local `visual-fused` raises by design (no GPU). The graph calls `retrieve_evidence` with the configured `retrieval_mode`, so it inherits whatever is configured. Do not add GPU work in this phase. **RESOLVED:** graph inherits `retrieval_mode` (06-01/06-05); no GPU work.
 
 ## Environment Availability
 

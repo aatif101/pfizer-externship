@@ -1,17 +1,20 @@
 ---
-gsd_state_version: 1.0
+gsd_state_version: "1.0"
 milestone: v1.0
-milestone_name: milestone
-status: ready_to_plan
-stopped_at: "Phase 5 complete (05-05 closed VISUAL-01/02: visual-fused recall@5 1.000 vs text-only 0.882); Phase 6 not yet discussed or planned"
-last_updated: "2026-09-23T00:00:00.000Z"
+current_phase: 6
+current_phase_name: Agentic RAG & Observability
+status: ready_to_execute
+stopped_at: "Phase 6 planned: 8 plans in 3 waves, plan-checker passed; ready to execute"
+last_updated: "2026-09-23T21:24:06.594Z"
 last_activity: 2026-09-23
+last_activity_desc: Phase 6 researched, planned (8 plans) and verified
+state_head: ea67f64b4117c3d98ea56a110b37d5206e32d7ee
 progress:
   total_phases: 7
   completed_phases: 5
-  total_plans: 8
+  total_plans: 15
   completed_plans: 8
-  percent: 71
+milestone_name: milestone
 ---
 
 # Project State
@@ -25,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-04-16)
 
 ## Current Position
 
-Phase: 6 (Agentic RAG & Observability) — NOT STARTED
-Plan: 0 of TBD
-Status: Ready to discuss/plan (run /gsd-discuss-phase 6 or /gsd-plan-phase 6)
-Last activity: 2026-09-23 — reconciled stale planning files after phase 5 close-out (quick 260923-lmw)
+Phase: 6 (Agentic RAG & Observability) — READY TO EXECUTE
+Plan: 0 of 8
+Status: Ready to execute (run /gsd-execute-phase 6)
+Last activity: 2026-09-23 — Phase 6 researched, planned (8 plans, 3 waves) and verified by plan-checker
 
 Progress: [███████░░░] 71%
 
@@ -70,6 +73,7 @@ Recent decisions affecting current work:
 - [Phase ?]: RRF stable tie-break on (doc_id,page_num) makes visual+text fused order fully deterministic; offline tests assert RRF math + DTO mapping only (metric-integrity)
 - [Phase 5 P03]: retrieval_mode config (text-only default | visual-fused) routes retrieve_evidence; visual-fused without a wired backend raises a clear RuntimeError (no fabricated score) — the real ranking comes from the Colab notebook (Plan 04)
 - [Phase 5 P03]: rq_ex3 gold mojibake repaired via guarded idempotent UPDATE (U+FFFD -> Ä); compliance.db never staged; trace allowlist gains numeric/id-only visual keys (retrieval_mode, visual_hit_count)
+- [Phase 6 plan]: langgraph pinned ==1.0.1 (langchain-core<1 for RAGAS 0.4.3); critic fails closed without Anthropic key (Gemini opt-in only); Chat defaults to agentic, eval stays linear
 - [Phase 5 P05]: ColQwen2.5 loaded on a pinned pre-Transformers-5 stack (colpali-engine==0.3.9, transformers>=4.50,<4.51, torch==2.6.0, peft>=0.14,<0.15) with a load-report gate; 6 empty-text scanned pages OCR-backfilled into page_ocr_texts (pages.page_text untouched); fusion is confidence-aware weighted RRF (rescue_weight=3.5)
 
 ### Pending Todos
@@ -101,5 +105,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-09-23
-Stopped at: Phase 5 complete (05-05 close-out f04f14d); next is Phase 6 discuss/plan
+Stopped at: Session resumed; Phase 6 planned (8 plans, 3 waves, checker passed), proceeding to /gsd-execute-phase 6
 Resume file: None
