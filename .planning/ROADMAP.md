@@ -99,7 +99,16 @@ Plans:
   2. Dashboard HITL tab surfaces low-confidence extractions for human review and corrections update the compliance database
   3. All agent steps, LLM calls, retrievals, and extractions are traced in Langfuse with a phase tag on every trace session
   4. System abstains rather than hallucinating when confidence is insufficient across both extraction and RAG pathways
-**Plans**: TBD
+**Plans**: 8 plans in 3 waves
+Plans:
+- [ ] 06-01-PLAN.md — Tracer: langgraph==1.0.1 pin (D028) + LangGraph agentic graph end-to-end with bounded retries/regen, fail-closed critic, service-owned citations (RAG-03)
+- [ ] 06-02-PLAN.md — HITL data layer: extraction_reviews audit table, 'human' evidence tier, list_review_queue + transactional apply_field_review (HITL-01)
+- [ ] 06-03-PLAN.md — Tracing core: Phase 6 settings, trace_session/phase tags, global mask, CallbackHandler/span/generation helpers (OBS-01)
+- [ ] 06-04-PLAN.md — Claude critic adapter + opt-in Gemini critic, fail-closed builder, graph CallbackHandler wiring, generation spans (RAG-03, OBS-01)
+- [ ] 06-05-PLAN.md — Deterministic-first decomposition + domain-synonym rewrite, per-node agent.* spans (RAG-03, OBS-01)
+- [ ] 06-06-PLAN.md — Streamlit Review tab (queue, source page, approve/correct/confirm-absent form, traced submit) + 4th app tab (HITL-01, OBS-01)
+- [ ] 06-07-PLAN.md — Phase-tagged trace sessions at extraction/retrieval/ingestion/eval CLI entry points; eval stays linear (OBS-01)
+- [ ] 06-08-PLAN.md — Chat agentic default + linear toggle, new hints/diagnostics, traced submit; human live verification (RAG-03, OBS-01, HITL-01)
 **UI hint**: yes
 
 ### Phase 7: Benchmark & Polish
@@ -126,5 +135,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 3. Retrieval & RAG Chatbot | .gsd M002 | Complete | 2026-05-21 |
 | 4. Dashboard & Evaluation | .gsd M003 | Complete | 2026-05-28 |
 | 5. Visual Retrieval & Critic Extraction | 5/5 | Complete | 2026-06-29 |
-| 6. Agentic RAG & Observability | 0/TBD | Not started | - |
+| 6. Agentic RAG & Observability | 0/8 | Planned | - |
 | 7. Benchmark & Polish | 0/TBD | Not started | - |
