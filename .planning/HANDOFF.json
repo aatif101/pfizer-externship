@@ -1,0 +1,39 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-09-23T20:27:01.301Z",
+  "phase": "6",
+  "phase_name": "Agentic RAG & Observability",
+  "phase_dir": ".planning/phases/06-agentic-rag-observability",
+  "plan": null,
+  "task": null,
+  "total_tasks": null,
+  "status": "paused",
+  "completed_tasks": [
+    {"id": 1, "name": "Research phase (06-RESEARCH.md)", "status": "done", "commit": "3a1e762"},
+    {"id": 2, "name": "Validation strategy (06-VALIDATION.md)", "status": "done", "commit": "99bf02a"},
+    {"id": 3, "name": "Pattern map (06-PATTERNS.md)", "status": "done", "commit": "60a819f"},
+    {"id": 4, "name": "Plans 06-01..06-08 + COVERAGE.md + ROADMAP update", "status": "done", "commit": "60a819f"},
+    {"id": 5, "name": "Plan-checker verification", "status": "in_progress", "progress": "gsd-plan-checker was spawned in the paused session; its result was not received before pause"}
+  ],
+  "remaining_tasks": [
+    {"id": 5, "name": "Plan-checker verification (re-run) + revision loop (max 3)", "status": "not_started"},
+    {"id": 6, "name": "Requirements coverage gate (HITL-01, RAG-03, OBS-01)", "status": "not_started"},
+    {"id": 7, "name": "state.planned-phase + roadmap.annotate-dependencies + commit", "status": "not_started"},
+    {"id": 8, "name": "Post-planning gap analysis (plan:post hooks)", "status": "not_started"},
+    {"id": 9, "name": "Execute phase 6", "status": "not_started"}
+  ],
+  "blockers": [],
+  "async_jobs": [],
+  "human_actions_pending": [
+    {"action": "Provide Langfuse keys (LANGFUSE_PUBLIC_KEY/SECRET_KEY/HOST) and ANTHROPIC_API_KEY for the 06-08 live-run checkpoint", "context": "06-08 has a human checkpoint verifying a live Langfuse trace; critic abstains without an Anthropic key (D-02)", "blocking": false}
+  ],
+  "decisions": [
+    {"decision": "Pin langgraph==1.0.1 instead of >=1.1", "rationale": "langgraph>=1.1 requires langchain-core>=1.0, unsatisfiable with langchain-core<1 needed by RAGAS 0.4.3; 1.0.1 smoke-tested. Plan 06-01 logs D028 and updates CLAUDE.md pin table.", "phase": "6"},
+    {"decision": "Critic abstains (fail closed) without Anthropic key; Gemini critic only by explicit opt-in", "rationale": "No-hallucination guarantee over availability", "phase": "6"},
+    {"decision": "Chat tab defaults to agentic pipeline with linear toggle; RAGAS eval stays linear", "rationale": "Showcase agentic path; keep eval baseline stable", "phase": "6"},
+    {"decision": "Continue without CONTEXT.md and without AI-SPEC.md; research assumptions A1-A8 accepted", "rationale": "Roadmap success criteria specific enough; stack locked", "phase": "6"}
+  ],
+  "uncommitted_files": ["?? .gsd/dispatch-isolation-sentinel.json"],
+  "next_action": "Resume /gsd-plan-phase 6 at step 10: re-run gsd-plan-checker on 06-01..06-08 (plans exist; skip research/planning), then continue steps 11-13e.",
+  "context_notes": "Plan-phase ran to completion of planning; the checker subagent was in flight at pause and its verdict is unknown. Running /gsd-plan-phase 6 again will offer 'add/view/replan' for existing plans — choose to proceed to verification rather than replan. Alternatively skip verification and /gsd-execute-phase 6."
+}
