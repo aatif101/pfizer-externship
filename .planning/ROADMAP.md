@@ -12,13 +12,15 @@ This roadmap delivers an end-to-end pharmaceutical document intelligence system 
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Foundation & Ingestion** - Doc store, SQLite schema, Streamlit skeleton, Langfuse wiring, and Docling PDF ingestion pipeline
-- [ ] **Phase 2: Extraction & Compliance** - VLM-powered structured field extraction with Pydantic validation and compliance risk flagging
-- [ ] **Phase 3: Retrieval & RAG Chatbot** - Hybrid BM25+dense retrieval with reranker, and linear RAG chatbot with page-level citations
-- [ ] **Phase 4: Dashboard & Evaluation** - Streamlit compliance table with color-coded risk levels, and eval harness with gold set
-- [ ] **Phase 5: Visual Retrieval & Critic Extraction** - ColQwen2 page-image retrieval, extraction critic loop, and per-field confidence ensemble
+- [x] **Phase 1: Foundation & Ingestion** - Doc store, SQLite schema, Streamlit skeleton, Langfuse wiring, and Docling PDF ingestion pipeline
+- [x] **Phase 2: Extraction & Compliance** - VLM-powered structured field extraction with Pydantic validation and compliance risk flagging
+- [x] **Phase 3: Retrieval & RAG Chatbot** - Hybrid BM25+dense retrieval with reranker, and linear RAG chatbot with page-level citations
+- [x] **Phase 4: Dashboard & Evaluation** - Streamlit compliance table with color-coded risk levels, and eval harness with gold set
+- [x] **Phase 5: Visual Retrieval & Critic Extraction** - ColQwen2 page-image retrieval, extraction critic loop, and per-field confidence ensemble (visual tier VISUAL-01/02; EXTRACT-03/04 split out per 05-CONTEXT.md)
 - [ ] **Phase 6: Agentic RAG & Observability** - LangGraph agentic RAG pipeline, HITL review queue, and Langfuse tracing
 - [ ] **Phase 7: Benchmark & Polish** - Side-by-side Phase 1 vs Phase 2 benchmark, eval dashboard, architecture diagrams, walkthrough, and design doc
+
+> Phases 2-4 were executed via the legacy .gsd/ workflow (no .planning/phases/ dirs): Phase 2 = .gsd M001 (complete 2026-05-20), Phase 3 = M002 (2026-05-21), Phase 4 = M003 (2026-05-28); each has status: complete + VALIDATION verdict: pass. M004 (extraction observability/visual fallback, 2026-06-09) was additional .gsd work not mapped to a single roadmap phase.
 
 ## Phase Details
 
@@ -34,9 +36,9 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. Streamlit app launches with skeleton tabs (Compliance, Chat, Eval) and Langfuse connection is verified
 **Plans**: 3 plans
 Plans:
-- [ ] 01-01-PLAN.md — Project scaffold, pyproject.toml, config, Wave 0 test stubs
-- [ ] 01-02-PLAN.md — Core ingestion pipeline (DB schema, converter, rasterizer, CLI)
-- [ ] 01-03-PLAN.md — Streamlit skeleton and Langfuse v3 tracing
+- [x] 01-01-PLAN.md — Project scaffold, pyproject.toml, config, Wave 0 test stubs
+- [x] 01-02-PLAN.md — Core ingestion pipeline (DB schema, converter, rasterizer, CLI)
+- [x] 01-03-PLAN.md — Streamlit skeleton and Langfuse v3 tracing
 
 ### Phase 2: Extraction & Compliance
 **Goal**: Every ingested document has structured metadata extracted and validated, with compliance risk levels computed and stored
@@ -46,7 +48,7 @@ Plans:
   1. System extracts doc_type, vendor_name, manufacturing_date, effective_date, revision_date, and expiry_date from each document into a Pydantic-validated model
   2. Each extracted field includes a verbatim source text span and source page reference
   3. Each document is flagged green (<2yr), amber (2-3yr), or red (>3yr) based on document age, stored in the compliance database
-**Plans**: TBD
+**Plans**: Executed via .gsd M001
 
 ### Phase 3: Retrieval & RAG Chatbot
 **Goal**: Users can ask natural-language questions about the document corpus and receive grounded answers with page-level citations
@@ -57,7 +59,7 @@ Plans:
   2. Retrieval fuses BM25 and dense candidates via RRF and re-ranks with a cross-encoder
   3. User can ask a question in the Chat tab and receive an answer with document filename and page number citations
   4. System returns "I don't have enough information to answer reliably" when retrieval confidence is low instead of generating unsupported answers
-**Plans**: TBD
+**Plans**: Executed via .gsd M002
 
 ### Phase 4: Dashboard & Evaluation
 **Goal**: Compliance officers can see all documents in a sortable, color-coded table and the eval harness validates pipeline quality against a gold set
@@ -68,7 +70,7 @@ Plans:
   2. Risk levels are color-coded red/amber/green inline in the table matching the EXTRACT-02 thresholds
   3. A hand-labeled gold set of ~50 pages exists with an annotation guide covering all document types and extraction fields
   4. Eval harness reports extraction F1 per field, retrieval recall@5, RAGAS faithfulness/relevancy scores, and latency p50/p95 and cost-per-query
-**Plans**: TBD
+**Plans**: Executed via .gsd M003
 **UI hint**: yes
 
 ### Phase 5: Visual Retrieval & Critic Extraction
@@ -80,12 +82,13 @@ Plans:
   2. Visual retrieval uses two-stage strategy (mean-pooled HNSW prefetch then full multivector MaxSim reranking) fused with Phase 1 text retrieval results
   3. Extraction critic loop challenges proposed fields by re-reading the source page image, with disagreements triggering reconciliation (capped at 2 iterations)
   4. Per-field confidence ensemble score (0.4 logprob + 0.4 self-consistency + 0.2 critic agreement) is computed and fields below 0.75 threshold are routed to HITL queue
-**Plans**: 4 plans (this slice covers the VISUAL RETRIEVAL TIER — VISUAL-01, VISUAL-02 — only; EXTRACT-03/04 critic-extraction are split into a follow-up phase per 05-CONTEXT.md Deferred Ideas)
+**Plans**: 5 plans (4 planned + 05-05 remediation) (this slice covers the VISUAL RETRIEVAL TIER — VISUAL-01, VISUAL-02 — only; EXTRACT-03/04 critic-extraction are split into a follow-up phase per 05-CONTEXT.md Deferred Ideas)
 Plans:
 - [x] 05-01-PLAN.md — Visual tier foundation: visual_index_runs schema, pure Qdrant collection-config + row/col pooling + blob decode + upsert-payload builders, gpu marker (offline-testable)
 - [x] 05-02-PLAN.md — Two-stage query payload builder, RRF (k=60) fusion → RetrievalHit, versioned visual run persistence (offline-testable)
 - [x] 05-03-PLAN.md — Integration: retrieval_mode config (text-only|visual-fused), retriever fusion seam, source-tag extension, rq_ex3 gold mojibake repair, privacy allowlist proof
 - [x] 05-04-PLAN.md — GPU embedder lazy seam + committed Colab L4 notebook deliverable (real VISUAL-01/02 numbers; Example-3 proof) — autonomous: false (Manual-Only Colab run)
+- [x] 05-05 (remediation, no PLAN file; see 05-05-SUMMARY.md / 05-05-DIAGNOSIS.md) — ColQwen2.5 loader fix + load-report gate, OCR backbone for 6 empty-text pages, confidence-aware fusion rescue; visual-fused recall@5 1.000 (17/17) vs text-only 0.882
 
 ### Phase 6: Agentic RAG & Observability
 **Goal**: RAG chatbot uses an agentic pipeline with self-critique, low-confidence extractions surface for human review, and all operations are traced for auditability
@@ -118,10 +121,10 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation & Ingestion | 0/3 | Not started | - |
-| 2. Extraction & Compliance | 0/TBD | Not started | - |
-| 3. Retrieval & RAG Chatbot | 0/TBD | Not started | - |
-| 4. Dashboard & Evaluation | 0/TBD | Not started | - |
-| 5. Visual Retrieval & Critic Extraction | 0/TBD | Not started | - |
+| 1. Foundation & Ingestion | 3/3 | Complete | 2026-04-27 |
+| 2. Extraction & Compliance | .gsd M001 | Complete | 2026-05-20 |
+| 3. Retrieval & RAG Chatbot | .gsd M002 | Complete | 2026-05-21 |
+| 4. Dashboard & Evaluation | .gsd M003 | Complete | 2026-05-28 |
+| 5. Visual Retrieval & Critic Extraction | 5/5 | Complete | 2026-06-29 |
 | 6. Agentic RAG & Observability | 0/TBD | Not started | - |
 | 7. Benchmark & Polish | 0/TBD | Not started | - |

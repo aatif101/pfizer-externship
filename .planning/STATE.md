@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: 05-04 autonomous tasks 1-2 committed; awaiting human Colab L4 checkpoint (Task 3) for the real VISUAL-01/VISUAL-02 numbers
-last_updated: "2026-06-23T21:56:05.207Z"
-last_activity: 2026-06-23
+status: ready_to_plan
+stopped_at: "Phase 5 complete (05-05 closed VISUAL-01/02: visual-fused recall@5 1.000 vs text-only 0.882); Phase 6 not yet discussed or planned"
+last_updated: "2026-09-23T00:00:00.000Z"
+last_activity: 2026-09-23
 progress:
   total_phases: 7
-  completed_phases: 2
-  total_plans: 7
-  completed_plans: 7
-  percent: 100
+  completed_phases: 5
+  total_plans: 8
+  completed_plans: 8
+  percent: 71
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-16)
 
 **Core value:** A pharmaceutical compliance officer can upload supplier documents and immediately see which are expired or at risk, ask natural language questions across the corpus, and trust every answer is grounded in a cited source page.
-**Current focus:** Phase 5 — Visual Retrieval & Critic Extraction
+**Current focus:** Phase 6 — Agentic RAG & Observability
 
 ## Current Position
 
-Phase: 5 (Visual Retrieval & Critic Extraction) — EXECUTING
-Plan: 4 of 4
-Status: 05-04 autonomous tasks committed — AWAITING human Colab L4 checkpoint (Task 3)
-Last activity: 2026-06-23
+Phase: 6 (Agentic RAG & Observability) — NOT STARTED
+Plan: 0 of TBD
+Status: Ready to discuss/plan (run /gsd-discuss-phase 6 or /gsd-plan-phase 6)
+Last activity: 2026-09-23 — reconciled stale planning files after phase 5 close-out (quick 260923-lmw)
 
-Progress: [██████████] 100%
+Progress: [███████░░░] 71%
 
 ## Performance Metrics
 
@@ -54,7 +54,7 @@ Progress: [██████████] 100%
 *Updated after each plan completion*
 | Phase 05 P02 | 8 min | 3 tasks | 8 files |
 | Phase 05 P03 | 12 min | 2 tasks | 7 files |
-| Phase Phase 05 PP04 | 18 min | 2 tasks | 4 files |
+| Phase 05 P04 | 18 min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -70,6 +70,7 @@ Recent decisions affecting current work:
 - [Phase ?]: RRF stable tie-break on (doc_id,page_num) makes visual+text fused order fully deterministic; offline tests assert RRF math + DTO mapping only (metric-integrity)
 - [Phase 5 P03]: retrieval_mode config (text-only default | visual-fused) routes retrieve_evidence; visual-fused without a wired backend raises a clear RuntimeError (no fabricated score) — the real ranking comes from the Colab notebook (Plan 04)
 - [Phase 5 P03]: rq_ex3 gold mojibake repaired via guarded idempotent UPDATE (U+FFFD -> Ä); compliance.db never staged; trace allowlist gains numeric/id-only visual keys (retrieval_mode, visual_hit_count)
+- [Phase 5 P05]: ColQwen2.5 loaded on a pinned pre-Transformers-5 stack (colpali-engine==0.3.9, transformers>=4.50,<4.51, torch==2.6.0, peft>=0.14,<0.15) with a load-report gate; 6 empty-text scanned pages OCR-backfilled into page_ocr_texts (pages.page_text untouched); fusion is confidence-aware weighted RRF (rescue_weight=3.5)
 
 ### Pending Todos
 
@@ -77,9 +78,7 @@ None yet.
 
 ### Blockers/Concerns
 
-yet.
-
-- 05-04 Task 3 pending human-verify Colab L4 checkpoint: real VISUAL-01/VISUAL-02 numbers require running notebooks/visual_retrieval_colab.ipynb on Colab Pro L4. Autonomous tasks 1-2 committed; no quality number fabricated.
+None.
 
 ### Quick Tasks Completed
 
@@ -90,6 +89,8 @@ yet.
 | 260610-3kx | Refactor chat/eval dashboard tests to use tmp_path for SQLite db paths | 2026-06-10 | 57ce32f | [260610-3kx-refactor-chat-eval-dashboard-tests-to-us](./quick/260610-3kx-refactor-chat-eval-dashboard-tests-to-us/) |
 | 260610-o8z | Compliance verdict fix: shared field rulebook + visual evidence tier (supersedes D026 via D027) | 2026-06-10 | f2ef4e4 | [260610-o8z-compliance-verdict-fix-shared-field-rule](./quick/260610-o8z-compliance-verdict-fix-shared-field-rule/) |
 | 260611-mw5 | Wire real RAGAS faithfulness + answer_relevancy (Gemini judge) into the eval harness; lazy-import seam, `eval run --with-ragas` CLI, real per-query scores keyed by query_id | 2026-06-11 | cc4556d | [260611-mw5-wire-real-ragas-faithfulness-and-answer-](./quick/260611-mw5-wire-real-ragas-faithfulness-and-answer-/) |
+| 260611-ou3 | Widen RAG evidence: bounded evidence_text (full page_text, 2000-char cap) fed to Gemini generator and RAGAS judge | 2026-06-11 | 931517f | [260611-ou3-widen-rag-evidence-from-truncated-index-](./quick/260611-ou3-widen-rag-evidence-from-truncated-index-/) |
+| 260923-lmw | Reconcile stale planning files after phase 5 close-out | 2026-09-23 | (this commit) | [260923-lmw-reconcile-stale-planning-files-after-pha](./quick/260923-lmw-reconcile-stale-planning-files-after-pha/) |
 
 ## Deferred Items
 
@@ -99,6 +100,6 @@ yet.
 
 ## Session Continuity
 
-Last session: 2026-06-23T21:55:15.562Z
-Stopped at: Completed 05-01-PLAN.md (visual retrieval plumbing foundation)
+Last session: 2026-09-23
+Stopped at: Phase 5 complete (05-05 close-out f04f14d); next is Phase 6 discuss/plan
 Resume file: None
