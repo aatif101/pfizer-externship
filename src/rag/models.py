@@ -34,6 +34,9 @@ class AnswerReasonCode(StrEnum):
     PROVIDER_BLANK_ANSWER = "provider_blank_answer"
     PROVIDER_MALFORMED_RESULT = "provider_malformed_result"
     PROVIDER_CONFIGURATION_ERROR = "provider_configuration_error"
+    RETRIEVAL_EXHAUSTED = "retrieval_exhausted"
+    CRITIC_REJECTED = "critic_rejected"
+    CRITIC_ERROR = "critic_error"
 
 
 @dataclass(frozen=True)
@@ -67,6 +70,14 @@ class AnswerDiagnostics:
     citation_count: int
     evidence_reason: str
     error_class: str | None = None
+    # Agentic pipeline diagnostics (Phase 6). Defaulted so every existing
+    # linear-path constructor keeps working unchanged.
+    pipeline: str = "linear"
+    retrieval_rounds: int = 0
+    regeneration_count: int = 0
+    sub_query_count: int = 0
+    critic_verdict: str | None = None
+    critic_score: float | None = None
 
 
 @dataclass(frozen=True)

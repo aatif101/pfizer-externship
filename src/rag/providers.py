@@ -36,11 +36,16 @@ class AnswerProviderRequest:
 
     Evidence contains retrieval-owned snippets only; providers never receive raw
     full page text through this service contract.
+
+    ``revision_hint`` is in-memory critic feedback used for at most one agentic
+    regeneration. It is never traced or persisted, and it is ``None`` on every
+    first draft and on the linear path.
     """
 
     question: str
     run_id: str
     evidence: tuple[RetrievalHit, ...]
+    revision_hint: str | None = None
 
 
 @dataclass(frozen=True)

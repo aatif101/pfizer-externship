@@ -66,7 +66,7 @@ An end-to-end AI-powered pharmaceutical document intelligence and compliance sys
 ### Agent Orchestration
 | Technology | Version | Purpose | Why |
 |------------|---------|---------|-----|
-| langgraph | >=1.1.0 | Stateful agentic RAG graph | LangGraph 1.0 GA was Oct 2025; 1.1.0 released March 10 2026. Industry-standard framework for the query-decompose → retrieve → evaluate → regenerate loop. StateGraph + conditional edges are exactly the primitive needed for the critic/reflection pattern in PROJECT.md. |
+| langgraph | ==1.0.1 (D028) | Stateful agentic RAG graph | LangGraph 1.0 GA was Oct 2025; 1.1.0 released March 10 2026. Industry-standard framework for the query-decompose → retrieve → evaluate → regenerate loop. StateGraph + conditional edges are exactly the primitive needed for the critic/reflection pattern in PROJECT.md. |
 | langgraph-prebuilt | latest | `create_react_agent` and tool helpers | Optional; use when the critic sub-agent needs ReAct-style tool-use. |
 | langchain-core | >=0.3 | Message/tool abstractions | Pulled transitively; pin explicitly for reproducibility. |
 | langchain-google-genai, langchain-anthropic | latest | Model bindings | Needed only if you want LangGraph's built-in LLM adapters. Alternative: wrap SDK calls in plain nodes — simpler and avoids LangChain's churn. |
@@ -155,7 +155,7 @@ An end-to-end AI-powered pharmaceutical document intelligence and compliance sys
 |---------|----------|--------|
 | docling | `>=2.72,<3.0` | 2.x is stable; 3.x (not released) would be breaking. |
 | colpali-engine | `>=0.3.11,<0.4` | Pre-1.0 library; minor bumps have broken init paths historically. |
-| langgraph | `>=1.1.0,<2.0` | 1.x is semver-stable since GA. |
+| langgraph | `==1.0.1` | langgraph>=1.1 needs langchain-core>=1.0, which conflicts with the RAGAS 0.4.3 langchain-core<1 pin (D028). |
 | langfuse | `>=3.0,<4.0` | **Hard upper bound.** v4 is breaking. |
 | ragas | `==0.4.3` | Exact pin — metric definitions and API have shifted across 0.x minors. |
 | transformers | `>=4.45,<4.50` | Floor for ColQwen2.5; ceiling avoids surprise regressions. |
