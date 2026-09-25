@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 6
 current_phase_name: Agentic RAG & Observability
 status: executing
-stopped_at: Completed 06-04-PLAN.md
-last_updated: "2026-09-25T02:07:29.440Z"
+stopped_at: Completed 06-05-PLAN.md
+last_updated: "2026-09-25T02:16:08.451Z"
 last_activity: 2026-09-25
-last_activity_desc: Completed 06-04 live critic and graph tracing wiring
+last_activity_desc: Completed 06-05 decomposition, rewrite and node spans
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 15
-  completed_plans: 12
-  percent: 80
+  completed_plans: 13
+  percent: 87
 milestone_name: milestone
 ---
 
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-04-16)
 ## Current Position
 
 Phase: 6 (Agentic RAG & Observability) — EXECUTING
-Plan: 5 of 8
+Plan: 6 of 8
 Status: Ready to execute
-Last activity: 2026-09-25 — Completed 06-04 live critic and graph tracing wiring
+Last activity: 2026-09-25 — Completed 06-05 decomposition, rewrite and node spans
 
-Progress: [████████░░] 80%
+Progress: [█████████░] 87%
 
 ## Performance Metrics
 
@@ -66,6 +66,7 @@ Progress: [████████░░] 80%
 | Phase 06 P02 | 7 min | 2 tasks | 5 files |
 | Phase 06 P03 | 8 min | 2 tasks | 4 files |
 | Phase 06 P04 | 7 min | 2 tasks | 8 files |
+| Phase 06 P05 | 5 min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -91,6 +92,7 @@ Recent decisions affecting current work:
 - [Phase 06]: tracing helpers (trace_session, build_callback_handler, flush_traces, span/generation updates) never raise; only with-body exceptions propagate
 - [Phase 06]: critic=None resolves via build_critic_provider; missing Anthropic key -> ABSTAINED critic_error (CriticConfigurationError), never a Gemini fallback (D-02)
 - [Phase 06]: explicit critic_min_faithfulness overrides CRITIC_MIN_FAITHFULNESS; injected decomposer/rewriter are never overridden by the provider.complete_text seam
+- [Phase 06]: 06-05: doc_type field mentions exclude bare coa/coq/certificate (subject nouns) so single-intent questions are not decomposed; rewrite_query strips verbatim prompt echoes so an echoing LLM is no progress
 
 ### Pending Todos
 
@@ -120,6 +122,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-09-25T02:07:29.428Z
-Stopped at: Completed 06-04-PLAN.md
+Last session: 2026-09-25T02:16:08.440Z
+Stopped at: Completed 06-05-PLAN.md
 Resume file: None
