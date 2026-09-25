@@ -14,6 +14,7 @@ from typing import Annotated
 import typer
 
 from src.eval.retrieval_eval_runner import run_retrieval_eval
+from src.tracing import PHASE_TAGS, trace_session
 
 app = typer.Typer(help="Run and inspect the provider-free retrieval eval harness.", no_args_is_help=True)
 
@@ -46,33 +47,27 @@ def run_command(
         typer.echo("status=error run_id=none with_ragas=false reason=db_missing", err=True)
         raise typer.Exit(2)
 
-    # Initialize the Langfuse client from Settings BEFORE the @observe-decorated
-    # run executes. pydantic-settings loads keys into Python objects but not into
-    # os.environ, so langfuse's default env lookup at @observe time would create a
-    # disabled trace; bridging here ensures the run emits a real trace.
-    try:
-        from src.tracing import _ensure_langfuse_initialized
-
-        _ensure_langfuse_initialized()
-    except Exception:  # noqa: BLE001 - tracing is best-effort; never block the eval.
-        pass
-
+    # Eval harness stays on the linear (phase1) pipeline per D-03; Phase 7 adds an
+    # explicit pipeline flag. trace_session initializes the Langfuse client from
+    # Settings itself (pydantic-settings does not populate os.environ) and never
+    # raises, so tracing can never block or alter the eval run.
     k_values = tuple(k) if k else (5, 10)
-    try:
-        run_id = run_retrieval_eval(
-            db_path,
-            k_values=k_values,
-            include_latency_cost=include_latency_cost,
-            include_ragas=with_ragas,
-        )
-    except Exception as exc:  # noqa: BLE001 - surface a bounded reason, never a raw traceback.
-        typer.echo(
-            f"status=error run_id=none with_ragas={str(with_ragas).lower()} reason={exc.__class__.__name__}",
-            err=True,
-        )
-        raise typer.Exit(1) from exc
+    with trace_session(phase=PHASE_TAGS["linear"], tags=("cli", "eval")):
+        try:
+            run_id = run_retrieval_eval(
+                db_path,
+                k_values=k_values,
+                include_latency_cost=include_latency_cost,
+                include_ragas=with_ragas,
+            )
+        except Exception as exc:  # noqa: BLE001 - surface a bounded reason, never a raw traceback.
+            typer.echo(
+                f"status=error run_id=none with_ragas={str(with_ragas).lower()} reason={exc.__class__.__name__}",
+                err=True,
+            )
+            raise typer.Exit(1) from exc
 
-    typer.echo(f"status=complete run_id={run_id} with_ragas={str(with_ragas).lower()}")
+        typer.echo(f"status=complete run_id={run_id} with_ragas={str(with_ragas).lower()}")
 
 
 if __name__ == "__main__":  # pragma: no cover - exercised by Typer runner/tests.
