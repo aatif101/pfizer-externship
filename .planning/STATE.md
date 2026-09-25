@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 6
 current_phase_name: Agentic RAG & Observability
 status: executing
-stopped_at: Completed 06-05-PLAN.md
-last_updated: "2026-09-25T02:16:08.451Z"
+stopped_at: Completed 06-06-PLAN.md
+last_updated: "2026-09-25T02:22:06.436Z"
 last_activity: 2026-09-25
-last_activity_desc: Completed 06-05 decomposition, rewrite and node spans
+last_activity_desc: Completed 06-06 HITL Review tab
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 15
-  completed_plans: 13
-  percent: 87
+  completed_plans: 14
+  percent: 93
 milestone_name: milestone
 ---
 
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-04-16)
 ## Current Position
 
 Phase: 6 (Agentic RAG & Observability) — EXECUTING
-Plan: 6 of 8
+Plan: 7 of 8
 Status: Ready to execute
-Last activity: 2026-09-25 — Completed 06-05 decomposition, rewrite and node spans
+Last activity: 2026-09-25 — Completed 06-06 HITL Review tab
 
-Progress: [█████████░] 87%
+Progress: [█████████░] 93%
 
 ## Performance Metrics
 
@@ -67,6 +67,7 @@ Progress: [█████████░] 87%
 | Phase 06 P03 | 8 min | 2 tasks | 4 files |
 | Phase 06 P04 | 7 min | 2 tasks | 8 files |
 | Phase 06 P05 | 5 min | 2 tasks | 4 files |
+| Phase 06 P06 | 6 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -93,6 +94,8 @@ Recent decisions affecting current work:
 - [Phase 06]: critic=None resolves via build_critic_provider; missing Anthropic key -> ABSTAINED critic_error (CriticConfigurationError), never a Gemini fallback (D-02)
 - [Phase 06]: explicit critic_min_faithfulness overrides CRITIC_MIN_FAITHFULNESS; injected decomposer/rewriter are never overridden by the provider.complete_text seam
 - [Phase 06]: 06-05: doc_type field mentions exclude bare coa/coq/certificate (subject nouns) so single-intent questions are not decomposed; rewrite_query strips verbatim prompt echoes so an echoing LLM is no progress
+- [Phase 06]: 06-06: Review selectbox has no widget key; selection kept in session_state and fed back via index so reviewed items leaving the queue never raise stale-value errors
+- [Phase 06]: 06-06: abstained review items offer only correct/confirm_absent; review submit runs in trace_session(phase, tags=hitl/review) with flush in finally; UI errors render reason_code or exception class name only
 
 ### Pending Todos
 
@@ -122,6 +125,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-09-25T02:16:08.440Z
-Stopped at: Completed 06-05-PLAN.md
+Last session: 2026-09-25T02:22:06.427Z
+Stopped at: Completed 06-06-PLAN.md
 Resume file: None

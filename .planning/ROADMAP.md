@@ -132,7 +132,7 @@ Plans:
 
 - [x] 06-04-PLAN.md — Claude critic adapter + opt-in Gemini critic, fail-closed builder, graph CallbackHandler wiring, generation spans (RAG-03, OBS-01)
 - [x] 06-05-PLAN.md — Deterministic-first decomposition + domain-synonym rewrite, per-node agent.* spans (RAG-03, OBS-01)
-- [ ] 06-06-PLAN.md — Streamlit Review tab (queue, source page, approve/correct/confirm-absent form, traced submit) + 4th app tab (HITL-01, OBS-01)
+- [x] 06-06-PLAN.md — Streamlit Review tab (queue, source page, approve/correct/confirm-absent form, traced submit) + 4th app tab (HITL-01, OBS-01)
 - [ ] 06-07-PLAN.md — Phase-tagged trace sessions at extraction/retrieval/ingestion/eval CLI entry points; eval stays linear (OBS-01)
 
 **Wave 3** *(blocked on Wave 2 completion)*
@@ -168,5 +168,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 3. Retrieval & RAG Chatbot | .gsd M002 | Complete | 2026-05-21 |
 | 4. Dashboard & Evaluation | .gsd M003 | Complete | 2026-05-28 |
 | 5. Visual Retrieval & Critic Extraction | 5/5 | Complete | 2026-06-29 |
-| 6. Agentic RAG & Observability | 5/8 | In Progress|  |
+| 6. Agentic RAG & Observability | 6/8 | In Progress|  |
 | 7. Benchmark & Polish | 0/TBD | Not started | - |
