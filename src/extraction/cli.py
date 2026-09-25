@@ -22,6 +22,7 @@ from src.extraction.providers import (
     SDFExtractionProvider,
     SDFVisualFallbackProvider,
 )
+from src.tracing import trace_session
 
 app = typer.Typer(help="Run Pfizer SDF extraction against ingested documents.", no_args_is_help=True)
 
@@ -127,27 +128,28 @@ def extract_command(
 ) -> None:
     """Extract and persist one ingested document's six SDF fields."""
 
-    typer.echo(
-        f"Starting extraction doc_id={doc_id} provider={provider_name} "
-        f"trace_status={_trace_status()} run_id={run_id or 'auto'} "
-        f"visual_fallback={str(visual_fallback).lower()}"
-    )
-    try:
-        provider = build_provider(provider_name)
-        visual_provider = build_visual_provider(provider_name) if visual_fallback else None
-        _extract_one(
-            db_path=db_path,
-            doc_id=doc_id,
-            provider=provider,
-            run_id=run_id,
-            visual_provider=visual_provider,
+    with trace_session(phase=get_settings().pipeline_phase, tags=("cli", "extract")):
+        typer.echo(
+            f"Starting extraction doc_id={doc_id} provider={provider_name} "
+            f"trace_status={_trace_status()} run_id={run_id or 'auto'} "
+            f"visual_fallback={str(visual_fallback).lower()}"
         )
-    except ExtractionConfigurationError as exc:
-        typer.echo(_safe_error_message(exc, doc_id=doc_id), err=True)
-        raise typer.Exit(2) from exc
-    except (ExtractionPipelineError, ExtractionProviderError, SafeCliError) as exc:
-        typer.echo(_safe_error_message(exc, doc_id=doc_id), err=True)
-        raise typer.Exit(getattr(exc, "exit_code", 1)) from exc
+        try:
+            provider = build_provider(provider_name)
+            visual_provider = build_visual_provider(provider_name) if visual_fallback else None
+            _extract_one(
+                db_path=db_path,
+                doc_id=doc_id,
+                provider=provider,
+                run_id=run_id,
+                visual_provider=visual_provider,
+            )
+        except ExtractionConfigurationError as exc:
+            typer.echo(_safe_error_message(exc, doc_id=doc_id), err=True)
+            raise typer.Exit(2) from exc
+        except (ExtractionPipelineError, ExtractionProviderError, SafeCliError) as exc:
+            typer.echo(_safe_error_message(exc, doc_id=doc_id), err=True)
+            raise typer.Exit(getattr(exc, "exit_code", 1)) from exc
 
 
 @app.command("extract-all")
@@ -165,49 +167,50 @@ def extract_all_command(
 ) -> None:
     """Extract and persist all documents with status='ingested'."""
 
-    documents = sorted(
-        (document for document in list_documents(db_path) if document.get("status") == "ingested"),
-        key=lambda document: str(document.get("doc_id", "")),
-    )
-    if not documents:
-        typer.echo("No ingested documents found for extraction.", err=True)
-        raise typer.Exit(1)
+    with trace_session(phase=get_settings().pipeline_phase, tags=("cli", "extract-all")):
+        documents = sorted(
+            (document for document in list_documents(db_path) if document.get("status") == "ingested"),
+            key=lambda document: str(document.get("doc_id", "")),
+        )
+        if not documents:
+            typer.echo("No ingested documents found for extraction.", err=True)
+            raise typer.Exit(1)
 
-    typer.echo(
-        f"Starting batch extraction provider={provider_name} trace_status={_trace_status()} "
-        f"docs={len(documents)} run_id={run_id or 'auto'} "
-        f"visual_fallback={str(visual_fallback).lower()}"
-    )
-    try:
-        provider = build_provider(provider_name)
-        visual_provider = build_visual_provider(provider_name) if visual_fallback else None
-    except ExtractionConfigurationError as exc:
-        typer.echo(_safe_error_message(exc), err=True)
-        raise typer.Exit(2) from exc
-    except SafeCliError as exc:
-        typer.echo(_safe_error_message(exc), err=True)
-        raise typer.Exit(exc.exit_code) from exc
-
-    succeeded = 0
-    failed = 0
-    for document in documents:
-        doc_id = str(document["doc_id"])
+        typer.echo(
+            f"Starting batch extraction provider={provider_name} trace_status={_trace_status()} "
+            f"docs={len(documents)} run_id={run_id or 'auto'} "
+            f"visual_fallback={str(visual_fallback).lower()}"
+        )
         try:
-            _extract_one(
-                db_path=db_path,
-                doc_id=doc_id,
-                provider=provider,
-                run_id=run_id,
-                visual_provider=visual_provider,
-            )
-            succeeded += 1
-        except (ExtractionPipelineError, ExtractionProviderError) as exc:
-            failed += 1
-            typer.echo(_safe_error_message(exc, doc_id=doc_id), err=True)
+            provider = build_provider(provider_name)
+            visual_provider = build_visual_provider(provider_name) if visual_fallback else None
+        except ExtractionConfigurationError as exc:
+            typer.echo(_safe_error_message(exc), err=True)
+            raise typer.Exit(2) from exc
+        except SafeCliError as exc:
+            typer.echo(_safe_error_message(exc), err=True)
+            raise typer.Exit(exc.exit_code) from exc
 
-    typer.echo(f"SUMMARY attempted={len(documents)} succeeded={succeeded} failed={failed}")
-    if failed:
-        raise typer.Exit(1)
+        succeeded = 0
+        failed = 0
+        for document in documents:
+            doc_id = str(document["doc_id"])
+            try:
+                _extract_one(
+                    db_path=db_path,
+                    doc_id=doc_id,
+                    provider=provider,
+                    run_id=run_id,
+                    visual_provider=visual_provider,
+                )
+                succeeded += 1
+            except (ExtractionPipelineError, ExtractionProviderError) as exc:
+                failed += 1
+                typer.echo(_safe_error_message(exc, doc_id=doc_id), err=True)
+
+        typer.echo(f"SUMMARY attempted={len(documents)} succeeded={succeeded} failed={failed}")
+        if failed:
+            raise typer.Exit(1)
 
 
 if __name__ == "__main__":  # pragma: no cover - exercised by Typer runner/tests.

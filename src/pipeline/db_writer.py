@@ -17,9 +17,12 @@ _STORAGE_TRACE_METADATA_KEYS = frozenset(
 
 
 def _trace_storage(metadata: dict[str, object]) -> None:
-    """Best-effort storage trace update with a strict metadata allowlist."""
+    """Best-effort storage trace update with a strict metadata allowlist.
+
+    The phase tag comes from the active ``trace_session`` (never hard-coded).
+    """
     safe_update_current_trace(
-        tags=["phase1", "storage"],
+        tags=["storage"],
         metadata=metadata,
         allowed_metadata_keys=_STORAGE_TRACE_METADATA_KEYS,
     )

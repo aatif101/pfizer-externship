@@ -13,8 +13,10 @@ from typing import Annotated
 
 import typer
 
+from src.config import get_settings
 from src.retrieval.indexer import RetrievalIndexBuildResult, build_retrieval_index, get_retrieval_index_status
 from src.retrieval.models import RetrievalIndexStatus, RetrievalIndexStatusReport
+from src.tracing import trace_session
 
 app = typer.Typer(help="Build and inspect the provider-free retrieval index.", no_args_is_help=True)
 
@@ -127,20 +129,21 @@ def build_command(
 ) -> None:
     """Build and persist the current provider-free retrieval index."""
 
-    try:
-        _preflight_source_database(db_path)
-        result = build_retrieval_index(db_path)
-    except SafeCliError as exc:
-        typer.echo(f"status=error run_id=none indexed_docs=0 indexed_pages=0 content_hash=none stale=false reason={exc.reason_code}", err=True)
-        raise typer.Exit(exc.exit_code) from exc
-    except sqlite3.Error as exc:
-        typer.echo("status=error run_id=none indexed_docs=0 indexed_pages=0 content_hash=none stale=false reason=db_error", err=True)
-        raise typer.Exit(2) from exc
+    with trace_session(phase=get_settings().pipeline_phase, tags=("cli", "retrieval-build")):
+        try:
+            _preflight_source_database(db_path)
+            result = build_retrieval_index(db_path)
+        except SafeCliError as exc:
+            typer.echo(f"status=error run_id=none indexed_docs=0 indexed_pages=0 content_hash=none stale=false reason={exc.reason_code}", err=True)
+            raise typer.Exit(exc.exit_code) from exc
+        except sqlite3.Error as exc:
+            typer.echo("status=error run_id=none indexed_docs=0 indexed_pages=0 content_hash=none stale=false reason=db_error", err=True)
+            raise typer.Exit(2) from exc
 
-    _echo_build_result(result)
-    exit_code = _exit_code_for_status(result.run.status)
-    if exit_code:
-        raise typer.Exit(exit_code)
+        _echo_build_result(result)
+        exit_code = _exit_code_for_status(result.run.status)
+        if exit_code:
+            raise typer.Exit(exit_code)
 
 
 @app.command("status")
@@ -149,20 +152,21 @@ def status_command(
 ) -> None:
     """Inspect retrieval index health without rebuilding it."""
 
-    try:
-        _preflight_source_database(db_path)
-        report = get_retrieval_index_status(db_path)
-    except SafeCliError as exc:
-        typer.echo(f"status=error run_id=none indexed_docs=0 indexed_pages=0 content_hash=none stale=false reason={exc.reason_code}", err=True)
-        raise typer.Exit(exc.exit_code) from exc
-    except sqlite3.Error as exc:
-        typer.echo("status=error run_id=none indexed_docs=0 indexed_pages=0 content_hash=none stale=false reason=db_error", err=True)
-        raise typer.Exit(2) from exc
+    with trace_session(phase=get_settings().pipeline_phase, tags=("cli", "retrieval-status")):
+        try:
+            _preflight_source_database(db_path)
+            report = get_retrieval_index_status(db_path)
+        except SafeCliError as exc:
+            typer.echo(f"status=error run_id=none indexed_docs=0 indexed_pages=0 content_hash=none stale=false reason={exc.reason_code}", err=True)
+            raise typer.Exit(exc.exit_code) from exc
+        except sqlite3.Error as exc:
+            typer.echo("status=error run_id=none indexed_docs=0 indexed_pages=0 content_hash=none stale=false reason=db_error", err=True)
+            raise typer.Exit(2) from exc
 
-    _echo_report(report)
-    exit_code = _exit_code_for_status(report.status)
-    if exit_code:
-        raise typer.Exit(exit_code)
+        _echo_report(report)
+        exit_code = _exit_code_for_status(report.status)
+        if exit_code:
+            raise typer.Exit(exit_code)
 
 
 if __name__ == "__main__":  # pragma: no cover - exercised by Typer runner/tests.

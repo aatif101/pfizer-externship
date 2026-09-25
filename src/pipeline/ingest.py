@@ -20,7 +20,7 @@ import typer
 from loguru import logger
 from tqdm import tqdm
 
-from src.tracing import observe, safe_update_current_trace
+from src.tracing import observe, safe_update_current_trace, trace_session
 
 from src.config import get_settings
 from src.db.schema import init_db
@@ -36,9 +36,13 @@ _INGEST_TRACE_METADATA_KEYS = frozenset(
 
 
 def _trace_ingestion(metadata: dict[str, object]) -> None:
-    """Best-effort ingestion trace update with a strict metadata allowlist."""
+    """Best-effort ingestion trace update with a strict metadata allowlist.
+
+    The phase tag is not hard-coded: it comes from the active ``trace_session``
+    (06-03 auto-prepend), so CLI ingestion is tagged with ``pipeline_phase``.
+    """
     safe_update_current_trace(
-        tags=["phase1", "ingestion"],
+        tags=["ingestion"],
         metadata=metadata,
         allowed_metadata_keys=_INGEST_TRACE_METADATA_KEYS,
     )
@@ -178,42 +182,43 @@ def ingest(
                                         help="Skip already-ingested documents"),
 ) -> None:
     """Ingest all PDFs in FOLDER into the compliance database."""
-    # T-1-01: Resolve and validate folder path
-    resolved_folder = folder.resolve()
-    if not resolved_folder.exists():
-        typer.echo(f"ERROR: Folder not found: {resolved_folder}", err=True)
-        raise typer.Exit(1)
-    if not resolved_folder.is_dir():
-        typer.echo(f"ERROR: Not a directory: {resolved_folder}", err=True)
-        raise typer.Exit(1)
+    with trace_session(phase=get_settings().pipeline_phase, tags=("cli", "ingest")):
+        # T-1-01: Resolve and validate folder path
+        resolved_folder = folder.resolve()
+        if not resolved_folder.exists():
+            typer.echo(f"ERROR: Folder not found: {resolved_folder}", err=True)
+            raise typer.Exit(1)
+        if not resolved_folder.is_dir():
+            typer.echo(f"ERROR: Not a directory: {resolved_folder}", err=True)
+            raise typer.Exit(1)
 
-    pdf_files = sorted(resolved_folder.glob("*.pdf"))
-    if not pdf_files:
-        typer.echo(f"No PDFs found in {resolved_folder}", err=True)
-        raise typer.Exit(1)
+        pdf_files = sorted(resolved_folder.glob("*.pdf"))
+        if not pdf_files:
+            typer.echo(f"No PDFs found in {resolved_folder}", err=True)
+            raise typer.Exit(1)
 
-    typer.echo(f"Found {len(pdf_files)} PDF(s) in {resolved_folder}")
-    init_db(db_path)
+        typer.echo(f"Found {len(pdf_files)} PDF(s) in {resolved_folder}")
+        init_db(db_path)
 
-    errors: list[tuple[str, str]] = []
-    for pdf_path in tqdm(pdf_files, desc="Ingesting", unit="doc"):
-        try:
-            result = ingest_document(str(pdf_path), db_path)
-            logger.info(
-                f"OK: {pdf_path.name} — {result['page_count']} pages, "
-                f"{result['image_count']} images"
-            )
-        except Exception as exc:
-            logger.error(f"FAILED: {pdf_path.name} — {exc}")
-            errors.append((pdf_path.name, str(exc)))
+        errors: list[tuple[str, str]] = []
+        for pdf_path in tqdm(pdf_files, desc="Ingesting", unit="doc"):
+            try:
+                result = ingest_document(str(pdf_path), db_path)
+                logger.info(
+                    f"OK: {pdf_path.name} — {result['page_count']} pages, "
+                    f"{result['image_count']} images"
+                )
+            except Exception as exc:
+                logger.error(f"FAILED: {pdf_path.name} — {exc}")
+                errors.append((pdf_path.name, str(exc)))
 
-    total = len(pdf_files)
-    succeeded = total - len(errors)
-    typer.echo(f"\nDone. {succeeded}/{total} succeeded.")
-    if errors:
-        for name, err in errors:
-            typer.echo(f"  ERROR: {name}: {err}", err=True)
-        raise typer.Exit(1)
+        total = len(pdf_files)
+        succeeded = total - len(errors)
+        typer.echo(f"\nDone. {succeeded}/{total} succeeded.")
+        if errors:
+            for name, err in errors:
+                typer.echo(f"  ERROR: {name}: {err}", err=True)
+            raise typer.Exit(1)
 
 
 if __name__ == "__main__":
