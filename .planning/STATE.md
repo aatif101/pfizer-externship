@@ -5,10 +5,10 @@ current_phase: 6
 current_phase_name: Agentic RAG & Observability
 status: executing
 stopped_at: Completed 06-02-PLAN.md
-last_updated: "2026-09-25T01:49:05.875Z"
+last_updated: "2026-09-25T01:49:22.181Z"
 last_activity: 2026-09-23
 last_activity_desc: Phase 6 execution started
-state_head: 29f8ee19445f94ca80f38cdba37eebd4cd95b507
+state_head: be63e51460fe42493941c3de4b0cdc4f70f8fa01
 progress:
   total_phases: 7
   completed_phases: 5
@@ -83,6 +83,8 @@ Recent decisions affecting current work:
 - [Phase 5 P05]: ColQwen2.5 loaded on a pinned pre-Transformers-5 stack (colpali-engine==0.3.9, transformers>=4.50,<4.51, torch==2.6.0, peft>=0.14,<0.15) with a load-report gate; 6 empty-text scanned pages OCR-backfilled into page_ocr_texts (pages.page_text untouched); fusion is confidence-aware weighted RRF (rescue_weight=3.5)
 - [Phase 06]: D028: pin langgraph==1.0.1 (langgraph>=1.1 needs langchain-core>=1.0, conflicts with RAGAS 0.4.3)
 - [Phase 06]: Agentic abstain reason: critic_rejected checked before retrieval_exhausted; finalize builds citations from retrieval hits and fails closed when empty
+- [Phase 06]: HITL reviews run in one BEGIN IMMEDIATE transaction (same-connection read), write only latest tables plus append-only extraction_reviews, never run history — Serializes concurrent reviews; keeps Phase 7 extraction F1 free of human values
+- [Phase 06]: Reviewer dates parsed strictly (ISO, then dateutil month-first; partial dates rejected); corrections must cite an existing page (source_page_out_of_range) — Compliance dates and page citations must never be invented
 
 ### Pending Todos
 
