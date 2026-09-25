@@ -239,3 +239,105 @@ def test_ingestion_trace_carries_session_phase_once(monkeypatch: pytest.MonkeyPa
         db_writer._trace_storage({"boundary": "storage", "status": "started"})
 
     assert [update["tags"] for update in ctx.updates] == [["phase2", "ingestion"], ["phase2", "storage"]]
+
+
+# --------------------------------------------------------------------------- eval (D-03: linear)
+
+
+def test_eval_run_opens_linear_session(monkeypatch: pytest.MonkeyPatch, recorder: SessionRecorder, tmp_path) -> None:
+    from src.eval import cli as eval_cli  # noqa: PLC0415
+
+    db_file = tmp_path / "eval.sqlite"
+    db_file.write_bytes(b"")
+    calls: list[str] = []
+
+    def _fake_run(db_path: str, **kwargs: Any) -> str:
+        calls.append(db_path)
+        return "run-x"
+
+    monkeypatch.setattr(eval_cli, "run_retrieval_eval", _fake_run)
+    _patch_session(monkeypatch, eval_cli, recorder)
+
+    result = runner.invoke(eval_cli.app, ["run", "--db-path", str(db_file)])
+
+    assert result.exit_code == 0, result.output
+    assert result.output.strip().splitlines()[-1] == "status=complete run_id=run-x with_ragas=false"
+    assert calls == [str(db_file)]
+    assert len(recorder.sessions) == 1
+    phase, tags = recorder.sessions[0]
+    assert phase == "phase1" == tracing.PHASE_TAGS["linear"]
+    assert "cli" in tags and "eval" in tags
+
+
+def test_eval_run_failure_keeps_bounded_error(monkeypatch: pytest.MonkeyPatch, recorder: SessionRecorder, tmp_path) -> None:
+    from src.eval import cli as eval_cli  # noqa: PLC0415
+
+    db_file = tmp_path / "eval.sqlite"
+    db_file.write_bytes(b"")
+
+    def _boom(db_path: str, **kwargs: Any) -> str:
+        raise RuntimeError("secret query text must not print")
+
+    monkeypatch.setattr(eval_cli, "run_retrieval_eval", _boom)
+    _patch_session(monkeypatch, eval_cli, recorder)
+
+    result = runner.invoke(eval_cli.app, ["run", "--db-path", str(db_file)])
+
+    assert result.exit_code == 1
+    assert "status=error run_id=none with_ragas=false reason=RuntimeError" in result.output
+    assert "secret query text" not in result.output
+    assert [phase for phase, _ in recorder.sessions] == ["phase1"]
+
+
+def test_eval_missing_db_unchanged(tmp_path) -> None:
+    from src.eval import cli as eval_cli  # noqa: PLC0415
+
+    result = runner.invoke(eval_cli.app, ["run", "--db-path", str(tmp_path / "nope.db")])
+
+    assert result.exit_code == 2
+    assert "status=error run_id=none with_ragas=false reason=db_missing" in result.output
+
+
+def test_ragas_harness_default_is_linear(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    """D-03 guard: compute_ragas_quality(answer_fn=None) answers with the linear pipeline."""
+    import inspect  # noqa: PLC0415
+    import sqlite3  # noqa: PLC0415
+    from types import SimpleNamespace  # noqa: PLC0415
+
+    import src.rag.service as rag_service  # noqa: PLC0415
+    from src.eval import ragas_quality  # noqa: PLC0415
+
+    db_path = str(tmp_path / "eval.sqlite")
+    init_db(db_path)
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute("INSERT INTO gold_retrieval_queries (query_id, query_text) VALUES (?, ?)", ("q1", "alpha"))
+        conn.commit()
+    finally:
+        conn.close()
+
+    linear_calls: list[str] = []
+
+    def _linear_spy(db: str, question: str, **kwargs: Any) -> SimpleNamespace:
+        linear_calls.append(question)
+        return SimpleNamespace(is_answered=False)
+
+    def _agentic_must_not_run(*args: Any, **kwargs: Any) -> None:
+        raise AssertionError("RAGAS harness default must stay linear (D-03)")
+
+    monkeypatch.setattr(rag_service, "answer_question", _linear_spy)
+    monkeypatch.setattr(rag_service, "answer_question_agentic", _agentic_must_not_run, raising=False)
+    import src.rag.agentic.graph as agentic_graph  # noqa: PLC0415
+
+    monkeypatch.setattr(agentic_graph, "answer_question_agentic", _agentic_must_not_run)
+
+    def _scorer_must_not_run(sample: Any) -> tuple[float, float]:
+        raise AssertionError("unanswered queries are never scored")
+
+    count = ragas_quality.compute_ragas_quality(
+        db_path, source_run_id="src-run", scorer=_scorer_must_not_run, provider=object()
+    )
+
+    assert count == 1
+    assert linear_calls == ["alpha"]
+    assert "answer_question_agentic" not in inspect.getsource(ragas_quality)
