@@ -41,6 +41,9 @@ class FakeStreamlit:
     def expander(self, label: str, *, expanded: bool = False) -> FakeContext:  # pragma: no cover
         return FakeContext()
 
+    def toggle(self, label: str, *, value: bool = False, key: str | None = None, help: str | None = None) -> bool:
+        return value
+
     def chat_input(self, placeholder: str):
         self.chat_inputs.append(placeholder)
         return None
