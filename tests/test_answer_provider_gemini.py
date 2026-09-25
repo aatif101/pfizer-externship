@@ -285,3 +285,101 @@ def test_optional_google_genai_import_failure_is_sanitized_configuration_error(m
 
     assert "google-genai" in str(exc_info.value)
     assert "raw google import failure details" not in str(exc_info.value)
+
+
+# ---------------------------------------------------------------------------
+# Plan 06-04: revision hint, complete_text seam, generation usage reporting
+# ---------------------------------------------------------------------------
+
+
+def test_revision_hint_in_prompt_only_when_present() -> None:
+    import dataclasses
+
+    from src.rag.gemini import _build_contents
+
+    base = _request()
+    with_hint = dataclasses.replace(base, revision_hint="Remove claim X")
+
+    contents = _build_contents(with_hint)
+    assert "<revision_feedback>" in contents
+    assert "Remove claim X" in contents
+    assert "every claim is supported by the evidence" in contents
+
+    plain = _build_contents(base)
+    assert "<revision_feedback>" not in plain
+
+
+def test_revision_hint_is_bounded() -> None:
+    import dataclasses
+
+    from src.rag.gemini import _build_contents
+
+    hint = "H" * 1500 + "HINT_TAIL_BEYOND_CAP"
+    contents = _build_contents(dataclasses.replace(_request(), revision_hint=hint))
+    assert "HINT_TAIL_BEYOND_CAP" not in contents
+
+
+def test_complete_text_uses_generation_span_and_temperature_zero() -> None:
+    from src.rag.gemini import GeminiAnswerProvider
+
+    client = FakeGeminiClient([FakeGeminiResponse("```\nexpiry date lot 42\n```")])
+    provider = GeminiAnswerProvider(api_key="test-key", client=client, max_attempts=1)
+
+    text = provider.complete_text("prompt " * 1000, role="decompose")
+
+    assert text == "expiry date lot 42"
+    assert len(client.models.calls) == 1
+    call = client.models.calls[0]
+    assert call["config"] == {"temperature": 0}
+    assert len(call["contents"]) <= 4000
+
+
+def test_complete_text_sanitizes_provider_errors() -> None:
+    from src.rag.gemini import GeminiAnswerProvider
+    from src.rag.providers import AnswerProviderError
+
+    client = FakeGeminiClient([NonRetryableProviderError("RAW_DETAIL_SHOULD_NOT_APPEAR")])
+    provider = GeminiAnswerProvider(api_key="secret-gemini-key", client=client, max_attempts=2)
+
+    with pytest.raises(AnswerProviderError) as exc_info:
+        provider.complete_text("rewrite this", role="rewrite")
+
+    message = str(exc_info.value)
+    assert "error_class=NonRetryableProviderError" in message
+    assert "RAW_DETAIL_SHOULD_NOT_APPEAR" not in message
+    assert "secret-gemini-key" not in message
+    assert len(client.models.calls) == 1
+
+
+@dataclass
+class _FakeUsageMetadata:
+    prompt_token_count: int = 11
+    candidates_token_count: int = 7
+
+
+@dataclass
+class _FakeResponseWithUsage:
+    text: str
+    usage_metadata: Any
+    response_id: str = "trace-usage"
+
+
+def test_answer_reports_generation_usage(monkeypatch: pytest.MonkeyPatch) -> None:
+    import src.rag.gemini as gemini_module
+    from src.rag.gemini import GeminiAnswerProvider
+
+    calls: list[dict[str, Any]] = []
+    monkeypatch.setattr(gemini_module, "safe_update_current_generation", lambda **kw: calls.append(kw) or True)
+    client = FakeGeminiClient([_FakeResponseWithUsage("Answer.", _FakeUsageMetadata())])
+    provider = GeminiAnswerProvider(api_key="test-key", client=client, max_attempts=1)
+
+    provider.answer(_request())
+
+    assert calls == [{"model": "gemini-2.5-flash", "input_tokens": 11, "output_tokens": 7}]
+
+
+def test_usage_tokens_ignores_missing_or_invalid_usage() -> None:
+    from src.rag.gemini import _usage_tokens
+
+    assert _usage_tokens(FakeGeminiResponse("x")) == (None, None)
+    assert _usage_tokens(_FakeResponseWithUsage("x", _FakeUsageMetadata(prompt_token_count=-1))) == (None, 7)
