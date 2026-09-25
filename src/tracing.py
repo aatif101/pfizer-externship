@@ -99,6 +99,25 @@ _propagate_attributes_factory: Callable[..., Any] | None = None
 _callback_handler_factory: Callable[[], Any] | None = None
 
 
+# Global allowlist of non-content keys that may survive the Langfuse mask. Content keys
+# (question, snippet, evidence_text, page_text, draft, critic_feedback, unsupported_claims,
+# field values, notes, verbatim spans, image bytes) are intentionally absent.
+_MASK_SAFE_KEYS: frozenset[str] = frozenset(
+    {
+        "boundary", "status", "reason_code", "answer_status", "run_id", "trace_id",
+        "provider_name", "top_score", "citation_count", "evidence_reason", "error_class",
+        "pipeline", "phase", "retrieval_round", "retrieval_rounds", "sub_query_count",
+        "regeneration_count", "critic_verdict", "critic_score", "critic_accepted", "outcome",
+        "steps", "doc_id", "page_number", "page_num", "field_name", "action",
+        "previous_review_state", "review_id", "retrieval_mode", "visual_hit_count", "model",
+        "usage_details", "input", "output", "total", "count", "filename", "page_count",
+        "image_count",
+    }
+)
+_MASK_MAX_DEPTH = 4
+_MASK_MAX_STRING_CHARS = 64
+
+
 def current_phase() -> str | None:
     """Return the phase tag of the active ``trace_session`` (None outside a session)."""
     return _CURRENT_PHASE.get()
@@ -178,6 +197,58 @@ def _ordered_unique_tags(tags: Iterable[Any]) -> list[str]:
     return ordered
 
 
+def _mask_value(value: Any, depth: int) -> Any:
+    if depth > _MASK_MAX_DEPTH:
+        return None
+    if value is None or isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, str):
+        if _is_secret_like(value):
+            return None
+        if len(value) > _MASK_MAX_STRING_CHARS:
+            return f"[redacted:len={len(value)}]"
+        return value
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return None
+    if isinstance(value, Mapping):
+        masked: dict[str, Any] = {}
+        for key, inner in value.items():
+            if not isinstance(key, str) or key not in _MASK_SAFE_KEYS:
+                continue
+            safe_inner = _mask_value(inner, depth + 1)
+            if safe_inner is not None:
+                masked[key] = safe_inner
+        return masked
+    if isinstance(value, (list, tuple)):
+        items: list[Any] = []
+        for inner in value:
+            safe_inner = _mask_value(inner, depth + 1)
+            if safe_inner is not None:
+                items.append(safe_inner)
+            if len(items) >= _TRACE_LIST_MAX_ITEMS:
+                break
+        return items
+    # Dataclasses, pydantic models, and arbitrary objects are dropped (never repr()'d).
+    return None
+
+
+def mask_trace_payload(*, data: Any, **kwargs: Any) -> Any:
+    """Langfuse v3 MaskFunction: strip content from auto-captured span input/output.
+
+    Mappings keep only ``_MASK_SAFE_KEYS``; strings longer than 64 chars become
+    ``"[redacted:len=N]"``; secret-looking strings, bytes, and objects are dropped.
+    Recursion depth is capped at 4. Never raises (returns None on any error).
+    """
+    try:
+        return _mask_value(data, 0)
+    except Exception:
+        return None
+
+
 def _ensure_langfuse_initialized() -> bool:
     """Initialize the global Langfuse client from Settings if keys are present.
 
@@ -198,6 +269,7 @@ def _ensure_langfuse_initialized() -> bool:
             public_key=settings.langfuse_public_key,
             secret_key=settings.langfuse_secret_key,
             host=settings.langfuse_host,
+            mask=mask_trace_payload,
         )
         return True
     except Exception:
@@ -255,6 +327,69 @@ def safe_update_current_trace(
 
     try:
         trace_context.update_current_trace(**update_kwargs)
+    except Exception:
+        return False
+    return True
+
+
+def safe_update_current_span(
+    *,
+    metadata: Mapping[str, Any] | None,
+    allowed_metadata_keys: set[str] | frozenset[str],
+    context: Any | None = None,
+) -> bool:
+    """Safely attach allowlisted, bounded metadata to the current Langfuse span. Never raises."""
+    try:
+        span_context = context if context is not None else _get_langfuse_context()
+        if span_context is None or not hasattr(span_context, "update_current_span"):
+            return False
+        safe_metadata = filter_trace_metadata(metadata, allowed_metadata_keys or frozenset())
+        if not safe_metadata:
+            return False
+        span_context.update_current_span(metadata=safe_metadata)
+    except Exception:
+        return False
+    return True
+
+
+def _safe_token_count(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return value
+
+
+def safe_update_current_generation(
+    *,
+    model: str | None,
+    input_tokens: Any = None,
+    output_tokens: Any = None,
+    context: Any | None = None,
+) -> bool:
+    """Safely set model + token usage on the current Langfuse generation. Never raises.
+
+    Only non-negative int token counts are sent; secret-looking model strings are dropped.
+    """
+    try:
+        gen_context = context if context is not None else _get_langfuse_context()
+        if gen_context is None or not hasattr(gen_context, "update_current_generation"):
+            return False
+        update_kwargs: dict[str, Any] = {}
+        if isinstance(model, str):
+            safe_model = _safe_trace_value(model)
+            if isinstance(safe_model, str) and safe_model:
+                update_kwargs["model"] = safe_model
+        usage: dict[str, int] = {}
+        safe_input = _safe_token_count(input_tokens)
+        if safe_input is not None:
+            usage["input"] = safe_input
+        safe_output = _safe_token_count(output_tokens)
+        if safe_output is not None:
+            usage["output"] = safe_output
+        if usage:
+            update_kwargs["usage_details"] = usage
+        if not update_kwargs:
+            return False
+        gen_context.update_current_generation(**update_kwargs)
     except Exception:
         return False
     return True
