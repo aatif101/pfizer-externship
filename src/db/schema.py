@@ -151,6 +151,26 @@ CREATE TABLE IF NOT EXISTS compliance_record_history (
     UNIQUE (run_id, doc_id)
 );
 
+-- HITL-01: append-only reviewer audit trail. One row per review action; rows are
+-- never updated or deleted by application code. Run-history tables are never
+-- touched by reviews (human values must not leak into model extraction F1).
+CREATE TABLE IF NOT EXISTS extraction_reviews (
+    review_id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    doc_id                 TEXT NOT NULL REFERENCES documents(doc_id) ON DELETE CASCADE,
+    field_name             TEXT NOT NULL,
+    action                 TEXT NOT NULL CHECK (action IN ('approve', 'correct', 'confirm_absent')),
+    previous_value         TEXT,
+    new_value              TEXT,
+    previous_confidence    REAL,
+    previous_review_state  TEXT,
+    source_page            INTEGER,
+    reviewer               TEXT NOT NULL,
+    note                   TEXT,
+    run_id                 TEXT,
+    trace_id               TEXT,
+    reviewed_at            TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
 -- LEGACY: Phase 1 evaluation surface (per-metric rows without run grouping).
 -- Keep for backward compatibility; new evaluation code should use eval_runs + eval_metrics.
 CREATE TABLE IF NOT EXISTS evaluations (
@@ -364,6 +384,7 @@ POST_MIGRATION_INDEX_SQL = """
 CREATE INDEX IF NOT EXISTS idx_extractions_review_state ON extractions(review_state);
 CREATE INDEX IF NOT EXISTS idx_extractions_needs_review ON extractions(needs_review);
 CREATE INDEX IF NOT EXISTS idx_retrieval_pages_text_source ON retrieval_index_pages(text_source);
+CREATE INDEX IF NOT EXISTS idx_extraction_reviews_doc_field ON extraction_reviews(doc_id, field_name);
 """
 
 

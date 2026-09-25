@@ -50,14 +50,17 @@ class SourceEvidence(BaseModel):
     )
     evidence_type: str = Field(
         default="text",
-        description="'text' = verbatim-grounded; 'visual' = image-grounded, page-cited, review-flagged.",
+        description=(
+            "'text' = verbatim-grounded; 'visual' = image-grounded, page-cited, review-flagged; "
+            "'human' = reviewer-entered correction (HITL), page-cited."
+        ),
     )
 
     @field_validator("evidence_type")
     @classmethod
     def validate_evidence_type(cls, value: str) -> str:
-        if value not in {"text", "visual"}:
-            raise ValueError("evidence_type must be 'text' or 'visual'")
+        if value not in {"text", "visual", "human"}:
+            raise ValueError("evidence_type must be 'text', 'visual', or 'human'")
         return value
 
     @field_validator("bbox")
