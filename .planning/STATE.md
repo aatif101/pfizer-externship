@@ -4,11 +4,11 @@ milestone: v1.0
 current_phase: 6
 current_phase_name: Agentic RAG & Observability
 status: executing
-stopped_at: "Session resumed; executing Phase 6 wave 1 (06-01 from committed scaffold f94217c)"
-last_updated: "2026-09-23T22:05:16.744Z"
+stopped_at: Completed 06-01-PLAN.md
+last_updated: "2026-09-25T01:39:28.436Z"
 last_activity: 2026-09-23
 last_activity_desc: Phase 6 execution started
-state_head: 213040f13206b3d3f9eb6e118946ec7220f92752
+state_head: 4343abecfb6e67fb359d6eb8e979becc0e07b57d
 progress:
   total_phases: 7
   completed_phases: 5
@@ -29,8 +29,8 @@ See: .planning/PROJECT.md (updated 2026-04-16)
 ## Current Position
 
 Phase: 6 (Agentic RAG & Observability) — EXECUTING
-Plan: 1 of 8
-Status: Executing Phase 6
+Plan: 2 of 8
+Status: Ready to execute
 Last activity: 2026-09-23 — Phase 6 execution started
 
 Progress: [███████░░░] 71%
@@ -58,6 +58,11 @@ Progress: [███████░░░] 71%
 | Phase 05 P02 | 8 min | 3 tasks | 8 files |
 | Phase 05 P03 | 12 min | 2 tasks | 7 files |
 | Phase 05 P04 | 18 min | 2 tasks | 4 files |
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 06 P01 | 6 min | 2 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -75,6 +80,8 @@ Recent decisions affecting current work:
 - [Phase 5 P03]: rq_ex3 gold mojibake repaired via guarded idempotent UPDATE (U+FFFD -> Ä); compliance.db never staged; trace allowlist gains numeric/id-only visual keys (retrieval_mode, visual_hit_count)
 - [Phase 6 plan]: langgraph pinned ==1.0.1 (langchain-core<1 for RAGAS 0.4.3); critic fails closed without Anthropic key (Gemini opt-in only); Chat defaults to agentic, eval stays linear
 - [Phase 5 P05]: ColQwen2.5 loaded on a pinned pre-Transformers-5 stack (colpali-engine==0.3.9, transformers>=4.50,<4.51, torch==2.6.0, peft>=0.14,<0.15) with a load-report gate; 6 empty-text scanned pages OCR-backfilled into page_ocr_texts (pages.page_text untouched); fusion is confidence-aware weighted RRF (rescue_weight=3.5)
+- [Phase 06]: D028: pin langgraph==1.0.1 (langgraph>=1.1 needs langchain-core>=1.0, conflicts with RAGAS 0.4.3)
+- [Phase 06]: Agentic abstain reason: critic_rejected checked before retrieval_exhausted; finalize builds citations from retrieval hits and fails closed when empty
 
 ### Pending Todos
 
@@ -104,6 +111,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-09-23
-Stopped at: Session resumed; Phase 6 planned (8 plans, 3 waves, checker passed), proceeding to /gsd-execute-phase 6
+Last session: 2026-09-25T01:39:28.409Z
+Stopped at: Completed 06-01-PLAN.md
 Resume file: None
