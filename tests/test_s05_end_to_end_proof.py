@@ -258,6 +258,9 @@ class S05FakeStreamlit:
         self.expanders.append((label, expanded))
         return S05FakeContext(self, "expander", label)
 
+    def toggle(self, label: str, *, value: bool = False, key: str | None = None, help: str | None = None) -> bool:
+        return value
+
     def chat_input(self, placeholder: str) -> str | None:
         self.chat_inputs.append(placeholder)
         if not self.prompts:

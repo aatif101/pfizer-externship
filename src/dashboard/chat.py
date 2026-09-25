@@ -9,9 +9,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import asdict, is_dataclass
 from typing import Any
+from uuid import uuid4
 
 import streamlit as st
 
+from src.config import get_settings
 from src.dashboard.ui import render_tab_header
 from src.rag import (
     AnswerCitation,
@@ -23,10 +25,13 @@ from src.rag import (
     build_answer_provider,
 )
 from src.rag import answer_question as default_answer_question
+from src.tracing import PHASE_TAGS, flush_traces, trace_session
 
 
 _CHAT_MESSAGES_KEY = "pfizer_chat_messages"
 _CHAT_DIAGNOSTICS_KEY = "pfizer_chat_last_diagnostics"
+_CHAT_AGENTIC_TOGGLE_KEY = "pfizer_chat_agentic"
+_CHAT_SESSION_ID_KEY = "pfizer_chat_session_id"
 _DEFAULT_PROVIDER_NAME = "gemini"
 _MAX_RENDERED_TEXT_CHARS = 600
 _MAX_CITATION_SNIPPET_CHARS = 280
@@ -48,6 +53,18 @@ _REASON_HINTS: dict[AnswerReasonCode, str] = {
     AnswerReasonCode.PROVIDER_EXCEPTION: "The answer provider failed safely. Retry after checking provider availability.",
     AnswerReasonCode.PROVIDER_BLANK_ANSWER: "The provider returned no usable answer. Retry or inspect diagnostics.",
     AnswerReasonCode.PROVIDER_MALFORMED_RESULT: "The provider returned an invalid response shape. Retry or inspect diagnostics.",
+    AnswerReasonCode.RETRIEVAL_EXHAUSTED: (
+        "The agent re-searched the corpus (up to 2 retries) but could not find strong evidence for every part "
+        "of the question, so it abstained. Try naming the supplier, document, or field."
+    ),
+    AnswerReasonCode.CRITIC_REJECTED: (
+        "A draft answer was produced but the faithfulness critic could not verify it against the cited evidence "
+        "(after one regeneration), so the system abstained rather than risk a hallucination."
+    ),
+    AnswerReasonCode.CRITIC_ERROR: (
+        "The faithfulness critic is unavailable, so answers cannot be verified and the system abstained. "
+        "Set ANTHROPIC_API_KEY, or opt in to the Gemini critic with CRITIC_PROVIDER=gemini."
+    ),
 }
 
 
@@ -65,13 +82,23 @@ def render_chat_tab(
 
     _initialize_chat_state()
     resolved_db_path = _resolve_db_path(db_path)
-    active_answer_fn = answer_fn or default_answer_question
 
     render_tab_header(
         "Chat",
         "Ask grounded questions over the indexed supplier corpus. Answers cite source pages.",
     )
     st.caption("Tips: mention a vendor, document type, or field name to improve retrieval.")
+
+    # D-03: agentic is the Chat default (Settings.rag_pipeline); the toggle switches this
+    # browser session back to the Phase 1 linear baseline. An injected answer_fn still wins.
+    agentic_enabled = st.toggle(
+        "Agentic pipeline (decompose, re-retrieve, self-critique)",
+        value=_settings_default_is_agentic(),
+        key=_CHAT_AGENTIC_TOGGLE_KEY,
+        help="Off = Phase 1 linear baseline",
+    )
+    pipeline = "agentic" if agentic_enabled else "linear"
+    active_answer_fn = answer_fn or _default_answer_fn(pipeline)
 
     for message in st.session_state[_CHAT_MESSAGES_KEY]:
         _render_message(message)
@@ -93,6 +120,8 @@ def render_chat_tab(
         prompt=user_text,
         provider_factory=provider_factory,
         answer_fn=active_answer_fn,
+        pipeline=pipeline,
+        session_id=st.session_state.get(_CHAT_SESSION_ID_KEY),
     )
     assistant_message = _assistant_message_from_result(result)
     st.session_state[_CHAT_MESSAGES_KEY].append(assistant_message)
@@ -103,13 +132,33 @@ def render_chat_tab(
 def _initialize_chat_state() -> None:
     st.session_state.setdefault(_CHAT_MESSAGES_KEY, [])
     st.session_state.setdefault(_CHAT_DIAGNOSTICS_KEY, None)
+    # Random per-browser-session id for Langfuse session grouping (T-06-36): not a user identifier.
+    if not st.session_state.get(_CHAT_SESSION_ID_KEY):
+        st.session_state[_CHAT_SESSION_ID_KEY] = str(uuid4())
+
+
+def _settings_default_is_agentic() -> bool:
+    try:
+        return str(get_settings().rag_pipeline).strip().lower() == "agentic"
+    except Exception:  # noqa: BLE001 - a settings failure must not break the Chat tab render.
+        return True
+
+
+def _default_answer_fn(pipeline: str) -> AnswerFn:
+    """Return the service answer function for ``pipeline``.
+
+    The agentic graph is imported lazily so the linear path never loads langgraph.
+    """
+    if pipeline == "agentic":
+        from src.rag.agentic import answer_question_agentic
+
+        return answer_question_agentic
+    return default_answer_question
 
 
 def _resolve_db_path(db_path: str | None) -> str:
     if db_path:
         return db_path
-
-    from src.config import get_settings
 
     return get_settings().db_path
 
@@ -120,6 +169,8 @@ def _answer_prompt(
     prompt: str,
     provider_factory: ProviderFactory | None,
     answer_fn: AnswerFn,
+    pipeline: str = "linear",
+    session_id: str | None = None,
 ) -> AnswerResult:
     try:
         provider = _build_provider(provider_factory)
@@ -129,7 +180,8 @@ def _answer_prompt(
         return _provider_configuration_result(error_class=exc.__class__.__name__)
 
     try:
-        return answer_fn(db_path, prompt, provider=provider)
+        with trace_session(phase=PHASE_TAGS.get(pipeline, "phase1"), session_id=session_id, tags=("chat",)):
+            return answer_fn(db_path, prompt, provider=provider)
     except AnswerConfigurationError:
         return _provider_configuration_result()
     except Exception as exc:  # noqa: BLE001 - malformed injected/live boundaries must not traceback in Streamlit.
@@ -137,6 +189,8 @@ def _answer_prompt(
             reason_code=AnswerReasonCode.PROVIDER_EXCEPTION,
             error_class=exc.__class__.__name__,
         )
+    finally:
+        flush_traces()
 
 
 def _build_provider(provider_factory: ProviderFactory | None) -> Any:
@@ -199,7 +253,31 @@ def _diagnostics_payload(diagnostics: AnswerDiagnostics) -> dict[str, Any]:
         "citation_count": int(diagnostics.citation_count),
         "evidence_reason": _safe_optional_text(diagnostics.evidence_reason) or "unknown",
         "safe_error_class": _safe_optional_text(diagnostics.error_class),
+        # Agentic diagnostics: bounded numeric/enum values only. Critic feedback and
+        # unsupported claims are never rendered (T-06-35).
+        "pipeline": _safe_optional_text(getattr(diagnostics, "pipeline", None)),
+        "retrieval_rounds": _safe_int(getattr(diagnostics, "retrieval_rounds", 0)),
+        "regeneration_count": _safe_int(getattr(diagnostics, "regeneration_count", 0)),
+        "sub_query_count": _safe_int(getattr(diagnostics, "sub_query_count", 0)),
+        "critic_verdict": _safe_optional_text(getattr(diagnostics, "critic_verdict", None)),
+        "critic_score": _safe_score(getattr(diagnostics, "critic_score", None)),
     }
+
+
+def _safe_int(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _safe_score(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return round(float(value), 3)
+    except (TypeError, ValueError):
+        return None
 
 
 def _render_message(message: dict[str, Any]) -> None:
@@ -252,6 +330,12 @@ def _render_diagnostics(diagnostics: dict[str, Any]) -> None:
             ("Citation count", "citation_count"),
             ("Evidence reason", "evidence_reason"),
             ("Safe error class", "safe_error_class"),
+            ("Pipeline", "pipeline"),
+            ("Retrieval rounds", "retrieval_rounds"),
+            ("Regenerations", "regeneration_count"),
+            ("Sub-queries", "sub_query_count"),
+            ("Critic verdict", "critic_verdict"),
+            ("Critic score", "critic_score"),
         ):
             st.markdown(f"**{label}:** {_diagnostic_display(diagnostics.get(key))}")
 
