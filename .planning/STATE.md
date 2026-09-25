@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 6
 current_phase_name: Agentic RAG & Observability
 status: executing
-stopped_at: Completed 06-02-PLAN.md
-last_updated: "2026-09-25T01:49:22.181Z"
-last_activity: 2026-09-23
-last_activity_desc: Phase 6 execution started
-state_head: be63e51460fe42493941c3de4b0cdc4f70f8fa01
+stopped_at: Completed 06-03-PLAN.md
+last_updated: "2026-09-25T01:57:07.404Z"
+last_activity: 2026-09-25
+last_activity_desc: Completed 06-03 phase-tagged tracing and privacy mask
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 15
-  completed_plans: 9
+  completed_plans: 11
+  percent: 73
 milestone_name: milestone
 ---
 
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-04-16)
 ## Current Position
 
 Phase: 6 (Agentic RAG & Observability) — EXECUTING
-Plan: 3 of 8
+Plan: 4 of 8
 Status: Ready to execute
-Last activity: 2026-09-23 — Phase 6 execution started
+Last activity: 2026-09-25 — Completed 06-03 phase-tagged tracing and privacy mask
 
-Progress: [███████░░░] 71%
+Progress: [███████░░░] 73%
 
 ## Performance Metrics
 
@@ -64,6 +64,7 @@ Progress: [███████░░░] 71%
 |------|----------|-------|-------|
 | Phase 06 P01 | 6 min | 2 tasks | 14 files |
 | Phase 06 P02 | 7 min | 2 tasks | 5 files |
+| Phase 06 P03 | 8 min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -85,6 +86,8 @@ Recent decisions affecting current work:
 - [Phase 06]: Agentic abstain reason: critic_rejected checked before retrieval_exhausted; finalize builds citations from retrieval hits and fails closed when empty
 - [Phase 06]: HITL reviews run in one BEGIN IMMEDIATE transaction (same-connection read), write only latest tables plus append-only extraction_reviews, never run history — Serializes concurrent reviews; keeps Phase 7 extraction F1 free of human values
 - [Phase 06]: Reviewer dates parsed strictly (ISO, then dateutil month-first; partial dates rejected); corrections must cite an existing page (source_page_out_of_range) — Compliance dates and page citations must never be invented
+- [Phase 06]: trace_session sets a ContextVar phase that safe_update_current_trace prepends (deduped, [phase, *module_tags]); Langfuse client built with mask=mask_trace_payload (allowlist-only keys, >64-char strings redacted, objects/bytes/secrets dropped)
+- [Phase 06]: tracing helpers (trace_session, build_callback_handler, flush_traces, span/generation updates) never raise; only with-body exceptions propagate
 
 ### Pending Todos
 
@@ -114,6 +117,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-09-25T01:49:05.846Z
-Stopped at: Completed 06-02-PLAN.md
+Last session: 2026-09-25T01:56:42.828Z
+Stopped at: Completed 06-03-PLAN.md
 Resume file: None

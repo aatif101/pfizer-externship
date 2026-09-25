@@ -41,7 +41,7 @@ key-decisions:
   - "The mask drops None-valued entries from mappings and sequences (a dropped value never leaves an empty key behind)"
   - "Session metadata allowlist is {pipeline, entry_point, command}; values are stringified to satisfy propagate_attributes Dict[str, str]"
 
-requirements-completed: [OBS-01]
+requirements-completed: []  # OBS-01 foundation only; entry-point wiring lands in 06-04..06-08
 
 duration: 8 min
 completed: 2026-09-24
