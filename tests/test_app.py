@@ -40,3 +40,14 @@ def test_streamlit_starts() -> None:
     assert "Error" not in stderr or "Traceback" not in stderr, (
         f"Streamlit reported errors:\n{stderr}"
     )
+
+def test_app_declares_review_tab() -> None:
+    """The dashboard exposes the HITL Review tab (06-06, HITL-01)."""
+    from pathlib import Path
+
+    import src.dashboard
+
+    source = Path("src/app.py").read_text(encoding="utf-8")
+    assert 'st.tabs(["Compliance", "Chat", "Review", "Eval"])' in source
+    assert "render_review_tab(" in source
+    assert hasattr(src.dashboard, "render_review_tab")

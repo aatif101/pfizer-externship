@@ -4,7 +4,8 @@ Layout (D-03):
     Sidebar: Langfuse connection status (checked once per session)
     Tab 1 — Compliance: SQLite-backed compliance dashboard
     Tab 2 — Chat: Document-grounded RAG chatbot
-    Tab 3 — Eval: Placeholder for Phase 4 evaluation metrics
+    Tab 3 — Review: Human-in-the-loop (HITL) review of low-confidence/abstained extractions
+    Tab 4 — Eval: Evaluation metrics
 
 Pitfall 5 mitigation: all expensive initialization is guarded with
     `if "key" not in st.session_state`
@@ -15,7 +16,7 @@ from __future__ import annotations
 import streamlit as st
 
 from src.config import get_settings
-from src.dashboard import render_chat_tab, render_compliance_tab, render_eval_tab
+from src.dashboard import render_chat_tab, render_compliance_tab, render_eval_tab, render_review_tab
 from src.tracing import verify_langfuse_connection
 
 # Page config must be the first Streamlit call
@@ -41,7 +42,7 @@ with st.sidebar:
     st.caption("Set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY in .env to enable tracing.")
 
 # --- Main tabs (D-03) ---
-tab_compliance, tab_chat, tab_eval = st.tabs(["Compliance", "Chat", "Eval"])
+tab_compliance, tab_chat, tab_review, tab_eval = st.tabs(["Compliance", "Chat", "Review", "Eval"])
 
 with tab_compliance:
     st.header("Compliance Dashboard")
@@ -50,6 +51,10 @@ with tab_compliance:
 with tab_chat:
     st.header("Document Q&A")
     render_chat_tab(get_settings().db_path)
+
+with tab_review:
+    st.header("Human Review")
+    render_review_tab(get_settings().db_path)
 
 with tab_eval:
     st.header("Evaluation")
