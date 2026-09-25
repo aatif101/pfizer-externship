@@ -21,7 +21,8 @@ from src.rag.agentic.state import (
     GRAPH_RECURSION_LIMIT,
     AgenticDeps,
 )
-from src.rag.critic import CriticProvider
+from src.config import get_settings
+from src.rag.critic import CriticProvider, build_critic_provider
 from src.rag.models import AnswerDiagnostics, AnswerReasonCode, AnswerResult, AnswerStatus
 from src.rag.providers import AnswerProvider
 from src.rag.service import (
@@ -32,9 +33,37 @@ from src.rag.service import (
     _provider_name,
 )
 from src.retrieval.models import EvidenceGateResult
-from src.tracing import observe
+from src.tracing import build_callback_handler, observe, safe_update_current_trace
 
 __all__ = ["GRAPH_RECURSION_LIMIT", "answer_question_agentic", "build_agentic_graph"]
+
+# Injectable test seams (mirrors src.rag.service). langfuse_context=None means
+# "resolve the live v3 client lazily inside src.tracing".
+_LANGFUSE_AVAILABLE: bool = True
+langfuse_context: Any | None = None
+
+# Non-content diagnostics only. Question, draft, evidence text, snippets, critic
+# feedback, and unsupported claims are intentionally absent.
+_AGENTIC_TRACE_ALLOWED_KEYS = frozenset(
+    {
+        "boundary",
+        "answer_status",
+        "reason_code",
+        "run_id",
+        "provider_name",
+        "trace_id",
+        "top_score",
+        "citation_count",
+        "evidence_reason",
+        "error_class",
+        "pipeline",
+        "retrieval_rounds",
+        "sub_query_count",
+        "regeneration_count",
+        "critic_verdict",
+        "critic_score",
+    }
+)
 
 
 def _route_after_decompose(state: dict[str, Any]) -> str:
@@ -100,7 +129,58 @@ def answer_question_agentic(
     Never raises for graph failures: a ``GraphRecursionError`` becomes an
     ABSTAINED ``retrieval_exhausted`` result and any other exception becomes an
     ABSTAINED ``retrieval_error`` result.
+
+    When ``critic`` is None it is resolved from settings via
+    ``build_critic_provider``; a resolution failure leaves the critic unset so
+    the draft node abstains with ``critic_error`` before any provider call (D-02).
     """
+
+    result = _run_agentic(
+        db_path,
+        question,
+        provider=provider,
+        critic=critic,
+        top_k=top_k,
+        retrieve_fn=retrieve_fn,
+        decomposer=decomposer,
+        rewriter=rewriter,
+        critic_min_faithfulness=critic_min_faithfulness,
+    )
+    _update_agentic_trace_metadata(result)
+    return result
+
+
+def _run_agentic(
+    db_path: str,
+    question: str,
+    *,
+    provider: AnswerProvider | None,
+    critic: CriticProvider | None,
+    top_k: int,
+    retrieve_fn: Callable[..., EvidenceGateResult] | None,
+    decomposer: Callable[[str], str] | None,
+    rewriter: Callable[[str], str] | None,
+    critic_min_faithfulness: float | None,
+) -> AnswerResult:
+    critic_error_class: str | None = None
+    if critic is None:
+        try:
+            critic = build_critic_provider()
+        except Exception as exc:  # noqa: BLE001 - fail closed: no critic means abstain (D-02).
+            critic = None
+            critic_error_class = exc.__class__.__name__
+    if critic_min_faithfulness is None:
+        try:
+            critic_min_faithfulness = float(get_settings().critic_min_faithfulness)
+        except Exception:  # noqa: BLE001 - settings failure keeps the conservative default.
+            critic_min_faithfulness = DEFAULT_CRITIC_MIN_FAITHFULNESS
+
+    complete_text = getattr(provider, "complete_text", None) if provider is not None else None
+    if callable(complete_text):
+        if decomposer is None:
+            decomposer = lambda prompt: complete_text(prompt, role="decompose")  # noqa: E731
+        if rewriter is None:
+            rewriter = lambda prompt: complete_text(prompt, role="rewrite")  # noqa: E731
 
     deps = AgenticDeps(
         db_path=db_path,
@@ -110,9 +190,8 @@ def answer_question_agentic(
         decomposer=decomposer,
         rewriter=rewriter,
         top_k=max(1, int(top_k)),
-        critic_min_faithfulness=(
-            DEFAULT_CRITIC_MIN_FAITHFULNESS if critic_min_faithfulness is None else float(critic_min_faithfulness)
-        ),
+        critic_min_faithfulness=float(critic_min_faithfulness),
+        critic_error_class=critic_error_class,
     )
     initial: dict[str, Any] = {"question": question or "", "steps": []}
     try:
@@ -123,7 +202,11 @@ def answer_question_agentic(
     try:
         graph = build_agentic_graph(deps)
         # Module global read at call time so tests can monkeypatch the backstop.
-        final = graph.invoke(initial, {"recursion_limit": GRAPH_RECURSION_LIMIT})
+        config: dict[str, Any] = {"recursion_limit": GRAPH_RECURSION_LIMIT}
+        handler = build_callback_handler()
+        if handler is not None:
+            config["callbacks"] = [handler]
+        final = graph.invoke(initial, config)
     except GraphRecursionError as exc:
         return _mark_agentic(
             _abstained_result(
@@ -200,6 +283,48 @@ def _result_from_state(final: dict[str, Any], deps: AgenticDeps) -> AnswerResult
             error_class=final.get("error_class"),
         )
     return _mark_agentic(result, final)
+
+
+def _update_agentic_trace_metadata(result: AnswerResult) -> None:
+    """Attach allowlisted agentic diagnostics to the current trace, if available."""
+
+    diagnostics = result.diagnostics
+    _safe_update_trace_metadata(
+        {
+            "boundary": "rag.agentic",
+            "answer_status": diagnostics.status.value,
+            "reason_code": diagnostics.reason_code.value,
+            "run_id": diagnostics.run_id,
+            "provider_name": diagnostics.provider_name,
+            "trace_id": diagnostics.trace_id,
+            "top_score": diagnostics.top_score,
+            "citation_count": diagnostics.citation_count,
+            "evidence_reason": diagnostics.evidence_reason,
+            "error_class": diagnostics.error_class,
+            "pipeline": getattr(diagnostics, "pipeline", None),
+            "retrieval_rounds": getattr(diagnostics, "retrieval_rounds", None),
+            "sub_query_count": getattr(diagnostics, "sub_query_count", None),
+            "regeneration_count": getattr(diagnostics, "regeneration_count", None),
+            "critic_verdict": getattr(diagnostics, "critic_verdict", None),
+            "critic_score": getattr(diagnostics, "critic_score", None),
+        }
+    )
+
+
+def _safe_update_trace_metadata(metadata: dict[str, Any]) -> None:
+    """Update Langfuse trace metadata defensively with the agentic allowlist. Never raises."""
+
+    if not _LANGFUSE_AVAILABLE:
+        return
+    try:
+        safe_update_current_trace(
+            tags=["rag", "agentic"],
+            metadata=metadata,
+            allowed_metadata_keys=_AGENTIC_TRACE_ALLOWED_KEYS,
+            context=langfuse_context,
+        )
+    except Exception:  # noqa: BLE001 - tracing must never break answering.
+        return
 
 
 def _reason(final: dict[str, Any], default: AnswerReasonCode) -> AnswerReasonCode:

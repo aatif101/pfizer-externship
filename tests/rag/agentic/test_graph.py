@@ -242,7 +242,14 @@ def test_critic_min_faithfulness_override(db_path: str) -> None:
         pytest.param(lambda: None, id="critic-missing"),
     ],
 )
-def test_critic_failure_fails_closed(db_path: str, critic_factory) -> None:
+def test_critic_failure_fails_closed(db_path: str, critic_factory, monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.config import get_settings
+
+    # 06-04: critic=None is resolved from settings; with no Anthropic key it
+    # fails closed as CriticConfigurationError (D-02, no Gemini fallback).
+    monkeypatch.setenv("CRITIC_PROVIDER", "anthropic")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    get_settings.cache_clear()
     critic = critic_factory()
     provider = FakeAnswerProvider()
 
@@ -257,9 +264,10 @@ def test_critic_failure_fails_closed(db_path: str, critic_factory) -> None:
     assert result.diagnostics.error_class
     if critic is None:
         assert provider.calls == []
-        assert result.diagnostics.error_class == "CriticNotConfigured"
+        assert result.diagnostics.error_class == "CriticConfigurationError"
     else:
         assert len(critic.calls) == 1
+    get_settings.cache_clear()
 
 
 def test_malformed_critic_verdict_fails_closed(db_path: str) -> None:

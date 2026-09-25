@@ -22,11 +22,14 @@ from src.rag.providers import (
     AnswerProviderResult,
     AnswerValidationError,
 )
+from src.tracing import observe, safe_update_current_generation
 
 DEFAULT_GEMINI_ANSWER_MODEL = "gemini-2.5-flash"
 _PROVIDER_NAME = "gemini"
 _MAX_EVIDENCE_CHARS = 2000
 _MAX_EVIDENCE_ITEMS = 5
+_MAX_REVISION_HINT_CHARS = 1000
+_MAX_COMPLETE_TEXT_PROMPT_CHARS = 4000
 
 
 @dataclass(frozen=True)
@@ -77,7 +80,7 @@ class GeminiAnswerProvider:
         """Call Gemini and return stripped plain answer text plus trace metadata."""
 
         try:
-            response = self._generate_content_with_retry(contents=_build_contents(request))
+            response = self._generate_traced(contents=_build_contents(request))
         except AnswerConfigurationError:
             raise
         except Exception as exc:  # noqa: BLE001 - provider boundary sanitizes arbitrary SDK failures.
@@ -99,6 +102,41 @@ class GeminiAnswerProvider:
             trace_id=_response_trace_id(response),
             provider_name=self.provider_name,
         )
+
+    def complete_text(self, prompt: str, *, role: str) -> str:
+        """Raw-text completion seam for the agentic decomposer/rewriter.
+
+        The prompt is bounded to 4000 chars; errors are sanitized to the
+        exception class name. ``role`` is "decompose" or "rewrite".
+        """
+
+        bounded = (prompt or "")[:_MAX_COMPLETE_TEXT_PROMPT_CHARS]
+        try:
+            response = self._generate_aux_traced(contents=bounded, role=role)
+        except AnswerConfigurationError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - provider boundary sanitizes arbitrary SDK failures.
+            raise AnswerProviderError(
+                "Gemini auxiliary completion failed "
+                f"(provider={self.provider_name}, model={self.model}, error_class={exc.__class__.__name__})."
+            ) from exc
+        return _strip_simple_fences(_response_text(response)).strip()
+
+    @observe(name="generation.draft", as_type="generation", capture_input=False, capture_output=False)
+    def _generate_traced(self, *, contents: str) -> Any:
+        response = self._generate_content_with_retry(contents=contents)
+        self._report_usage(response)
+        return response
+
+    @observe(name="generation.aux", as_type="generation", capture_input=False, capture_output=False)
+    def _generate_aux_traced(self, *, contents: str, role: str) -> Any:
+        response = self._generate_content_with_retry(contents=contents)
+        self._report_usage(response)
+        return response
+
+    def _report_usage(self, response: Any) -> None:
+        input_tokens, output_tokens = _usage_tokens(response)
+        safe_update_current_generation(model=self.model, input_tokens=input_tokens, output_tokens=output_tokens)
 
     def _generate_content_with_retry(self, *, contents: str) -> Any:
         retrying = Retrying(
@@ -139,6 +177,15 @@ def _build_contents(request: AnswerProviderRequest) -> str:
         )
         for idx, hit in enumerate(request.evidence[:_MAX_EVIDENCE_ITEMS], start=1)
     )
+    revision_block = ""
+    if request.revision_hint:
+        revision_block = (
+            "\n<revision_feedback>\n"
+            f"{request.revision_hint.strip()[:_MAX_REVISION_HINT_CHARS]}\n"
+            "</revision_feedback>\n"
+            "Revise the answer so every claim is supported by the evidence; "
+            "if the evidence is insufficient, say so.\n"
+        )
     return f"""You answer Pfizer supplier-document compliance questions.
 Use only the supplied evidence snippets. Answer concisely in plain text.
 If the evidence does not support the answer, say that the supplied evidence is
@@ -150,7 +197,7 @@ Question: {request.question}
 
 Evidence snippets:
 {evidence_blocks}
-"""
+{revision_block}"""
 
 
 def _bounded_evidence(evidence: str) -> str:
@@ -158,6 +205,24 @@ def _bounded_evidence(evidence: str) -> str:
     if len(stripped) <= _MAX_EVIDENCE_CHARS:
         return stripped
     return stripped[: _MAX_EVIDENCE_CHARS - 1].rstrip() + "…"
+
+
+def _usage_tokens(response: Any) -> tuple[int | None, int | None]:
+    """Return (input, output) token counts from Gemini usage_metadata, or None each."""
+
+    usage = getattr(response, "usage_metadata", None)
+    if usage is None and isinstance(response, dict):
+        usage = response.get("usage_metadata")
+    if usage is None:
+        return None, None
+
+    def _read(name: str) -> int | None:
+        value = usage.get(name) if isinstance(usage, dict) else getattr(usage, name, None)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            return None
+        return value
+
+    return _read("prompt_token_count"), _read("candidates_token_count")
 
 
 def _response_text(response: Any) -> str:
