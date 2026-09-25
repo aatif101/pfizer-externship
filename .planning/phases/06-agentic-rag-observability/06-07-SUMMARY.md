@@ -185,3 +185,8 @@ None. With no Langfuse keys, trace_session does nothing and CLI output is unchan
 ---
 *Phase: 06-agentic-rag-observability*
 *Completed: 2026-09-25*
+
+## Self-Check: PASSED
+
+- FOUND: tests/test_tracing_entry_points.py, 06-07-SUMMARY.md
+- FOUND commits: 89dbf28, 6fed3ff, 857ff1d, 8492439

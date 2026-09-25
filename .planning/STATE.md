@@ -4,16 +4,17 @@ milestone: v1.0
 current_phase: 6
 current_phase_name: Agentic RAG & Observability
 status: executing
-stopped_at: Completed 06-06-PLAN.md
-last_updated: "2026-09-25T02:22:06.436Z"
+stopped_at: Completed 06-07-PLAN.md
+last_updated: "2026-09-25T02:29:53.445Z"
 last_activity: 2026-09-25
-last_activity_desc: Completed 06-06 HITL Review tab
+last_activity_desc: Completed 06-07 CLI entry-point trace sessions
+state_head: ca1f5e49b5f1b479ef642e9abbc510a36cc581e0
 progress:
   total_phases: 7
   completed_phases: 5
-  total_plans: 15
-  completed_plans: 14
-  percent: 93
+  total_plans: 16
+  completed_plans: 15
+  percent: 94
 milestone_name: milestone
 ---
 
@@ -29,11 +30,11 @@ See: .planning/PROJECT.md (updated 2026-04-16)
 ## Current Position
 
 Phase: 6 (Agentic RAG & Observability) — EXECUTING
-Plan: 7 of 8
+Plan: 8 of 8
 Status: Ready to execute
-Last activity: 2026-09-25 — Completed 06-06 HITL Review tab
+Last activity: 2026-09-25 — Completed 06-07 CLI entry-point trace sessions
 
-Progress: [█████████░] 93%
+Progress: [█████████░] 94%
 
 ## Performance Metrics
 
@@ -68,6 +69,7 @@ Progress: [█████████░] 93%
 | Phase 06 P04 | 7 min | 2 tasks | 8 files |
 | Phase 06 P05 | 5 min | 2 tasks | 4 files |
 | Phase 06 P06 | 6 min | 2 tasks | 5 files |
+| Phase 06 P07 | 5 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -96,6 +98,7 @@ Recent decisions affecting current work:
 - [Phase 06]: 06-05: doc_type field mentions exclude bare coa/coq/certificate (subject nouns) so single-intent questions are not decomposed; rewrite_query strips verbatim prompt echoes so an echoing LLM is no progress
 - [Phase 06]: 06-06: Review selectbox has no widget key; selection kept in session_state and fed back via index so reviewed items leaving the queue never raise stale-value errors
 - [Phase 06]: 06-06: abstained review items offer only correct/confirm_absent; review submit runs in trace_session(phase, tags=hitl/review) with flush in finally; UI errors render reason_code or exception class name only
+- [Phase 06]: 06-07: CLI entry points (extract, extract-all, retrieval build/status, ingest) open trace_session(phase=pipeline_phase); eval run pinned to phase1 (D-03); ingestion/storage trace tags no longer hard-code phase1
 
 ### Pending Todos
 
@@ -125,6 +128,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-09-25T02:22:06.427Z
-Stopped at: Completed 06-06-PLAN.md
+Last session: 2026-09-25T02:29:53.416Z
+Stopped at: Completed 06-07-PLAN.md
 Resume file: None
