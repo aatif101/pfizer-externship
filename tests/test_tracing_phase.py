@@ -314,3 +314,249 @@ def test_flush_traces_never_raises(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_forbidden_keys_fixture_is_shared() -> None:
     assert "question" in _FORBIDDEN_TRACE_KEYS
+
+
+# ---------------------------------------------------------------------------
+# Global privacy mask (Task 2)
+# ---------------------------------------------------------------------------
+
+_QUESTION = "When does the Acme Pharma GMP certificate expire for lot 42?"
+_EVIDENCE = "Acme Pharma GMP certificate valid until 2027-01-31 issued by EMA inspectorate page text"
+_DRAFT = "The Acme Pharma GMP certificate expires on 2027-01-31 according to the cited page."
+_CONTENT_KEYS = (
+    "question",
+    "snippet",
+    "evidence_text",
+    "page_text",
+    "draft",
+    "critic_feedback",
+    "unsupported_claims",
+    "field_value",
+    "corrected_value",
+    "note",
+    "verbatim_span",
+)
+
+
+@dataclass(frozen=True)
+class _HitLike:
+    doc_id: str
+    page_num: int
+    snippet: str
+    evidence_text: str
+    score: float
+
+
+def _all_keys(value: Any) -> set[str]:
+    keys: set[str] = set()
+    if isinstance(value, dict):
+        for key, inner in value.items():
+            keys.add(key)
+            keys |= _all_keys(inner)
+    elif isinstance(value, (list, tuple)):
+        for inner in value:
+            keys |= _all_keys(inner)
+    return keys
+
+
+def test_mask_safe_keys_exclude_content_keys() -> None:
+    assert tracing._MASK_SAFE_KEYS.isdisjoint(_CONTENT_KEYS)
+    assert tracing._MASK_SAFE_KEYS.isdisjoint(_FORBIDDEN_TRACE_KEYS)
+
+
+def test_mask_redacts_state() -> None:
+    hit = _HitLike(doc_id="doc-1", page_num=3, snippet=_EVIDENCE[:40], evidence_text=_EVIDENCE, score=0.91)
+    state = {
+        "question": _QUESTION,
+        "sub_queries": [_QUESTION, "Acme GMP expiry"],
+        "evidence": (hit, hit),
+        "draft": _DRAFT,
+        "critic_feedback": "Claim about lot 42 unsupported by evidence text",
+        "unsupported_claims": ["lot 42"],
+        "retrieval_round": 2,
+        "critic_score": 0.9,
+        "reason_code": "answered",
+        "run_id": "r1",
+        "api_key": "sk-ant-SHOULD_NOT_APPEAR",
+        "page_text": _EVIDENCE,
+        "image_blob": b"\x89PNG....",
+        "field_value": "2027-01-31",
+        "note": "reviewer note",
+    }
+    masked = tracing.mask_trace_payload(data=state)
+
+    assert masked == {"retrieval_round": 2, "critic_score": 0.9, "reason_code": "answered", "run_id": "r1"}
+    keys = _all_keys(masked)
+    assert keys.isdisjoint(_FORBIDDEN_TRACE_KEYS)
+    assert keys.isdisjoint(_CONTENT_KEYS)
+    rendered = repr(masked)
+    for leaked in (_QUESTION, _EVIDENCE, _DRAFT, "SHOULD_NOT_APPEAR", "Acme", "lot 42", "PNG"):
+        assert leaked not in rendered
+
+
+def test_mask_nested_callback_handler_payload() -> None:
+    payload = {
+        "input": {"question": _QUESTION, "retrieval_round": 1, "sub_query_count": 2},
+        "output": {"draft": _DRAFT, "critic_verdict": "supported", "citation_count": 2},
+        "kwargs": {"question": _QUESTION},
+    }
+    masked = tracing.mask_trace_payload(data=payload)
+    assert masked == {
+        "input": {"retrieval_round": 1, "sub_query_count": 2},
+        "output": {"critic_verdict": "supported", "citation_count": 2},
+    }
+
+
+def test_mask_primitives_and_empty() -> None:
+    assert tracing.mask_trace_payload(data=None) is None
+    assert tracing.mask_trace_payload(data={}) == {}
+    assert tracing.mask_trace_payload(data="") == ""
+    assert tracing.mask_trace_payload(data="doc-abc-0012") == "doc-abc-0012"
+    long_text = "x" * 300
+    assert tracing.mask_trace_payload(data=long_text) == "[redacted:len=300]"
+    assert tracing.mask_trace_payload(data=b"raw image bytes") is None
+    assert tracing.mask_trace_payload(data=bytearray(b"raw")) is None
+    assert tracing.mask_trace_payload(data="Bearer abc.def") is None
+    assert tracing.mask_trace_payload(data="sk-live-abc") is None
+    assert tracing.mask_trace_payload(data=7) == 7
+    assert tracing.mask_trace_payload(data=0.25) == 0.25
+    assert tracing.mask_trace_payload(data=True) is True
+    assert tracing.mask_trace_payload(data=float("nan")) is None
+    assert tracing.mask_trace_payload(data=object()) is None
+    assert tracing.mask_trace_payload(data=_HitLike("d", 1, "s", "e", 0.1)) is None
+    assert tracing.mask_trace_payload(data=[]) == []
+
+    rows = [{"doc_id": f"doc-{i}", "snippet": _EVIDENCE} for i in range(50)]
+    masked_rows = tracing.mask_trace_payload(data=rows)
+    assert isinstance(masked_rows, list)
+    assert len(masked_rows) == tracing._TRACE_LIST_MAX_ITEMS
+    assert masked_rows[0] == {"doc_id": "doc-0"}
+    assert "snippet" not in repr(masked_rows)
+
+    # None results are dropped from sequences.
+    assert tracing.mask_trace_payload(data=[b"x", "ok", object()]) == ["ok"]
+    # kwargs from the Langfuse MaskFunction protocol are accepted.
+    assert tracing.mask_trace_payload(data="ok", extra="ignored") == "ok"
+
+
+def test_mask_depth_is_capped() -> None:
+    deep: Any = {"count": 1}
+    for _ in range(10):
+        deep = {"input": deep}
+    masked = tracing.mask_trace_payload(data=deep)
+    rendered = repr(masked)
+    assert "count" not in rendered  # beyond depth cap -> dropped
+
+
+def test_mask_never_raises() -> None:
+    class _ExplodingMapping(dict):
+        def items(self) -> Any:  # type: ignore[override]
+            raise RuntimeError("boom")
+
+    assert tracing.mask_trace_payload(data=_ExplodingMapping(a=1)) is None
+
+
+def test_mask_wired_into_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    constructed: list[dict[str, Any]] = []
+
+    class _RecordingLangfuse:
+        def __init__(self, **kwargs: Any) -> None:
+            constructed.append(kwargs)
+
+    monkeypatch.setattr(tracing, "_Langfuse", _RecordingLangfuse)
+    monkeypatch.setattr(tracing, "_LANGFUSE_AVAILABLE", True)
+    _use_settings(
+        monkeypatch,
+        langfuse_enabled=True,
+        langfuse_public_key="pk-lf-test",
+        langfuse_secret_key="sk-lf-test",
+    )
+    assert tracing._ensure_langfuse_initialized() is True
+    assert constructed and constructed[-1]["mask"] is tracing.mask_trace_payload
+
+
+# ---------------------------------------------------------------------------
+# Span / generation helpers (Task 2)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _FakeSpanContext:
+    span_updates: list[dict[str, Any]] = field(default_factory=list)
+    generation_updates: list[dict[str, Any]] = field(default_factory=list)
+    raise_on_update: bool = False
+
+    def update_current_span(self, **kwargs: Any) -> None:
+        if self.raise_on_update:
+            raise RuntimeError("span backend down")
+        self.span_updates.append(kwargs)
+
+    def update_current_generation(self, **kwargs: Any) -> None:
+        if self.raise_on_update:
+            raise RuntimeError("generation backend down")
+        self.generation_updates.append(kwargs)
+
+
+def test_safe_update_current_span_allowlist() -> None:
+    fake = _FakeSpanContext()
+    sent = tracing.safe_update_current_span(
+        metadata={
+            "retrieval_round": 2,
+            "critic_score": 0.85,
+            "doc_id": "doc-1",
+            "question": _QUESTION,
+            "evidence_text": _EVIDENCE,
+        },
+        allowed_metadata_keys=frozenset({"retrieval_round", "critic_score", "doc_id"}),
+        context=fake,
+    )
+    assert sent is True
+    assert fake.span_updates == [{"metadata": {"retrieval_round": 2, "critic_score": 0.85, "doc_id": "doc-1"}}]
+
+    # Nothing safe remains -> no update.
+    assert tracing.safe_update_current_span(
+        metadata={"question": _QUESTION},
+        allowed_metadata_keys=frozenset({"retrieval_round"}),
+        context=fake,
+    ) is False
+    assert tracing.safe_update_current_span(
+        metadata=None, allowed_metadata_keys=frozenset({"retrieval_round"}), context=fake
+    ) is False
+    # Context without the method.
+    assert tracing.safe_update_current_span(
+        metadata={"retrieval_round": 1}, allowed_metadata_keys=frozenset({"retrieval_round"}), context=object()
+    ) is False
+    # Context that raises.
+    assert tracing.safe_update_current_span(
+        metadata={"retrieval_round": 1},
+        allowed_metadata_keys=frozenset({"retrieval_round"}),
+        context=_FakeSpanContext(raise_on_update=True),
+    ) is False
+
+
+def test_safe_update_current_generation() -> None:
+    fake = _FakeSpanContext()
+    assert tracing.safe_update_current_generation(
+        model="gemini-2.5-flash", input_tokens=10, output_tokens=5, context=fake
+    ) is True
+    assert fake.generation_updates[-1] == {
+        "model": "gemini-2.5-flash",
+        "usage_details": {"input": 10, "output": 5},
+    }
+
+    assert tracing.safe_update_current_generation(
+        model="claude-sonnet-4-6", input_tokens="10", output_tokens=-3, context=fake
+    ) is True
+    assert fake.generation_updates[-1] == {"model": "claude-sonnet-4-6"}
+
+    assert tracing.safe_update_current_generation(
+        model=None, input_tokens=True, output_tokens=4, context=fake
+    ) is True
+    assert fake.generation_updates[-1] == {"usage_details": {"output": 4}}
+
+    assert tracing.safe_update_current_generation(model=None, context=fake) is False
+    assert tracing.safe_update_current_generation(model="m", input_tokens=1, context=object()) is False
+    assert tracing.safe_update_current_generation(
+        model="m", input_tokens=1, context=_FakeSpanContext(raise_on_update=True)
+    ) is False
+    assert tracing.safe_update_current_generation(model="sk-ant-secret", context=fake) is False
