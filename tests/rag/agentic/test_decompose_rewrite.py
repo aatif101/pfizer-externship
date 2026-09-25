@@ -224,3 +224,171 @@ def test_rewrite_query_llm_raises_exhausted() -> None:
         raise RuntimeError("quota")
 
     assert rewrite_query("CAS number", tried=["CAS number"], llm=boom) == (None, "exhausted")
+
+
+# --------------------------------------------------------------------------- graph level
+
+from dataclasses import dataclass, field  # noqa: E402
+from typing import Any, Callable  # noqa: E402
+
+from src.rag.agentic import answer_question_agentic  # noqa: E402
+from src.rag.agentic import nodes as agentic_nodes  # noqa: E402
+from src.rag.models import AnswerReasonCode, AnswerStatus  # noqa: E402
+from src.retrieval.models import EvidenceGateResult  # noqa: E402
+
+from tests.rag.agentic.conftest import (  # noqa: E402
+    FakeAnswerProvider,
+    FakeCritic,
+    make_hit,
+    strong_result,
+    weak_result,
+)
+
+EXPIRY_HITS = (make_hit("doc-a", 0, 0.9, "Expiry Date: 2027-01-31"), make_hit("doc-b", 1, 0.6, "Valid until 2027"))
+MFG_HITS = (make_hit("doc-a", 0, 0.8, "Mfg Date: 2024-01-31"), make_hit("doc-c", 3, 0.7, "Manufactured 2024"))
+
+
+@dataclass
+class _RoutedRetrieve:
+    """retrieve_fn fake whose result depends on the query text."""
+
+    route: Callable[[str], EvidenceGateResult]
+    calls: list[str] = field(default_factory=list)
+
+    def __call__(self, db_path: str, query: str, **kwargs: Any) -> EvidenceGateResult:
+        self.calls.append(query)
+        return self.route(query)
+
+
+def _by_field(expiry_strong: bool, mfg_strong: bool) -> Callable[[str], EvidenceGateResult]:
+    def route(query: str) -> EvidenceGateResult:
+        lowered = query.lower()
+        if "expiry" in lowered:
+            return strong_result(EXPIRY_HITS) if expiry_strong else weak_result()
+        if "manufactur" in lowered:
+            return strong_result(MFG_HITS) if mfg_strong else weak_result()
+        return weak_result()
+
+    return route
+
+
+def test_compound_question_retrieves_each_subquery(db_path: str) -> None:
+    retrieve = _RoutedRetrieve(_by_field(True, True))
+    provider = FakeAnswerProvider()
+
+    result = answer_question_agentic(db_path, TWO_FIELD, provider=provider, critic=FakeCritic(), retrieve_fn=retrieve)
+
+    assert result.status is AnswerStatus.ANSWERED
+    assert len(retrieve.calls) == 2
+    assert result.diagnostics.sub_query_count == 2
+    assert result.diagnostics.retrieval_rounds == 1
+    pairs = [(citation.doc_id, citation.page_num) for citation in result.citations]
+    # Merged across sub-queries, deduped by (doc_id, page_num), max score kept, score-ordered.
+    assert pairs == [("doc-a", 0), ("doc-c", 3), ("doc-b", 1)]
+    assert len(provider.calls) == 1
+
+
+def test_compound_partial_coverage_abstains(db_path: str) -> None:
+    retrieve = _RoutedRetrieve(_by_field(True, False))
+    provider = FakeAnswerProvider()
+    critic = FakeCritic()
+
+    result = answer_question_agentic(db_path, TWO_FIELD, provider=provider, critic=critic, retrieve_fn=retrieve)
+
+    assert result.status is AnswerStatus.ABSTAINED
+    assert result.diagnostics.reason_code is AnswerReasonCode.RETRIEVAL_EXHAUSTED
+    assert result.citations == ()
+    assert provider.calls == []
+    assert critic.calls == []
+    expiry_calls = [query for query in retrieve.calls if "expiry" in query.lower()]
+    mfg_calls = [query for query in retrieve.calls if "manufactur" in query.lower()]
+    assert len(expiry_calls) == 1  # only failing sub-queries are re-retrieved
+    assert len(mfg_calls) == 2  # original + one synonym rewrite, then exhausted
+    assert "mfg" in mfg_calls[1]
+    assert result.diagnostics.retrieval_rounds == 2
+
+
+def test_synonym_rewrite_recovers(db_path: str) -> None:
+    retrieve = _RoutedRetrieve(lambda query: strong_result() if "expiration" in query else weak_result())
+    rewriter = _Spy("should not be used")
+    provider = FakeAnswerProvider()
+
+    result = answer_question_agentic(
+        db_path, "expiry date Sigma", provider=provider, critic=FakeCritic(), retrieve_fn=retrieve, rewriter=rewriter
+    )
+
+    assert result.status is AnswerStatus.ANSWERED
+    assert result.diagnostics.retrieval_rounds == 2
+    assert rewriter.calls == []
+    assert len(provider.calls) == 1
+
+
+def test_rewrite_no_progress_abstains(db_path: str) -> None:
+    question = "What is the CAS number?"
+    retrieve = _RoutedRetrieve(lambda query: weak_result())
+    provider = FakeAnswerProvider()
+
+    result = answer_question_agentic(
+        db_path, question, provider=provider, critic=FakeCritic(), retrieve_fn=retrieve,
+        rewriter=lambda prompt: question,
+    )
+
+    assert result.status is AnswerStatus.ABSTAINED
+    assert result.diagnostics.reason_code is AnswerReasonCode.RETRIEVAL_EXHAUSTED
+    assert result.diagnostics.retrieval_rounds < 3
+    assert retrieve.calls == [question]
+    assert provider.calls == []
+
+
+class _SpanRecorder:
+    def __init__(self) -> None:
+        self.updates: list[dict[str, Any]] = []
+
+    def update_current_span(self, **kwargs: Any) -> None:
+        self.updates.append(kwargs)
+
+
+def test_node_spans_allowlisted(db_path: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _SpanRecorder()
+    monkeypatch.setattr(agentic_nodes, "langfuse_context", recorder)
+    monkeypatch.setattr(agentic_nodes, "_LANGFUSE_AVAILABLE", True)
+
+    answered = answer_question_agentic(
+        db_path, TWO_FIELD, provider=FakeAnswerProvider(), critic=FakeCritic(),
+        retrieve_fn=_RoutedRetrieve(_by_field(True, True)),
+    )
+    abstained = answer_question_agentic(
+        db_path, TWO_FIELD, provider=FakeAnswerProvider(), critic=FakeCritic(),
+        retrieve_fn=_RoutedRetrieve(_by_field(True, False)),
+    )
+    assert answered.status is AnswerStatus.ANSWERED
+    assert abstained.status is AnswerStatus.ABSTAINED
+
+    assert recorder.updates, "nodes must attach span metadata"
+    forbidden_text = [TWO_FIELD, "Sigma", *(hit.snippet for hit in EXPIRY_HITS + MFG_HITS), "Answer text"]
+    seen_keys: set[str] = set()
+    for update in recorder.updates:
+        assert set(update) == {"metadata"}
+        metadata = update["metadata"]
+        assert set(metadata) <= agentic_nodes._NODE_SPAN_ALLOWED_KEYS
+        seen_keys |= set(metadata)
+        for value in metadata.values():
+            for text in forbidden_text:
+                assert text not in str(value)
+    for key in ("retrieval_round", "sub_query_count", "citation_count", "critic_verdict", "reason_code", "doc_id"):
+        assert key in seen_keys
+    for banned in ("question", "snippet", "evidence_text", "draft", "critic_feedback"):
+        assert banned not in agentic_nodes._NODE_SPAN_ALLOWED_KEYS
+
+
+def test_node_spans_disabled_seam(db_path: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _SpanRecorder()
+    monkeypatch.setattr(agentic_nodes, "langfuse_context", recorder)
+    monkeypatch.setattr(agentic_nodes, "_LANGFUSE_AVAILABLE", False)
+
+    answer_question_agentic(
+        db_path, SINGLE, provider=FakeAnswerProvider(), critic=FakeCritic(),
+        retrieve_fn=_RoutedRetrieve(lambda query: strong_result()),
+    )
+
+    assert recorder.updates == []
