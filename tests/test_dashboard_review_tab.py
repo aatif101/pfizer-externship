@@ -124,9 +124,9 @@ class FakeStreamlit:
         self.images.append((image, caption))
 
     # --- widgets ---
-    def selectbox(self, label: str, *, options: list[str], format_func=None, key: str | None = None) -> str:
-        self.selectboxes.append({"label": label, "options": list(options), "key": key})
-        selected = self._select if self._select is not None else options[0]
+    def selectbox(self, label: str, *, options: list[str], format_func=None, key: str | None = None, index: int = 0) -> str:
+        self.selectboxes.append({"label": label, "options": list(options), "key": key, "index": index})
+        selected = self._select if self._select is not None else options[index]
         assert selected in options
         if key is not None:
             self.session_state[key] = selected
