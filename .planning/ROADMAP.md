@@ -120,12 +120,12 @@ Plans:
   3. All agent steps, LLM calls, retrievals, and extractions are traced in Langfuse with a phase tag on every trace session
   4. System abstains rather than hallucinating when confidence is insufficient across both extraction and RAG pathways
 
-**Plans**: 1/8 plans executed in 3 waves
+**Plans**: 2/8 plans executed in 3 waves
 Plans:
 **Wave 1**
 
 - [x] 06-01-PLAN.md — Tracer: langgraph==1.0.1 pin (D028) + LangGraph agentic graph end-to-end with bounded retries/regen, fail-closed critic, service-owned citations (RAG-03)
-- [ ] 06-02-PLAN.md — HITL data layer: extraction_reviews audit table, 'human' evidence tier, list_review_queue + transactional apply_field_review (HITL-01)
+- [x] 06-02-PLAN.md — HITL data layer: extraction_reviews audit table, 'human' evidence tier, list_review_queue + transactional apply_field_review (HITL-01)
 - [ ] 06-03-PLAN.md — Tracing core: Phase 6 settings, trace_session/phase tags, global mask, CallbackHandler/span/generation helpers (OBS-01)
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -168,5 +168,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 3. Retrieval & RAG Chatbot | .gsd M002 | Complete | 2026-05-21 |
 | 4. Dashboard & Evaluation | .gsd M003 | Complete | 2026-05-28 |
 | 5. Visual Retrieval & Critic Extraction | 5/5 | Complete | 2026-06-29 |
-| 6. Agentic RAG & Observability | 1/8 | In Progress|  |
+| 6. Agentic RAG & Observability | 2/8 | In Progress|  |
 | 7. Benchmark & Polish | 0/TBD | Not started | - |
