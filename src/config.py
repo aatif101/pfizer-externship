@@ -32,6 +32,33 @@ class Settings(BaseSettings):
         description="Confidence below which extracted fields require human review",
     )
 
+    anthropic_api_key: str = Field(default="", description="Anthropic API key for the Claude faithfulness critic")
+    critic_provider: str = Field(
+        default="anthropic",
+        description=(
+            "'anthropic' (default) or 'gemini'. 'gemini' is an explicit opt-in only; there is NO "
+            "automatic fallback. With no Anthropic key the agentic critic abstains (fail closed, D-02)."
+        ),
+    )
+    critic_model: str = Field(default="claude-sonnet-4-6", description="Model id for the faithfulness critic")
+    critic_min_faithfulness: float = Field(
+        default=0.8,
+        ge=0.0,
+        le=1.0,
+        description="Minimum critic faithfulness score (0..1) for a draft answer to be accepted",
+    )
+    rag_pipeline: str = Field(
+        default="agentic",
+        description=(
+            "Chat tab default pipeline: 'agentic' (phase2, LangGraph) or 'linear' (phase1 baseline). "
+            "The eval harness stays linear unless explicitly told otherwise (D-03)."
+        ),
+    )
+    pipeline_phase: str = Field(
+        default="phase2",
+        description="Phase tag for non-RAG entry points (extraction/retrieval/ingestion CLIs, review).",
+    )
+
     max_pdf_mb: int = Field(default=100, description="Max PDF file size in MB before rejection")
 
     retrieval_mode: str = Field(

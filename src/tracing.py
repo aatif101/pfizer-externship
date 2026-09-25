@@ -1,7 +1,7 @@
 """Langfuse v3 observability module for the Pfizer SDF pipeline.
 
 CRITICAL VERSION CONSTRAINT:
-    langfuse must be >=3.0,<4.0. v4 has breaking import path changes.
+    langfuse>=3.9,<4.0 (propagate_attributes). v4 has breaking import path changes.
     This file asserts the version at import time to catch accidental upgrades.
 
 v3 import paths (DO NOT change):
@@ -22,7 +22,9 @@ from __future__ import annotations
 import math
 import re
 import sys
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
+from contextlib import contextmanager, nullcontext
+from contextvars import ContextVar
 from typing import Any
 
 # Handle pydantic v1 compatibility issue with Python 3.14+
@@ -87,6 +89,21 @@ _SECRET_VALUE_RE = re.compile(
 )
 
 
+# Phase 6 (OBS-01): every trace session carries a phase tag.
+PHASE_TAGS: dict[str, str] = {"linear": "phase1", "agentic": "phase2"}
+_CURRENT_PHASE: ContextVar[str | None] = ContextVar("pfizer_trace_phase", default=None)
+_SESSION_METADATA_KEYS: frozenset[str] = frozenset({"pipeline", "entry_point", "command"})
+
+# Test seams. When None, resolved lazily from the Langfuse SDK inside a try/except.
+_propagate_attributes_factory: Callable[..., Any] | None = None
+_callback_handler_factory: Callable[[], Any] | None = None
+
+
+def current_phase() -> str | None:
+    """Return the phase tag of the active ``trace_session`` (None outside a session)."""
+    return _CURRENT_PHASE.get()
+
+
 def _is_secret_like(value: str) -> bool:
     return bool(_SECRET_VALUE_RE.search(value))
 
@@ -144,6 +161,21 @@ def filter_trace_metadata(metadata: Mapping[str, Any] | None, allowed_keys: set[
         if safe_value is not None:
             safe_metadata[key] = safe_value
     return safe_metadata
+
+
+def _ordered_unique_tags(tags: Iterable[Any]) -> list[str]:
+    """Return safe string tags in first-occurrence order with duplicates removed."""
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for tag in tags:
+        if not isinstance(tag, str):
+            continue
+        safe_tag = _safe_trace_value(tag)
+        if not isinstance(safe_tag, str) or not safe_tag or safe_tag in seen:
+            continue
+        seen.add(safe_tag)
+        ordered.append(safe_tag)
+    return ordered
 
 
 def _ensure_langfuse_initialized() -> bool:
@@ -208,6 +240,10 @@ def safe_update_current_trace(
             if isinstance(safe_tag, str):
                 safe_tags.append(safe_tag)
 
+    phase = current_phase()
+    if phase:
+        safe_tags = _ordered_unique_tags([phase, *safe_tags])
+
     if not safe_metadata and not safe_tags:
         return False
 
@@ -219,6 +255,143 @@ def safe_update_current_trace(
 
     try:
         trace_context.update_current_trace(**update_kwargs)
+    except Exception:
+        return False
+    return True
+
+
+def _resolve_propagate_attributes() -> Callable[..., Any] | None:
+    if _propagate_attributes_factory is not None:
+        return _propagate_attributes_factory
+    try:
+        from langfuse import propagate_attributes  # noqa: PLC0415
+
+        return propagate_attributes
+    except Exception:
+        return None
+
+
+def _build_propagate_context(
+    *,
+    tags: list[str],
+    session_id: str | None,
+    metadata: dict[str, str],
+) -> Any:
+    """Build a Langfuse propagate_attributes context, or a nullcontext on any failure."""
+    try:
+        if not _ensure_langfuse_initialized():
+            return nullcontext()
+        factory = _resolve_propagate_attributes()
+        if factory is None:
+            return nullcontext()
+        kwargs: dict[str, Any] = {"tags": tags, "metadata": metadata}
+        if session_id:
+            safe_session = _safe_trace_value(session_id) if isinstance(session_id, str) else None
+            if isinstance(safe_session, str) and safe_session:
+                kwargs["session_id"] = safe_session
+        ctx = factory(**kwargs)
+        if ctx is None or not hasattr(ctx, "__enter__") or not hasattr(ctx, "__exit__"):
+            return nullcontext()
+        return ctx
+    except Exception:
+        return nullcontext()
+
+
+@contextmanager
+def trace_session(
+    *,
+    phase: str,
+    session_id: str | None = None,
+    tags: Iterable[str] = (),
+    metadata: Mapping[str, Any] | None = None,
+) -> Iterator[None]:
+    """Open a phase-tagged Langfuse v3 trace session around an entry point.
+
+    Sets the active phase (so every ``safe_update_current_trace`` carries it) and, when
+    Langfuse is enabled with keys, enters ``propagate_attributes`` with tags
+    ``[phase, *tags]`` (deduplicated), ``metadata={"phase": phase, ...allowlisted}`` and
+    ``session_id``. Tracing failures never raise; only exceptions from the with-body do.
+    """
+    token = None
+    try:
+        token = _CURRENT_PHASE.set(phase if isinstance(phase, str) and phase else None)
+    except Exception:
+        token = None
+
+    try:
+        session_tags = _ordered_unique_tags([phase, *(tags or ())])
+    except Exception:
+        session_tags = []
+    try:
+        extra = filter_trace_metadata(metadata, _SESSION_METADATA_KEYS)
+        session_metadata = {"phase": str(phase), **{k: str(v) for k, v in extra.items()}}
+    except Exception:
+        session_metadata = {"phase": str(phase)}
+
+    ctx = _build_propagate_context(tags=session_tags, session_id=session_id, metadata=session_metadata)
+    entered = False
+    try:
+        ctx.__enter__()
+        entered = True
+    except Exception:
+        entered = False
+
+    try:
+        yield
+    except BaseException as body_exc:
+        if entered:
+            try:
+                ctx.__exit__(type(body_exc), body_exc, body_exc.__traceback__)
+            except Exception:
+                pass
+            entered = False
+        raise
+    finally:
+        if entered:
+            try:
+                ctx.__exit__(None, None, None)
+            except Exception:
+                pass
+        if token is not None:
+            try:
+                _CURRENT_PHASE.reset(token)
+            except Exception:
+                pass
+
+
+def _resolve_callback_handler_factory() -> Callable[[], Any] | None:
+    if _callback_handler_factory is not None:
+        return _callback_handler_factory
+    try:
+        from langfuse.langchain import CallbackHandler  # noqa: PLC0415
+
+        return CallbackHandler
+    except Exception:
+        return None
+
+
+def build_callback_handler() -> Any | None:
+    """Return a Langfuse LangChain CallbackHandler for LangGraph, or None.
+
+    Only built when tracing is enabled and keys are present. Never raises.
+    """
+    try:
+        if not _ensure_langfuse_initialized():
+            return None
+        factory = _resolve_callback_handler_factory()
+        if factory is None:
+            return None
+        return factory()
+    except Exception:
+        return None
+
+
+def flush_traces() -> bool:
+    """Flush buffered Langfuse spans (Streamlit handlers). Returns False on any failure."""
+    if not _LANGFUSE_AVAILABLE:
+        return False
+    try:
+        get_client().flush()
     except Exception:
         return False
     return True
