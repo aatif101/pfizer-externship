@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Retrieval & RAG Chatbot** - Hybrid BM25+dense retrieval with reranker, and linear RAG chatbot with page-level citations
 - [x] **Phase 4: Dashboard & Evaluation** - Streamlit compliance table with color-coded risk levels, and eval harness with gold set
 - [x] **Phase 5: Visual Retrieval & Critic Extraction** - ColQwen2 page-image retrieval, extraction critic loop, and per-field confidence ensemble (visual tier VISUAL-01/02; EXTRACT-03/04 split out per 05-CONTEXT.md)
-- [ ] **Phase 6: Agentic RAG & Observability** - LangGraph agentic RAG pipeline, HITL review queue, and Langfuse tracing
+- [x] **Phase 6: Agentic RAG & Observability** - LangGraph agentic RAG pipeline, HITL review queue, and Langfuse tracing
 - [ ] **Phase 7: Benchmark & Polish** - Side-by-side Phase 1 vs Phase 2 benchmark, eval dashboard, architecture diagrams, walkthrough, and design doc
 
 > Phases 2-4 were executed via the legacy .gsd/ workflow (no .planning/phases/ dirs): Phase 2 = .gsd M001 (complete 2026-05-20), Phase 3 = M002 (2026-05-21), Phase 4 = M003 (2026-05-28); each has status: complete + VALIDATION verdict: pass. M004 (extraction observability/visual fallback, 2026-06-09) was additional .gsd work not mapped to a single roadmap phase.
@@ -120,7 +120,7 @@ Plans:
   3. All agent steps, LLM calls, retrievals, and extractions are traced in Langfuse with a phase tag on every trace session
   4. System abstains rather than hallucinating when confidence is insufficient across both extraction and RAG pathways
 
-**Plans**: 7/8 plans executed in 3 waves
+**Plans**: 8/8 plans executed in 3 waves
 Plans:
 **Wave 1**
 
@@ -137,7 +137,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 06-08-PLAN.md — Chat agentic default + linear toggle, new hints/diagnostics, traced submit; human live verification (RAG-03, OBS-01, HITL-01)
+- [x] 06-08-PLAN.md — Chat agentic default + linear toggle, new hints/diagnostics, traced submit; human live verification (RAG-03, OBS-01, HITL-01)
 
 **UI hint**: yes
 
@@ -168,5 +168,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 3. Retrieval & RAG Chatbot | .gsd M002 | Complete | 2026-05-21 |
 | 4. Dashboard & Evaluation | .gsd M003 | Complete | 2026-05-28 |
 | 5. Visual Retrieval & Critic Extraction | 5/5 | Complete | 2026-06-29 |
-| 6. Agentic RAG & Observability | 7/8 | In Progress|  |
+| 6. Agentic RAG & Observability | 8/8 | Complete | 2026-09-30 |
 | 7. Benchmark & Polish | 0/TBD | Not started | - |

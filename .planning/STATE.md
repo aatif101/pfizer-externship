@@ -1,20 +1,20 @@
 ---
 gsd_state_version: "1.0"
 milestone: v1.0
-current_phase: 6
-current_phase_name: Agentic RAG & Observability
-status: executing
-stopped_at: 06-08 Task 2 human-verify checkpoint (Task 1 committed c9101e7)
-last_updated: "2026-09-30T00:00:00.000Z"
+current_phase: 7
+current_phase_name: Benchmark & Polish
+status: planning
+stopped_at: Phase 6 complete (06-08 human-verified 2026-09-30); next is planning Phase 7
+last_updated: "2026-09-30T19:40:00.000Z"
 last_activity: 2026-09-30
-last_activity_desc: 06-08 Task 1 done; paused at blocking human-verify checkpoint for Windows pickup
+last_activity_desc: 06-08 live verification passed on Windows; Phase 6 closed
 state_head: ca1f5e49b5f1b479ef642e9abbc510a36cc581e0
 progress:
   total_phases: 7
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 16
-  completed_plans: 15
-  percent: 94
+  completed_plans: 16
+  percent: 100
 milestone_name: milestone
 ---
 
@@ -25,16 +25,16 @@ milestone_name: milestone
 See: .planning/PROJECT.md (updated 2026-04-16)
 
 **Core value:** A pharmaceutical compliance officer can upload supplier documents and immediately see which are expired or at risk, ask natural language questions across the corpus, and trust every answer is grounded in a cited source page.
-**Current focus:** Phase 6 — Agentic RAG & Observability
+**Current focus:** Phase 7 — Benchmark & Polish
 
 ## Current Position
 
-Phase: 6 (Agentic RAG & Observability) — EXECUTING
-Plan: 8 of 8
-Status: Awaiting human verification (06-08 Task 2, blocking) — see phases/06-agentic-rag-observability/.continue-here.md
-Last activity: 2026-09-30 — 06-08 Task 1 committed (c9101e7); offline suite 610 passed / 7 skipped / 0 failed on WSL
+Phase: 7 (Benchmark & Polish) — NOT STARTED (Phase 6 complete)
+Plan: -
+Status: Ready to plan Phase 7
+Last activity: 2026-09-30 — 06-08 human-verified on Windows (6/6 checks pass; see 06-08-SUMMARY.md); offline suite 610 passed / 7 skipped / 0 failed
 
-Progress: [█████████░] 94%
+Progress: [██████████] 100% of planned plans (Phase 7 not yet planned)
 
 ## Performance Metrics
 
@@ -70,6 +70,7 @@ Progress: [█████████░] 94%
 | Phase 06 P05 | 5 min | 2 tasks | 4 files |
 | Phase 06 P06 | 6 min | 2 tasks | 5 files |
 | Phase 06 P07 | 5 min | 2 tasks | 6 files |
+| Phase 06 P08 | live UAT | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -102,7 +103,8 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-None yet.
+- Chat/review diagnostics do not surface the Langfuse trace id (extraction_reviews.trace_id is NULL); see 06-08-SUMMARY follow-ups
+- generation.critique statusMessage carries the raw provider error body; see 06-08-SUMMARY follow-ups
 
 ### Blockers/Concerns
 
@@ -129,5 +131,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-09-25T02:29:53.416Z
-Stopped at: Completed 06-07-PLAN.md
+Stopped at: Completed 06-08-PLAN.md (Phase 6 complete)
 Resume file: None

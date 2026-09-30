@@ -50,8 +50,8 @@
 - [ ] **EXTRACT-03**: Extraction uses a critic/reflection loop — extractor proposes fields, critic re-reads the source page image and challenges each claim, disagreements trigger a reconciliation pass (hard cap: 2 iterations)
 - [ ] **EXTRACT-04**: System computes a per-field confidence ensemble score: `0.4 × logprob + 0.4 × self-consistency(k=3) + 0.2 × critic_agreement`; fields below threshold (default 0.75) are routed to the HITL review queue
 - [x] **HITL-01**: Dashboard HITL tab surfaces low-confidence extractions for human review and correction; corrections update the Compliance DB
-- [ ] **RAG-03**: RAG chatbot uses a LangGraph agentic pipeline: decompose query → retrieve → evaluate retrieval quality → re-retrieve if insufficient (≤2 retries) → draft answer → self-critique for faithfulness → regenerate or abstain (≤1 regen)
-- [ ] **OBS-01**: All agent steps, LLM calls, retrievals, and extractions are traced in Langfuse (v3, pinned <4.0) with `phase` tag on every trace session
+- [x] **RAG-03**: RAG chatbot uses a LangGraph agentic pipeline: decompose query → retrieve → evaluate retrieval quality → re-retrieve if insufficient (≤2 retries) → draft answer → self-critique for faithfulness → regenerate or abstain (≤1 regen)
+- [x] **OBS-01**: All agent steps, LLM calls, retrievals, and extractions are traced in Langfuse (v3, pinned <4.0) with `phase` tag on every trace session
 
 ---
 
@@ -105,9 +105,9 @@
 | VISUAL-02 | v2 | Phase 5: Visual Retrieval & Critic Extraction | Pending |
 | EXTRACT-03 | v2 | Phase 5: Visual Retrieval & Critic Extraction | Pending |
 | EXTRACT-04 | v2 | Phase 5: Visual Retrieval & Critic Extraction | Pending |
-| HITL-01 | v2 | Phase 6: Agentic RAG & Observability | Pending |
-| RAG-03 | v2 | Phase 6: Agentic RAG & Observability | Pending |
-| OBS-01 | v2 | Phase 6: Agentic RAG & Observability | Pending |
+| HITL-01 | v2 | Phase 6: Agentic RAG & Observability | Complete |
+| RAG-03 | v2 | Phase 6: Agentic RAG & Observability | Complete |
+| OBS-01 | v2 | Phase 6: Agentic RAG & Observability | Complete |
 | BENCH-01 | v3 | Phase 7: Benchmark & Polish | Pending |
 | BENCH-02 | v3 | Phase 7: Benchmark & Polish | Pending |
 | POLISH-01 | v3 | Phase 7: Benchmark & Polish | Pending |
