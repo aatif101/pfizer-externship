@@ -4,10 +4,10 @@ milestone: v1.0
 current_phase: 6
 current_phase_name: Agentic RAG & Observability
 status: executing
-stopped_at: Completed 06-07-PLAN.md
-last_updated: "2026-09-25T02:29:53.445Z"
-last_activity: 2026-09-25
-last_activity_desc: Completed 06-07 CLI entry-point trace sessions
+stopped_at: 06-08 Task 2 human-verify checkpoint (Task 1 committed c9101e7)
+last_updated: "2026-09-30T00:00:00.000Z"
+last_activity: 2026-09-30
+last_activity_desc: 06-08 Task 1 done; paused at blocking human-verify checkpoint for Windows pickup
 state_head: ca1f5e49b5f1b479ef642e9abbc510a36cc581e0
 progress:
   total_phases: 7
@@ -31,8 +31,8 @@ See: .planning/PROJECT.md (updated 2026-04-16)
 
 Phase: 6 (Agentic RAG & Observability) — EXECUTING
 Plan: 8 of 8
-Status: Ready to execute
-Last activity: 2026-09-25 — Completed 06-07 CLI entry-point trace sessions
+Status: Awaiting human verification (06-08 Task 2, blocking) — see phases/06-agentic-rag-observability/.continue-here.md
+Last activity: 2026-09-30 — 06-08 Task 1 committed (c9101e7); offline suite 610 passed / 7 skipped / 0 failed on WSL
 
 Progress: [█████████░] 94%
 
