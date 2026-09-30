@@ -29,7 +29,7 @@ dependencies = [
     "langchain-community>=0.3,<0.4",
     "langchain-openai>=0.3,<1",
     "langchain-google-genai>=2,<3",
-    "langgraph==1.0.1",  # D028: last release compatible with langchain-core<1 (RAGAS 0.4.3); see 06-RESEARCH Pitfall 1
+    "langgraph==1.0.10rc1",  # D028: last release compatible with langchain-core<1 (RAGAS 0.4.3); see 06-RESEARCH Pitfall 1
     "anthropic>=1,<2",  # Claude Sonnet faithfulness critic (06)
 ]
 
